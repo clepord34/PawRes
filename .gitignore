@@ -1,0 +1,57 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+
+# Log files
+*.log
+app.log
+
+# Storage directories (keep structure, ignore contents)
+app/storage/data/*
+!app/storage/data/.gitkeep
+app/storage/uploads/*
+!app/storage/uploads/.gitkeep
+app/storage/temp/*
+!app/storage/temp/.gitkeep
+
+# Asset directories (keep structure, ignore contents)
+gitkeep app/assets/icons/*
+!app/assets/icons/.gitkeep
+gitkeep app/assets/images/*
+!app/assets/images/.gitkeep
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Ignore GitHub configuration files
+.github/
