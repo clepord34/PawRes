@@ -35,58 +35,67 @@ class AnalyticsService:
         
         Returns:
             Tuple containing:
-            - (month_labels, rescued_counts, adopted_counts): Monthly trend data
-            - type_dist: Dictionary of animal type distribution
-            - status_counts: Dictionary of health status counts
+            - (day_labels, rescued_counts, adopted_counts): Daily trend data for last 1 month
+            - type_dist: Dictionary of animal type distribution (empty dict if no data)
+            - status_counts: Dictionary of health status counts (always includes healthy, recovering, injured)
         """
-        # Prepare months labels for last 12 months
+        # Prepare day labels for last 1 month (30 days)
         now = datetime.utcnow()
-        months: List[datetime] = []
-        for i in range(11, -1, -1):
-            m = (now.replace(day=15) - timedelta(days=30 * i))
-            months.append(m)
-        month_labels = [m.strftime("%Y-%m") for m in months]
+        days: List[datetime] = []
+        for i in range(29, -1, -1):
+            d = now - timedelta(days=i)
+            days.append(d)
+        day_labels = [d.strftime("%m-%d") for d in days]
+        day_dates = [d.strftime("%Y-%m-%d") for d in days]
 
         # Initialize counts
-        rescued_counts = [0 for _ in month_labels]
-        adopted_counts = [0 for _ in month_labels]
+        rescued_counts = [0 for _ in day_labels]
+        adopted_counts = [0 for _ in day_labels]
 
-        # Count rescued missions by month
+        # Count rescued missions by day
         missions = self.rescue_service.get_all_missions() or []
         for ms in missions:
             dt = ms.get("mission_date")
             if not dt:
                 continue
-            try:
-                d = datetime.fromisoformat(dt)
-            except (ValueError, TypeError):
+            # Handle both datetime objects and strings
+            if isinstance(dt, datetime):
+                d = dt
+            else:
                 try:
-                    d = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+                    d = datetime.fromisoformat(str(dt))
                 except (ValueError, TypeError):
-                    # Unable to parse date, skip this mission
-                    continue
-            label = d.strftime("%Y-%m")
-            if label in month_labels:
-                idx = month_labels.index(label)
+                    try:
+                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        # Unable to parse date, skip this mission
+                        continue
+            date_str = d.strftime("%Y-%m-%d")
+            if date_str in day_dates:
+                idx = day_dates.index(date_str)
                 rescued_counts[idx] += 1
 
-        # Count adopted animals by month
+        # Count adopted animals by day
         requests = self.adoption_service.get_all_requests() or []
         for req in requests:
             dt = req.get("request_date")
             if not dt:
                 continue
-            try:
-                d = datetime.fromisoformat(dt)
-            except (ValueError, TypeError):
+            # Handle both datetime objects and strings
+            if isinstance(dt, datetime):
+                d = dt
+            else:
                 try:
-                    d = datetime.strptime(dt, "%Y-%m-%d %H:%M:%S")
+                    d = datetime.fromisoformat(str(dt))
                 except (ValueError, TypeError):
-                    # Unable to parse date, skip this adoption request
-                    continue
-            label = d.strftime("%Y-%m")
-            if label in month_labels:
-                idx = month_labels.index(label)
+                    try:
+                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        # Unable to parse date, skip this adoption request
+                        continue
+            date_str = d.strftime("%Y-%m-%d")
+            if date_str in day_dates:
+                idx = day_dates.index(date_str)
                 # Consider approved/adopted/completed as successful adoptions
                 if (req.get("status") or "").lower() in ("approved", "adopted", "completed"):
                     adopted_counts[idx] += 1
@@ -94,23 +103,38 @@ class AnalyticsService:
         # Calculate type distribution and status counts
         type_dist, status_counts = self.get_animal_statistics()
 
-        return (month_labels, rescued_counts, adopted_counts), type_dist, status_counts
+        return (day_labels, rescued_counts, adopted_counts), type_dist, status_counts
 
     def get_animal_statistics(self) -> Tuple[Dict[str, int], Dict[str, int]]:
         """Calculate animal type distribution and health status counts.
         
         Returns:
-            Tuple of (type_distribution, status_counts) dictionaries
+            Tuple of (type_distribution, status_counts) dictionaries.
+            - type_distribution: Empty dict if no animals, otherwise counts by species
+            - status_counts: Always contains 'healthy', 'recovering', 'injured' keys (with 0 if none)
         """
         animals = self.animal_service.get_all_animals() or []
         type_dist: Dict[str, int] = {}
-        status_counts: Dict[str, int] = {}
+        # Always include all three health status categories
+        status_counts: Dict[str, int] = {
+            "healthy": 0,
+            "recovering": 0,
+            "injured": 0,
+        }
         
         for a in animals:
             t = (a.get("species") or "Unknown")
-            s = (a.get("status") or "unknown")
+            s = (a.get("status") or "unknown").lower()
             type_dist[t] = type_dist.get(t, 0) + 1
-            status_counts[s] = status_counts.get(s, 0) + 1
+            # Map status to one of the three categories
+            if s in status_counts:
+                status_counts[s] += 1
+            elif s in ("unknown", ""):
+                # Don't count unknown statuses in any category
+                pass
+            else:
+                # Any other status goes to 'injured' as fallback
+                status_counts["injured"] += 1
 
         return type_dist, status_counts
 
