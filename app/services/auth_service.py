@@ -96,11 +96,15 @@ class AuthService:
         """Ensure default admin account exists in database.
 
         Creates admin account with credentials from app_config (can be overridden via env vars).
-        Silently handles the case where admin already exists.
+        Also removes any old admin accounts that don't match the current configured email.
+        This ensures that changing ADMIN_EMAIL in .env takes effect properly.
         """
         try:
+            # First, check if the configured admin email already exists
             existing = self.db.fetch_one("SELECT id FROM users WHERE email = ?", (app_config.DEFAULT_ADMIN_EMAIL,))
+            
             if existing is None:
+                # Create the new admin account
                 self.register_user(
                     name=app_config.DEFAULT_ADMIN_NAME,
                     email=app_config.DEFAULT_ADMIN_EMAIL,
@@ -108,6 +112,13 @@ class AuthService:
                     phone=None,
                     role="admin",
                 )
+            
+            # Remove any other admin accounts that don't match the configured email
+            # This ensures old admin emails no longer work after changing .env
+            self.db.execute(
+                "DELETE FROM users WHERE role = 'admin' AND email != ?",
+                (app_config.DEFAULT_ADMIN_EMAIL,)
+            )
         except ValueError:
             # Admin already exists, which is expected on subsequent runs
             pass
