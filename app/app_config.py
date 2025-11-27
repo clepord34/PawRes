@@ -24,7 +24,7 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 
 # Application paths
 APP_ROOT = Path(__file__).parent
-STORAGE_DIR = APP_ROOT / "storage"
+STORAGE_DIR = APP_ROOT / "storage/data"
 STORAGE_DIR.mkdir(exist_ok=True)
 
 # Database
