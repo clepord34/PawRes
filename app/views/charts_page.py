@@ -46,7 +46,14 @@ class ChartsPage:
         # Calculate statistics
         total_rescued = sum(rescued_counts)
         total_adopted = sum(adopted_counts)
-        total_pending = len(self.adoption_service.get_all_requests() or [])  # All requests considered pending
+        pending_requests = self.adoption_service.get_all_requests() or []
+        total_pending = len([r for r in pending_requests if (r.get("status") or "").lower() == "pending"])
+        
+        # Get actual percentage changes
+        changes = self.analytics_service.get_monthly_changes()
+        rescues_change = changes["rescues_change"]
+        adoptions_change = changes["adoptions_change"]
+        pending_change = changes["pending_change"]
 
         # helper to render matplotlib figure to base64 png
         def fig_to_base64(fig) -> str:
@@ -57,62 +64,74 @@ class ChartsPage:
             b = base64.b64encode(buf.read()).decode("ascii")
             return b
 
-        # Line chart: rescued vs adopted trend
+        # Line chart: rescued vs adopted trend (last 1 month / 30 days)
         fig1, ax1 = plt.subplots(figsize=(8, 3.5))
         ax1.plot(months, rescued_counts, label="Rescued", marker="o", color="#2196F3")
         ax1.plot(months, adopted_counts, label="Adopted", marker="o", color="#FF9800")
-        ax1.set_title("Rescued vs Adopted (last 12 months)", fontsize=12)
-        ax1.set_xticklabels(months, rotation=45, fontsize=8)
+        ax1.set_title("Rescued vs Adopted (last 1 month)", fontsize=12)
+        # Show only every 5th label to avoid crowding
+        ax1.set_xticks(range(0, len(months), 5))
+        ax1.set_xticklabels([months[i] for i in range(0, len(months), 5)], rotation=45, fontsize=8)
         ax1.legend()
         ax1.grid(True, alpha=0.3)
         b1 = fig_to_base64(fig1)
 
         # Pie chart: type distribution
         fig2, ax2 = plt.subplots(figsize=(3, 2.5))
-        labels = list(type_dist.keys()) or ["None"]
-        sizes = list(type_dist.values()) or [1]
-        colors = ['#2196F3', '#FFA726', '#66BB6A', '#EF5350']
-        ax2.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90, colors=colors[:len(labels)])
+        if type_dist:
+            labels = list(type_dist.keys())
+            sizes = list(type_dist.values())
+            colors = ['#2196F3', '#FFA726', '#66BB6A', '#EF5350']
+            ax2.pie(sizes, labels=labels, autopct="%1.1f%%", startangle=90, colors=colors[:len(labels)])
+        else:
+            # No data - show empty pie with "No Data" message
+            ax2.pie([1], labels=[""], colors=["#E0E0E0"])
+            ax2.text(0, 0, "No Data", ha='center', va='center', fontsize=12, color='#757575')
         ax2.set_title("Animal Type Distribution", fontsize=10)
         b2 = fig_to_base64(fig2)
 
-        # Bar chart: health status
+        # Bar chart: health status - always show all three categories
         fig3, ax3 = plt.subplots(figsize=(8, 3.5))
-        statuses = list(status_counts.keys()) or ["unknown"]
+        statuses = ["healthy", "recovering", "injured"]
         counts = [status_counts.get(s, 0) for s in statuses]
         colors_map = {
             "healthy": "#4CAF50",  # green
-            "recovering": "#F44336",  # red
-            "injured": "#FFEB3B",  # yellow
+            "recovering": "#FFEB3B",  # yellow
+            "injured": "#F44336",  # red
         }
-        bar_colors = [colors_map.get(s.lower(), "#90A4AE") for s in statuses]
-        ax3.bar(statuses, counts, color=bar_colors)
+        bar_colors = [colors_map[s] for s in statuses]
+        bars = ax3.bar(statuses, counts, color=bar_colors)
+        # Add value labels on top of bars
+        for bar, count in zip(bars, counts):
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                    str(count), ha='center', va='bottom', fontsize=10)
         ax3.set_title("Health Status Breakdown", fontsize=12)
         ax3.set_ylabel("Count")
+        # Ensure y-axis starts at 0 and has some headroom for labels
+        ax3.set_ylim(0, max(counts) + 1 if max(counts) > 0 else 1)
         b3 = fig_to_base64(fig3)
 
-        # Placeholder map image (static map with pins)
-        fig4, ax4 = plt.subplots(figsize=(3, 2.5))
-        ax4.text(0.5, 0.5, "Realtime Rescue Mission\n\nMap View", 
-                ha='center', va='center', fontsize=10, color='#666')
-        ax4.set_xlim(0, 1)
-        ax4.set_ylim(0, 1)
-        ax4.axis('off')
-        # Add some fake map pins
-        import numpy as np
-        np.random.seed(42)
-        for _ in range(5):
-            x, y = np.random.rand(2)
-            ax4.plot(x, y, 'o', markersize=12, color=np.random.choice(['red', 'green', 'orange']))
-        b4 = fig_to_base64(fig4)
+        # Get real rescue mission data for map
+        from services.map_service import MapService
+        map_service = MapService()
+        missions = self.rescue_service.get_all_missions() or []
+        map_widget = map_service.create_map_with_markers(missions)
 
         # Build stat cards
         def stat_card(title: str, value: str, change: str, color: str):
+            # Determine change text color based on content
+            if "+" in change:
+                change_color = ft.Colors.GREEN_600
+            elif "-" in change or "%" in change:
+                change_color = ft.Colors.RED_600
+            else:
+                change_color = ft.Colors.GREY_600  # For "No change" or neutral text
+            
             return ft.Container(
                 ft.Column([
                     ft.Text(title, size=12, color=ft.Colors.BLACK54),
                     ft.Text(value, size=32, weight="bold", color=color),
-                    ft.Text(change, size=11, color=ft.Colors.GREEN_600 if "+" in change else ft.Colors.RED_600),
+                    ft.Text(change, size=11, color=change_color),
                 ], spacing=5),
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
@@ -122,9 +141,9 @@ class ChartsPage:
             )
 
         stats_row = ft.Row([
-            stat_card("Total Animals Rescued", str(total_rescued), "▲ 12% this month", ft.Colors.GREEN_600),
-            stat_card("Total Adoptions", f"{total_adopted:,}", "▲ 18% this month", ft.Colors.ORANGE_600),
-            stat_card("Pending Applications", str(total_pending), "▲ 8% this month", ft.Colors.ORANGE_600),
+            stat_card("Total Animals Rescued", str(total_rescued), rescues_change, ft.Colors.GREEN_600),
+            stat_card("Total Adoptions", f"{total_adopted:,}", adoptions_change, ft.Colors.ORANGE_600),
+            stat_card("Pending Applications", str(total_pending), pending_change, ft.Colors.ORANGE_600),
         ], spacing=15, expand=True)
 
         # Chart containers
@@ -157,13 +176,22 @@ class ChartsPage:
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
         )
 
+        # Create map container with real map or fallback placeholder
+        if map_widget:
+            map_content = ft.Container(
+                map_widget,
+                height=500,
+                border_radius=8,
+                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            )
+        else:
+            map_content = map_service.create_empty_map_placeholder(len(missions))
+        
         map_container = ft.Container(
             ft.Column([
                 ft.Text("Realtime Rescue Mission", size=16, weight="w600", color=ft.Colors.BLACK87),
                 ft.Divider(height=10, color=ft.Colors.GREY_300),
-                ft.Row([
-                    ft.Image(src_base64=b4, fit=ft.ImageFit.CONTAIN),
-                ], alignment="center"),
+                map_content,
             ], spacing=5, horizontal_alignment="center"),
             padding=20,
             bgcolor=ft.Colors.WHITE,

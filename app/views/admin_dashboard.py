@@ -49,10 +49,11 @@ class AdminDashboard:
         total_adoptions = stats["total_adoptions"]
         pending_applications = stats["pending_applications"]
         
-        # Calculate percentage changes (mock data for now - you can enhance with historical data)
-        animals_change = "+15% this month"
-        adoptions_change = "+15% this month"
-        pending_change = "+15% this month"
+        # Calculate actual percentage changes
+        changes = self.analytics_service.get_monthly_changes()
+        animals_change = changes["animals_change"]
+        adoptions_change = changes["adoptions_change"]
+        pending_change = changes["pending_change"]
 
         # Fetch chart data using analytics service
         (month_labels, rescued_counts, adopted_counts), type_dist, status_counts = self.analytics_service.get_chart_data()

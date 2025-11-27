@@ -157,6 +157,96 @@ class AnalyticsService:
             "pending_applications": pending_applications,
         }
 
+    def get_monthly_changes(self) -> Dict[str, str]:
+        """Calculate percentage changes comparing this month vs last month.
+        
+        Returns:
+            Dictionary with formatted change strings for:
+            - animals_change: Change in animals added
+            - rescues_change: Change in rescue missions
+            - adoptions_change: Change in adoptions
+            - pending_change: Change in pending applications
+        """
+        now = datetime.utcnow()
+        
+        # Define this month and last month date ranges
+        this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_month_end = this_month_start - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        
+        def parse_date(dt) -> Optional[datetime]:
+            """Parse date from various formats."""
+            if dt is None:
+                return None
+            if isinstance(dt, datetime):
+                return dt
+            try:
+                return datetime.fromisoformat(str(dt))
+            except (ValueError, TypeError):
+                try:
+                    return datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                except (ValueError, TypeError):
+                    return None
+        
+        def is_in_range(dt, start: datetime, end: datetime) -> bool:
+            """Check if datetime is within range."""
+            parsed = parse_date(dt)
+            if parsed is None:
+                return False
+            return start <= parsed <= end
+        
+        # Get all data
+        animals = self.animal_service.get_all_animals() or []
+        missions = self.rescue_service.get_all_missions() or []
+        requests = self.adoption_service.get_all_requests() or []
+        
+        # Count animals added this month vs last month
+        animals_this_month = len([a for a in animals if is_in_range(a.get("intake_date"), this_month_start, now)])
+        animals_last_month = len([a for a in animals if is_in_range(a.get("intake_date"), last_month_start, last_month_end)])
+        
+        # Count rescue missions this month vs last month
+        rescues_this_month = len([m for m in missions if is_in_range(m.get("mission_date"), this_month_start, now)])
+        rescues_last_month = len([m for m in missions if is_in_range(m.get("mission_date"), last_month_start, last_month_end)])
+        
+        # Count adoptions (approved/adopted) this month vs last month
+        adoptions_this_month = len([r for r in requests 
+            if is_in_range(r.get("request_date"), this_month_start, now) 
+            and (r.get("status") or "").lower() in ("approved", "adopted", "completed")])
+        adoptions_last_month = len([r for r in requests 
+            if is_in_range(r.get("request_date"), last_month_start, last_month_end)
+            and (r.get("status") or "").lower() in ("approved", "adopted", "completed")])
+        
+        # Count pending applications this month vs last month
+        pending_this_month = len([r for r in requests 
+            if is_in_range(r.get("request_date"), this_month_start, now)
+            and (r.get("status") or "").lower() == "pending"])
+        pending_last_month = len([r for r in requests 
+            if is_in_range(r.get("request_date"), last_month_start, last_month_end)
+            and (r.get("status") or "").lower() == "pending"])
+        
+        def calc_change(current: int, previous: int) -> str:
+            """Calculate percentage change and format as string."""
+            if previous == 0:
+                if current == 0:
+                    return "No change"
+                else:
+                    return f"+{current} new this month"
+            
+            change = ((current - previous) / previous) * 100
+            if change > 0:
+                return f"+{change:.0f}% this month"
+            elif change < 0:
+                return f"{change:.0f}% this month"
+            else:
+                return "No change"
+        
+        return {
+            "animals_change": calc_change(animals_this_month, animals_last_month),
+            "rescues_change": calc_change(rescues_this_month, rescues_last_month),
+            "adoptions_change": calc_change(adoptions_this_month, adoptions_last_month),
+            "pending_change": calc_change(pending_this_month, pending_last_month),
+        }
+
     def get_user_activity_stats(self, user_id: int) -> Dict[str, Any]:
         """Get activity statistics for a specific user.
         

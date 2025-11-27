@@ -160,7 +160,7 @@ class RescueMissionListPage:
                     ft.Container(height=15),
                     ft.Container(
                         map_widget,
-                        height=350,
+                        height=500,
                         border_radius=8,
                         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                         border=ft.border.all(1, ft.Colors.GREY_300),
