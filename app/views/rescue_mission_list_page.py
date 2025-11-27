@@ -6,7 +6,10 @@ from typing import Optional
 from services.rescue_service import RescueService
 from services.map_service import MapService
 import app_config
-from components import create_admin_sidebar, create_mission_status_badge, create_gradient_background
+from components import (
+    create_admin_sidebar, create_mission_status_badge, create_gradient_background,
+    create_page_title, create_section_card, create_map_container, show_snackbar
+)
 
 
 class RescueMissionListPage:
@@ -188,19 +191,13 @@ class RescueMissionListPage:
         # Main content area
         main_content = ft.Container(
             ft.Column([
-                ft.Text("Rescue Mission List", size=28, weight="bold", color=ft.Colors.with_opacity(0.6, ft.Colors.BLACK), text_align=ft.TextAlign.CENTER),
+                create_page_title("Rescue Mission List"),
                 ft.Container(height=20),
                 # Rescue Mission List Section
-                ft.Container(
-                    ft.Column([
-                        ft.Text("Rescue Mission List", size=18, weight="w600", color=ft.Colors.BLACK87),
-                        ft.Container(height=10),
-                        table_container,
-                    ], spacing=0),
-                    padding=20,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=12,
-                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                create_section_card(
+                    title="Rescue Mission List",
+                    content=table_container,
+                    show_divider=True,
                 ),
                 ft.Container(height=20),
                 # Map Container
@@ -224,22 +221,13 @@ class RescueMissionListPage:
     def _on_status_change(self, page, mission_id: int, new_status: str) -> None:
         try:
             updated = self.rescue_service.update_rescue_status(mission_id, new_status)
-            import flet as ft
 
             if updated:
-                page.snack_bar = ft.SnackBar(ft.Text("Status updated"))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, "Status updated")
                 # refresh
                 self.build(page, user_role="admin")
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("Failed to update status"))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, "Failed to update status", error=True)
         except Exception as exc:
-            import flet as ft
-
-            page.snack_bar = ft.SnackBar(ft.Text(f"Error: {exc}"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, f"Error: {exc}", error=True)
 

@@ -5,7 +5,10 @@ from typing import Optional
 
 from services.auth_service import AuthService
 import app_config
-from components import create_header, create_action_button, create_gradient_background
+from components import (
+    create_header, create_action_button, create_gradient_background,
+    create_form_text_field, create_form_label, show_snackbar, create_error_dialog
+)
 
 
 class SignupPage:
@@ -33,64 +36,20 @@ class SignupPage:
 
         # Header with logo/title
         header = create_header()        # Name field with label
-        name_label = ft.Text("Name", size=13, weight="w500", color=ft.Colors.BLACK87)
-        self._name_field = ft.TextField(
-            hint_text="Full Name...",
-            width=280,
-            height=50,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            color=ft.Colors.BLACK,
-            content_padding=ft.padding.all(12),
-        )
+        name_label = create_form_label("Name")
+        self._name_field = create_form_text_field(hint_text="Full Name...")
 
         # Email field with label
-        email_label = ft.Text("Email Address", size=13, weight="w500", color=ft.Colors.BLACK87)
-        self._email_field = ft.TextField(
-            hint_text="Email...",
-            width=280,
-            height=50,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            color=ft.Colors.BLACK,
-            content_padding=ft.padding.all(12),
-        )
+        email_label = create_form_label("Email Address")
+        self._email_field = create_form_text_field(hint_text="Email...")
 
         # Password field with label
-        password_label = ft.Text("Password", size=13, weight="w500", color=ft.Colors.BLACK87)
-        self._password_field = ft.TextField(
-            hint_text="Password...",
-            password=True, 
-            can_reveal_password=True, 
-            width=280,
-            height=50,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            color=ft.Colors.BLACK,
-            content_padding=ft.padding.all(12),
-        )
+        password_label = create_form_label("Password")
+        self._password_field = create_form_text_field(hint_text="Password...", password=True)
 
         # Confirm password field with label
-        confirm_label = ft.Text("Confirm Password", size=13, weight="w500", color=ft.Colors.BLACK87)
-        self._confirm_field = ft.TextField(
-            hint_text="Confirm Password...",
-            password=True, 
-            can_reveal_password=True, 
-            width=280,
-            height=50,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            color=ft.Colors.BLACK,
-            content_padding=ft.padding.all(12),
-        )
+        confirm_label = create_form_label("Confirm Password")
+        self._confirm_field = create_form_text_field(hint_text="Confirm Password...", password=True)
 
         # Create Account button - teal
         submit_btn = create_action_button(
@@ -172,21 +131,15 @@ class SignupPage:
         confirm = (self._confirm_field.value or "")
 
         if not name or not email or not password or not confirm:
-            page.snack_bar = ft.SnackBar(ft.Text("All fields are required"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "All fields are required")
             return
 
         if password != confirm:
-            page.snack_bar = ft.SnackBar(ft.Text("Passwords do not match"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Passwords do not match")
             return
 
         if len(password) < 6:
-            page.snack_bar = ft.SnackBar(ft.Text("Password must be at least 6 characters"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Password must be at least 6 characters")
             return
 
         try:
@@ -194,67 +147,13 @@ class SignupPage:
             print(f"[DEBUG] User registered successfully with ID: {user_id}")
         except ValueError as exc:
             print(f"[DEBUG] Registration failed - ValueError: {exc}")
-            
-            # Show error dialog for existing email
-            def close_error_dialog(e):
-                error_dialog.open = False
-                page.update()
-            
-            error_dialog = ft.AlertDialog(
-                modal=True,
-                title=ft.Text("Registration Failed", weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700),
-                content=ft.Text(str(exc), text_align=ft.TextAlign.CENTER),
-                actions=[
-                    ft.ElevatedButton(
-                        "OK",
-                        on_click=close_error_dialog,
-                        style=ft.ButtonStyle(
-                            bgcolor=ft.Colors.RED_400,
-                            color=ft.Colors.WHITE,
-                            shape=ft.RoundedRectangleBorder(radius=8),
-                            side=ft.BorderSide(2, ft.Colors.RED_600),
-                        )
-                    ),
-                ],
-                actions_alignment=ft.MainAxisAlignment.CENTER,
-            )
-            
-            page.dialog = error_dialog
-            error_dialog.open = True
-            page.update()
+            create_error_dialog(page, title="Registration Failed", message=str(exc))
             return
         except Exception as exc:
             print(f"[DEBUG] Registration failed - Exception: {exc}")
             import traceback
             traceback.print_exc()
-            
-            # Show generic error dialog
-            def close_error_dialog(e):
-                error_dialog.open = False
-                page.update()
-            
-            error_dialog = ft.AlertDialog(
-                modal=True,
-                title=ft.Text("Registration Failed", weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700),
-                content=ft.Text("An error occurred during registration. Please try again.", text_align=ft.TextAlign.CENTER),
-                actions=[
-                    ft.ElevatedButton(
-                        "OK",
-                        on_click=close_error_dialog,
-                        style=ft.ButtonStyle(
-                            bgcolor=ft.Colors.RED_400,
-                            color=ft.Colors.WHITE,
-                            shape=ft.RoundedRectangleBorder(radius=8),
-                            side=ft.BorderSide(2, ft.Colors.RED_600),
-                        )
-                    ),
-                ],
-                actions_alignment=ft.MainAxisAlignment.CENTER,
-            )
-            
-            page.dialog = error_dialog
-            error_dialog.open = True
-            page.update()
+            create_error_dialog(page, title="Registration Failed", message="An error occurred during registration. Please try again.")
             return
 
         # Success: show success message and redirect

@@ -6,7 +6,10 @@ import app_config
 from services.adoption_service import AdoptionService
 from services.animal_service import AnimalService
 from state import get_app_state
-from components import create_page_header, create_content_card, create_action_button, create_gradient_background
+from components import (
+    create_page_header, create_content_card, create_action_button, create_gradient_background,
+    create_form_text_field, show_snackbar
+)
 
 
 class AdoptionFormPage:
@@ -34,7 +37,7 @@ class AdoptionFormPage:
         # fetch adoptable animals
         animals = self.animal_service.get_adoptable_animals() or []
 
-        # animal dropdown
+        # animal dropdown - needs to be ft.Dropdown for option text support
         animal_options = [ft.dropdown.Option(str(a.get("id")), text=a.get("name", "Unknown")) for a in animals]
         self._animal_dropdown = ft.Dropdown(
             label="Select Animal",
@@ -42,7 +45,8 @@ class AdoptionFormPage:
             options=animal_options,
             hint_text="Choose animal to adopt",
             bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
+            border_color=ft.Colors.GREY_300,
+            focused_border_color=ft.Colors.TEAL_400,
             color=ft.Colors.BLACK87,
         )
 
@@ -51,28 +55,19 @@ class AdoptionFormPage:
             self._animal_dropdown.value = str(animal_id)
 
         # form fields
-        self._name_field = ft.TextField(
+        self._name_field = create_form_text_field(
             label="Your Name", 
             width=350,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
         )
-        self._contact_field = ft.TextField(
+        self._contact_field = create_form_text_field(
             label="Contact Info (Phone/Email)", 
             width=350,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
         )
-        self._reason_field = ft.TextField(
-            label="Reason for Adoption", 
-            multiline=True, 
-            min_lines=3, 
+        self._reason_field = create_form_text_field(
+            label="Reason for Adoption",
+            multiline=True,
+            min_lines=3,
             width=350,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
         )
 
         # error display
@@ -188,9 +183,7 @@ class AdoptionFormPage:
             )
 
             # show success
-            page.snack_bar = ft.SnackBar(ft.Text("Application submitted successfully!"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Application submitted successfully!")
 
             # navigate to check status
             page.go(f"/check_status?request_id={request_id}")

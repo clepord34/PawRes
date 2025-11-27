@@ -4,7 +4,10 @@ from typing import Optional, List, Dict
 
 import app_config
 from services.animal_service import AnimalService
-from components import create_page_header, create_action_button, create_table_action_button, create_gradient_background
+from components import (
+    create_page_header, create_action_button, create_table_action_button, create_gradient_background,
+    create_section_card
+)
 
 
 class AvailableAdoptionPage:

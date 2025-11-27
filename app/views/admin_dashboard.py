@@ -18,7 +18,10 @@ from services.analytics_service import AnalyticsService
 from services.map_service import MapService
 from state import get_app_state
 import app_config
-from components import create_admin_sidebar, create_dashboard_card, create_gradient_background
+from components import (
+    create_admin_sidebar, create_dashboard_card, create_gradient_background,
+    create_stat_card, create_chart_container, fig_to_base64
+)
 
 
 class AdminDashboard:
@@ -67,14 +70,6 @@ class AdminDashboard:
         # Try to create charts with matplotlib
         chart_images = {}
         try:
-            def fig_to_base64(fig) -> str:
-                buf = BytesIO()
-                fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
-                plt.close(fig)
-                buf.seek(0)
-                b = base64.b64encode(buf.read()).decode("ascii")
-                return b
-
             # Line chart: rescued vs adopted trend (last 1 month / 30 days)
             fig1, ax1 = plt.subplots(figsize=(5, 2.5))
             ax1.plot(month_labels, rescued_counts, label="Rescued", marker="o", color="#26A69A")

@@ -17,7 +17,10 @@ from services.adoption_service import AdoptionService
 from services.map_service import MapService
 from services.photo_service import load_photo
 from state import get_app_state
-from components import create_user_sidebar, create_gradient_background
+from components import (
+    create_user_sidebar, create_gradient_background,
+    create_section_card, create_chart_container, fig_to_base64
+)
 
 
 class UserDashboard:
@@ -61,14 +64,6 @@ class UserDashboard:
         ongoing_rescue_missions = len([r for r in user_rescues if (r.get("status") or "").lower() == "on-going"])
 
         # Create chart data
-        def fig_to_base64(fig) -> str:
-            buf = BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight", dpi=100)
-            plt.close(fig)
-            buf.seek(0)
-            b = base64.b64encode(buf.read()).decode("ascii")
-            return b
-
         # Bar chart for user activity
         try:
             fig, ax = plt.subplots(figsize=(4.5, 2.5))

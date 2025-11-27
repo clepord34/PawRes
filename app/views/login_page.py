@@ -6,7 +6,10 @@ from typing import Optional
 from services.auth_service import AuthService
 from state import get_app_state
 import app_config
-from components import create_header, create_form_card, create_gradient_background, create_action_button
+from components import (
+    create_header, create_form_card, create_gradient_background, create_action_button,
+    create_form_text_field, create_form_label, show_snackbar
+)
 
 
 class LoginPage:
@@ -45,41 +48,16 @@ class LoginPage:
         header = create_header()
 
         # Email field with icon
-        self._email_field = ft.TextField(
+        self._email_field = create_form_text_field(
             hint_text="Enter your email",
-            width=280,
-            height=50,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            color=ft.Colors.BLACK,
-            text_align=ft.TextAlign.LEFT,
-            content_padding=ft.padding.only(left=15, right=10, top=10, bottom=10),
-            prefix=ft.Container(
-                ft.Icon(ft.Icons.EMAIL_OUTLINED, size=20, color=ft.Colors.BLACK54),
-                padding=ft.padding.only(left=12, right=8),
-            ),
+            prefix_icon=ft.Icons.EMAIL_OUTLINED,
         )
         
         # Password field with icon
-        self._password_field = ft.TextField(
+        self._password_field = create_form_text_field(
             hint_text="Enter your password",
-            password=True, 
-            can_reveal_password=True, 
-            width=280,
-            height=50,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            color=ft.Colors.BLACK,
-            text_align=ft.TextAlign.LEFT,
-            content_padding=ft.padding.only(left=15, right=10, top=10, bottom=10),
-            prefix=ft.Container(
-                ft.Icon(ft.Icons.LOCK_OUTLINE, size=20, color=ft.Colors.BLACK54),
-                padding=ft.padding.only(left=12, right=8),
-            ),
+            password=True,
+            prefix_icon=ft.Icons.LOCK_OUTLINE,
         )
 
         # Login button - full width teal
@@ -127,16 +105,10 @@ class LoginPage:
         ], alignment="center", spacing=5)
 
         # Label above email field
-        email_label = ft.Row([
-            ft.Icon(ft.Icons.EMAIL, size=16, color=ft.Colors.BLACK87),
-            ft.Text("Email Address", size=13, weight="w500", color=ft.Colors.BLACK87),
-        ], spacing=5)
+        email_label = create_form_label("Email Address", icon=ft.Icons.EMAIL)
         
         # Label above password field
-        password_label = ft.Row([
-            ft.Icon(ft.Icons.LOCK, size=16, color=ft.Colors.BLACK87),
-            ft.Text("Password", size=13, weight="w500", color=ft.Colors.BLACK87),
-        ], spacing=5)
+        password_label = create_form_label("Password", icon=ft.Icons.LOCK)
 
         # create a centered card/container for the form
         card = ft.Container(
@@ -199,16 +171,12 @@ class LoginPage:
         password = (self._password_field.value or "")
 
         if not email or not password:
-            page.snack_bar = ft.SnackBar(ft.Text("Please enter email and password"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Please enter email and password")
             return
 
         user = self.auth.login(email, password)
         if not user:
-            page.snack_bar = ft.SnackBar(ft.Text("Invalid email or password"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Invalid email or password")
             return
 
         role = user.get("role") or "user"
@@ -233,14 +201,7 @@ class LoginPage:
     def _on_google(self, page, e) -> None:
         # Placeholder for Google login flow. In a desktop/web Flet app you'd
         # typically open an OAuth flow; here we simply show a message.
-        try:
-            import flet as ft
-        except Exception:
-            return
-
-        page.snack_bar = ft.SnackBar(ft.Text("Google sign-in is not implemented."))
-        page.snack_bar.open = True
-        page.update()
+        show_snackbar(page, "Google sign-in is not implemented.")
 
 
 __all__ = ["LoginPage"]

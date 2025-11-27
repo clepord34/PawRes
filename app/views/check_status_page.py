@@ -8,7 +8,10 @@ from services.rescue_service import RescueService
 from services.animal_service import AnimalService
 from services.map_service import MapService
 from state import get_app_state
-from components import create_user_sidebar, create_status_badge, create_gradient_background
+from components import (
+    create_user_sidebar, create_status_badge, create_gradient_background,
+    create_page_title, create_section_card, create_map_container
+)
 
 
 class CheckStatusPage:
@@ -231,32 +234,18 @@ class CheckStatusPage:
         # Main content area
         main_content = ft.Container(
             ft.Column([
-                ft.Text("Application Status", size=28, weight="bold", color=ft.Colors.with_opacity(0.6, ft.Colors.BLACK), text_align=ft.TextAlign.CENTER),
+                create_page_title("Application Status"),
                 ft.Container(height=20),
                 # Adoption Requests Section
-                ft.Container(
-                    ft.Column([
-                        ft.Text("Adoption Requests", size=18, weight="w600", color=ft.Colors.BLACK87),
-                        ft.Container(height=10),
-                        adoption_table,
-                    ], spacing=0),
-                    padding=20,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=12,
-                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                create_section_card(
+                    title="Adoption Requests",
+                    content=adoption_table,
                 ),
                 ft.Container(height=20),
                 # Rescue Missions Section
-                ft.Container(
-                    ft.Column([
-                        ft.Text("Reported Rescue Missions", size=18, weight="w600", color=ft.Colors.BLACK87),
-                        ft.Container(height=10),
-                        rescue_table,
-                    ], spacing=0),
-                    padding=20,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=12,
-                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                create_section_card(
+                    title="Reported Rescue Missions",
+                    content=rescue_table,
                 ),
                 ft.Container(height=20),
                 # Map Container

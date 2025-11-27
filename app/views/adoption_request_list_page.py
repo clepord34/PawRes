@@ -4,7 +4,10 @@ from typing import Optional
 
 import app_config
 from services.adoption_service import AdoptionService
-from components import create_admin_sidebar, create_adoption_status_dropdown, create_status_badge, create_gradient_background
+from components import (
+    create_admin_sidebar, create_adoption_status_dropdown, create_status_badge, create_gradient_background,
+    create_page_title, create_section_card, show_snackbar
+)
 
 
 class AdoptionRequestListPage:
@@ -150,7 +153,7 @@ class AdoptionRequestListPage:
         # Main content area
         main_content = ft.Container(
             ft.Column([
-                ft.Text("Adoption Requests List", size=28, weight="bold", color=ft.Colors.with_opacity(0.6, ft.Colors.BLACK)),
+                create_page_title("Adoption Requests List"),
                 ft.Container(height=15),
                 table_container,
             ], spacing=0, scroll=ft.ScrollMode.AUTO),
@@ -171,22 +174,13 @@ class AdoptionRequestListPage:
     def _on_status_change(self, page, request_id: int, new_status: str) -> None:
         try:
             updated = self.adoption_service.update_status(request_id, new_status)
-            import flet as ft
 
             if updated:
-                page.snack_bar = ft.SnackBar(ft.Text(f"Status updated to {new_status}"))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, f"Status updated to {new_status}")
                 # Refresh page
                 self.build(page, user_role="admin")
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("Failed to update status"))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, "Failed to update status", error=True)
         except Exception as exc:
-            import flet as ft
-
-            page.snack_bar = ft.SnackBar(ft.Text(f"Error: {exc}"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, f"Error: {exc}", error=True)
 

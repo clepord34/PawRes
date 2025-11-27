@@ -16,7 +16,10 @@ from services.animal_service import AnimalService
 from services.rescue_service import RescueService
 from services.adoption_service import AdoptionService
 from services.analytics_service import AnalyticsService
-from components import create_admin_sidebar, create_gradient_background
+from components import (
+    create_admin_sidebar, create_gradient_background,
+    create_page_title, create_chart_container, create_stat_card, fig_to_base64
+)
 
 
 class ChartsPage:
@@ -54,15 +57,6 @@ class ChartsPage:
         rescues_change = changes["rescues_change"]
         adoptions_change = changes["adoptions_change"]
         pending_change = changes["pending_change"]
-
-        # helper to render matplotlib figure to base64 png
-        def fig_to_base64(fig) -> str:
-            buf = BytesIO()
-            fig.savefig(buf, format="png", bbox_inches="tight")
-            plt.close(fig)
-            buf.seek(0)
-            b = base64.b64encode(buf.read()).decode("ascii")
-            return b
 
         # Line chart: rescued vs adopted trend (last 1 month / 30 days)
         fig1, ax1 = plt.subplots(figsize=(8, 3.5))

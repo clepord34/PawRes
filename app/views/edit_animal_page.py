@@ -11,7 +11,11 @@ import app_config
 from services.animal_service import AnimalService
 from services.photo_service import load_photo
 from storage.file_store import get_file_store
-from components import create_page_header, create_action_button, create_gradient_background, PhotoUploadWidget, create_photo_upload_widget
+from components import (
+    create_page_header, create_action_button, create_gradient_background, 
+    PhotoUploadWidget, create_photo_upload_widget,
+    create_form_text_field, create_form_dropdown, create_form_label, show_snackbar
+)
 
 
 class EditAnimalPage:
@@ -48,9 +52,7 @@ class EditAnimalPage:
                     pass
 
         if animal_id is None:
-            page.snack_bar = ft.SnackBar(ft.Text("Error: No animal ID provided"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Error: No animal ID provided", error=True)
             page.go("/animals_list?admin=1")
             return
 
@@ -61,9 +63,7 @@ class EditAnimalPage:
         animal = next((a for a in animals if a.get("id") == animal_id), None)
 
         if not animal:
-            page.snack_bar = ft.SnackBar(ft.Text("Error: Animal not found"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Error: Animal not found", error=True)
             page.go("/animals_list?admin=1")
             return
 
@@ -113,20 +113,14 @@ class EditAnimalPage:
                         fit=ft.ImageFit.COVER,
                         border_radius=8,
                     )
-                    page.snack_bar = ft.SnackBar(ft.Text(f"Photo selected: {original_name}"))
-                    page.snack_bar.open = True
-                    page.update()
+                    show_snackbar(page, f"Photo selected: {original_name}")
                 except Exception as ex:
                     import traceback
                     traceback.print_exc()
-                    page.snack_bar = ft.SnackBar(ft.Text(f"Error loading photo: {str(ex)}"))
-                    page.snack_bar.open = True
-                    page.update()
+                    show_snackbar(page, f"Error loading photo: {str(ex)}", error=True)
             else:
                 # No files were selected by the user
-                page.snack_bar = ft.SnackBar(ft.Text("No file selected."))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, "No file selected.")
 
         self._file_picker = ft.FilePicker(on_result=on_file_picked)
         page.overlay.append(self._file_picker)
@@ -179,56 +173,28 @@ class EditAnimalPage:
         )
 
         # Pre-fill form with existing data
-        self._type_dropdown = ft.Dropdown(
+        self._type_dropdown = create_form_dropdown(
             hint_text="Pick Animal",
-            options=[ft.dropdown.Option("dog"), ft.dropdown.Option("cat")],
-            width=280,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            prefix_icon=ft.Icons.PETS,
+            options=["dog", "cat"],
+            leading_icon=ft.Icons.PETS,
             value=animal.get("species", "")
         )
         
-        self._name_field = ft.TextField(
+        self._name_field = create_form_text_field(
             hint_text="Enter animal name...",
-            width=280,
-            height=50,
-            color=ft.Colors.BLACK,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            content_padding=ft.padding.all(12),
             value=animal.get("name", "")
         )
         
-        self._age_field = ft.TextField(
+        self._age_field = create_form_text_field(
             hint_text="Enter animal Age...",
             keyboard_type=ft.KeyboardType.NUMBER,
-            width=280,
-            height=50,
-            color=ft.Colors.BLACK,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            content_padding=ft.padding.all(12),
             value=str(animal.get("age", ""))
         )
         
-        self._health_dropdown = ft.Dropdown(
+        self._health_dropdown = create_form_dropdown(
             hint_text="Health Status",
-            options=[
-                ft.dropdown.Option("healthy"),
-                ft.dropdown.Option("recovering"),
-                ft.dropdown.Option("injured"),
-            ],
-            width=280,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            prefix_icon=ft.Icons.FAVORITE,
+            options=["healthy", "recovering", "injured"],
+            leading_icon=ft.Icons.FAVORITE,
             value=animal.get("status", "")
         )
 
@@ -261,10 +227,10 @@ class EditAnimalPage:
         )
 
         # Labels for fields
-        type_label = ft.Text("Animal Type", size=13, color=ft.Colors.BLACK54)
-        name_label = ft.Text("Animal Name", size=13, color=ft.Colors.BLACK54)
-        age_label = ft.Text("Age", size=13, color=ft.Colors.BLACK54)
-        health_label = ft.Text("Health Status", size=13, color=ft.Colors.BLACK54)
+        type_label = create_form_label("Animal Type")
+        name_label = create_form_label("Animal Name")
+        age_label = create_form_label("Age")
+        health_label = create_form_label("Health Status")
 
         card = ft.Container(
             ft.Column([
@@ -322,9 +288,7 @@ class EditAnimalPage:
         health_status = (self._health_dropdown.value or "").strip()
 
         if not animal_type or not name or not age_str or not health_status:
-            page.snack_bar = ft.SnackBar(ft.Text("All fields are required"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "All fields are required")
             return
 
         try:
@@ -332,9 +296,7 @@ class EditAnimalPage:
             if age < 0:
                 raise ValueError("Age must be non-negative")
         except ValueError:
-            page.snack_bar = ft.SnackBar(ft.Text("Age must be a valid non-negative number"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Age must be a valid non-negative number")
             return
 
         try:
@@ -362,18 +324,12 @@ class EditAnimalPage:
                 self.service.update_animal_photo(self._animal_id, new_photo_filename)
             
             if success:
-                page.snack_bar = ft.SnackBar(ft.Text("Animal updated successfully!"))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, "Animal updated successfully!")
                 page.go("/animals_list?admin=1")
             else:
-                page.snack_bar = ft.SnackBar(ft.Text("Failed to update animal"))
-                page.snack_bar.open = True
-                page.update()
+                show_snackbar(page, "Failed to update animal", error=True)
         except Exception as exc:
-            page.snack_bar = ft.SnackBar(ft.Text(f"Error: {str(exc)}"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, f"Error: {str(exc)}", error=True)
 
 
 __all__ = ["EditAnimalPage"]

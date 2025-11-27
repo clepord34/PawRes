@@ -6,7 +6,10 @@ import app_config
 from services.rescue_service import RescueService
 from services.map_service import MapService
 from state import get_app_state
-from components import create_page_header, create_content_card, create_action_button, create_gradient_background
+from components import (
+    create_page_header, create_content_card, create_action_button, create_gradient_background,
+    create_form_text_field, create_form_dropdown, show_snackbar
+)
 
 
 class RescueFormPage:
@@ -30,39 +33,27 @@ class RescueFormPage:
 
         # Header with logo
         header = create_page_header("Paw Rescue")        # animal type dropdown
-        self._type_dropdown = ft.Dropdown(
+        self._type_dropdown = create_form_dropdown(
             label="Animal Type",
+            options=["Dog", "Cat", "Other"],
             width=350,
-            options=[ft.dropdown.Option("Dog"), ft.dropdown.Option("Cat"), ft.dropdown.Option("Other")],
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
         )
 
         # form fields
-        self._name_field = ft.TextField(
+        self._name_field = create_form_text_field(
             label="Reporter Name", 
             width=350,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
         )
-        self._location_field = ft.TextField(
-            label="Location", 
-            width=350, 
+        self._location_field = create_form_text_field(
+            label="Location",
             hint_text="Address or coordinates",
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
-        )
-        self._details_field = ft.TextField(
-            label="Other Details", 
-            multiline=True, 
-            min_lines=3, 
             width=350,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.TEAL_300,
-            color=ft.Colors.BLACK87,
+        )
+        self._details_field = create_form_text_field(
+            label="Other Details",
+            multiline=True,
+            min_lines=3,
+            width=350,
         )
 
         # error display
@@ -191,9 +182,7 @@ class RescueFormPage:
             print(f"[DEBUG] Rescue mission created with ID={mission_id}")
 
             # show success
-            page.snack_bar = ft.SnackBar(ft.Text("Rescue mission submitted successfully!"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Rescue mission submitted successfully!")
 
             # navigate to check status
             page.go(f"/check_status?mission_id={mission_id}")

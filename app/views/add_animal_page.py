@@ -5,7 +5,10 @@ from typing import Optional
 
 from services.animal_service import AnimalService
 import app_config
-from components import create_header, create_photo_upload_widget, create_action_button, create_gradient_background
+from components import (
+    create_header, create_photo_upload_widget, create_action_button, create_gradient_background,
+    create_form_text_field, create_form_dropdown, create_form_label, show_snackbar
+)
 
 
 class AddAnimalPage:
@@ -35,53 +38,23 @@ class AddAnimalPage:
         photo_container = self._photo_widget.build()
 
         # Dropdown and fields with updated styling
-        self._type_dropdown = ft.Dropdown(
+        self._type_dropdown = create_form_dropdown(
             hint_text="Pick Animal",
-            options=[ft.dropdown.Option("dog"), ft.dropdown.Option("cat")],
-            width=280,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            prefix_icon=ft.Icons.PETS,
+            options=["dog", "cat"],
+            leading_icon=ft.Icons.PETS,
         )
         
-        self._name_field = ft.TextField(
-            hint_text="Enter animal name...",
-            width=280,
-            height=50,
-            color=ft.Colors.BLACK,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            content_padding=ft.padding.all(12),
-        )
+        self._name_field = create_form_text_field(hint_text="Enter animal name...")
         
-        self._age_field = ft.TextField(
+        self._age_field = create_form_text_field(
             hint_text="Enter animal Age...",
             keyboard_type=ft.KeyboardType.NUMBER,
-            width=280,
-            height=50,
-            color=ft.Colors.BLACK,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            text_size=14,
-            content_padding=ft.padding.all(12),
         )
         
-        self._health_dropdown = ft.Dropdown(
+        self._health_dropdown = create_form_dropdown(
             hint_text="Health Status",
-            options=[
-                ft.dropdown.Option("healthy"),
-                ft.dropdown.Option("recovering"),
-                ft.dropdown.Option("injured"),
-            ],
-            width=280,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
-            prefix_icon=ft.Icons.FAVORITE,
+            options=["healthy", "recovering", "injured"],
+            leading_icon=ft.Icons.FAVORITE,
         )
 
         # Buttons
@@ -102,10 +75,10 @@ class AddAnimalPage:
         )
 
         # Labels for fields
-        type_label = ft.Text("Choose what type", size=13, color=ft.Colors.BLACK54)
-        name_label = ft.Text("Animal Name", size=13, color=ft.Colors.BLACK54)
-        age_label = ft.Text("Age", size=13, color=ft.Colors.BLACK54)
-        health_label = ft.Text("Health Status", size=13, color=ft.Colors.BLACK54)
+        type_label = create_form_label("Choose what type")
+        name_label = create_form_label("Animal Name")
+        age_label = create_form_label("Age")
+        health_label = create_form_label("Health Status")
 
         # Card with form
         card = ft.Container(
@@ -161,9 +134,7 @@ class AddAnimalPage:
         health_status = (self._health_dropdown.value or "").strip()
 
         if not animal_type or not name or not age_str or not health_status:
-            page.snack_bar = ft.SnackBar(ft.Text("All fields are required"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "All fields are required")
             return
 
         try:
@@ -171,9 +142,7 @@ class AddAnimalPage:
             if age < 0:
                 raise ValueError("Age must be non-negative")
         except ValueError:
-            page.snack_bar = ft.SnackBar(ft.Text("Age must be a valid non-negative number"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, "Age must be a valid non-negative number")
             return
 
         try:
@@ -191,16 +160,12 @@ class AddAnimalPage:
                 photo=photo_filename,  # Stores filename like 'pipay_20251125_abc1.jpg'
             )
 
-            page.snack_bar = ft.SnackBar(ft.Text(f"Animal added successfully (ID: {animal_id})"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, f"Animal added successfully (ID: {animal_id})")
             page.go("/admin")
         except Exception as exc:
             import traceback
             traceback.print_exc()
-            page.snack_bar = ft.SnackBar(ft.Text(f"Error: {str(exc)}"))
-            page.snack_bar.open = True
-            page.update()
+            show_snackbar(page, f"Error: {str(exc)}", error=True)
 
 
 __all__ = ["AddAnimalPage"]
