@@ -38,10 +38,19 @@ class AdoptionRequestListPage:
         for req in requests:
             request_id = req.get("id")
             user_name = req.get("user_name", "N/A")
-            animal_name = req.get("animal_name", "N/A")
             contact = req.get("contact", "N/A")
             reason = req.get("reason", "N/A")
             status = (req.get("status") or "pending").capitalize()
+            
+            # Handle animal name - the query uses COALESCE to prefer joined name, fallback to stored name
+            animal_id = req.get("animal_id")
+            animal_name = req.get("animal_name")
+            
+            # Add "(Removed)" suffix if animal was deleted (animal_id is NULL or no species)
+            if animal_id is None or (animal_id and not req.get("animal_species")):
+                animal_name = (animal_name or "[Animal Removed]") + " (Removed)"
+            elif not animal_name:
+                animal_name = "N/A"
 
             # Status dropdown for admin
             if is_admin:
@@ -53,22 +62,45 @@ class AdoptionRequestListPage:
                 else:
                     dropdown_color = ft.Colors.ORANGE_600
                 
-                status_dropdown = ft.Dropdown(
-                    value=status,
-                    options=[
-                        ft.dropdown.Option("Approved"),
-                        ft.dropdown.Option("Denied")
-                    ],
-                    on_change=lambda e, rid=request_id: self._on_status_change(page, rid, e.control.value),
-                    width=140,
-                    bgcolor=dropdown_color,
-                    border_color=dropdown_color,
-                    text_style=ft.TextStyle(color=ft.Colors.WHITE, size=12, weight="w500"),
-                    color=ft.Colors.WHITE,
-                    filled=True,
-                    content_padding=10,
-                )
-                status_widget = status_dropdown
+                # Check if status changes should be disabled:
+                # 1. Animal was removed (animal_id is NULL) - request is frozen
+                # 2. Status is already "Approved" - adoption is complete, can't be changed
+                is_frozen = animal_id is None or status.lower() == "approved"
+                
+                if is_frozen:
+                    # Show static badge instead of dropdown (status locked)
+                    status_widget = ft.Container(
+                        ft.Row([
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE if status.lower() == "approved" else 
+                                ft.Icons.CANCEL if status.lower() == "denied" else ft.Icons.PENDING,
+                                size=14, color=ft.Colors.WHITE
+                            ),
+                            ft.Text(status, size=12, color=ft.Colors.WHITE, weight="w500"),
+                            ft.Icon(ft.Icons.LOCK, size=12, color=ft.Colors.WHITE70) if animal_id is None else ft.Container(),
+                        ], spacing=5, alignment="center", tight=True),
+                        bgcolor=dropdown_color,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                        border_radius=20,
+                        tooltip="Status locked - animal was removed" if animal_id is None else "Approved adoptions cannot be changed",
+                    )
+                else:
+                    status_dropdown = ft.Dropdown(
+                        value=status,
+                        options=[
+                            ft.dropdown.Option("Approved"),
+                            ft.dropdown.Option("Denied")
+                        ],
+                        on_change=lambda e, rid=request_id: self._on_status_change(page, rid, e.control.value),
+                        width=140,
+                        bgcolor=dropdown_color,
+                        border_color=dropdown_color,
+                        text_style=ft.TextStyle(color=ft.Colors.WHITE, size=12, weight="w500"),
+                        color=ft.Colors.WHITE,
+                        filled=True,
+                        content_padding=10,
+                    )
+                    status_widget = status_dropdown
             else:
                 # For non-admin, show static chip
                 if status.lower() == "approved":

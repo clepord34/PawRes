@@ -20,10 +20,14 @@ def create_status_badge(
     status_lower = (status or "").lower()
     
     # Determine color and icon based on status
-    if status_lower in ("approved", "adopted", "completed", "rescued"):
+    if status_lower in ("approved", "completed", "rescued"):
         bgcolor = ft.Colors.GREEN_600
         icon = ft.Icons.CHECK_CIRCLE
         text = status.capitalize()
+    elif status_lower == "adopted":
+        bgcolor = ft.Colors.PURPLE_600
+        icon = ft.Icons.FAVORITE
+        text = "Adopted"
     elif status_lower == "denied":
         bgcolor = ft.Colors.RED_600
         icon = ft.Icons.CANCEL

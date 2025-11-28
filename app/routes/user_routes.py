@@ -28,12 +28,18 @@ def render_adoption_form(page, params: Dict[str, Any]) -> None:
     from views.adoption_form_page import AdoptionFormPage
     clear_page(page)
     animal_id = None
+    edit_request_id = None
     if "animal_id" in params:
         try:
             animal_id = int(params["animal_id"])
         except (ValueError, TypeError):
             pass
-    AdoptionFormPage(db_path=app_config.DB_PATH).build(page, animal_id=animal_id)
+    if "edit_request_id" in params:
+        try:
+            edit_request_id = int(params["edit_request_id"])
+        except (ValueError, TypeError):
+            pass
+    AdoptionFormPage(db_path=app_config.DB_PATH).build(page, animal_id=animal_id, edit_request_id=edit_request_id)
     page.update()
 
 

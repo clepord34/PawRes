@@ -78,10 +78,13 @@ class MapService:
             logger.error("flet or flet-map not installed")
             return None
         
-        # Filter missions that have coordinates
+        # Filter missions that have coordinates AND are not deleted/closed
         missions_with_coords = [
             m for m in missions 
-            if m.get('latitude') is not None and m.get('longitude') is not None
+            if m.get('latitude') is not None 
+            and m.get('longitude') is not None
+            and (m.get('status') or '').lower() != 'deleted'
+            and '|closed' not in (m.get('status') or '').lower()
         ]
         
         # Determine map center

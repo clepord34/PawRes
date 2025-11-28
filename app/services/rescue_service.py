@@ -56,7 +56,15 @@ class RescueService:
         return True
 
     def get_all_missions(self) -> List[Dict[str, Any]]:
-        """Return all missions ordered newest first."""
+        """Return all active missions ordered newest first (excludes closed/deleted)."""
+        rows = self.db.fetch_all("SELECT * FROM rescue_missions WHERE status NOT LIKE '%|Closed' AND status != 'Deleted' ORDER BY mission_date DESC")
+        return rows
+
+    def get_all_missions_for_analytics(self) -> List[Dict[str, Any]]:
+        """Return ALL missions including closed/deleted for analytics and charts.
+        
+        This is used for historical data in charts like 'Rescued vs Adopted'.
+        """
         rows = self.db.fetch_all("SELECT * FROM rescue_missions ORDER BY mission_date DESC")
         return rows
 
@@ -64,6 +72,38 @@ class RescueService:
         """Return missions submitted by a specific user, newest first."""
         rows = self.db.fetch_all("SELECT * FROM rescue_missions WHERE user_id = ? ORDER BY mission_date DESC", (user_id,))
         return rows
+
+    def delete_mission(self, mission_id: int) -> bool:
+        """Soft-delete a rescue mission by preserving original status with Closed suffix.
+        
+        This preserves the record for the user who reported it while hiding it
+        from admin views. The user can still see their report history.
+        Status is stored as 'OriginalStatus|Closed' (e.g., 'Rescued|Closed').
+        
+        Returns True if updated successfully.
+        """
+        existing = self.db.fetch_one("SELECT id, status FROM rescue_missions WHERE id = ?", (mission_id,))
+        if not existing:
+            return False
+        # Store original status with |Closed suffix for display as "Status (Case Closed)"
+        original_status = existing.get('status', 'On-going')
+        # Don't double-close
+        if '|Closed' in original_status:
+            return True
+        closed_status = f"{original_status}|Closed"
+        self.db.execute("UPDATE rescue_missions SET status = ? WHERE id = ?", (closed_status, mission_id))
+        return True
+
+    def hard_delete_mission(self, mission_id: int) -> bool:
+        """Permanently delete a rescue mission. Use with caution.
+        
+        Returns True if deleted successfully.
+        """
+        existing = self.db.fetch_one("SELECT id FROM rescue_missions WHERE id = ?", (mission_id,))
+        if not existing:
+            return False
+        self.db.execute("DELETE FROM rescue_missions WHERE id = ?", (mission_id,))
+        return True
 
 
 __all__ = ["RescueService"]

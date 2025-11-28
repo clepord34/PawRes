@@ -4,9 +4,10 @@ from typing import Optional, List, Dict
 
 import app_config
 from services.animal_service import AnimalService
+from services.photo_service import load_photo
 from components import (
-    create_page_header, create_action_button, create_table_action_button, create_gradient_background,
-    create_section_card
+    create_user_sidebar, create_gradient_background,
+    create_page_title, create_animal_card
 )
 
 
@@ -23,82 +24,77 @@ class AvailableAdoptionPage:
 
         page.title = "Available for Adoption"
 
-        # Header with logo/title
-        header = create_page_header("Paw Rescue")
+        # Get user info from session
+        user_name = page.session.get("user_name") or "User"
 
-        # Title
-        title = ft.Container(
-            ft.Text("Available For Adoption", size=18, weight="w600", color=ft.Colors.BLACK87),
-            padding=ft.padding.only(bottom=15, top=10),
-            alignment=ft.alignment.center,
-        )
+        # Create sidebar
+        sidebar = create_user_sidebar(page, user_name)
 
-        # fetch adoptable animals
+        # Fetch adoptable animals (only healthy/ready animals)
         self._all_animals = self.animal_service.get_adoptable_animals() or []
 
-        # Build table rows
-        rows = []
-        for a in self._all_animals:
-            name = (a.get("name") or "Unknown")
-            species = (a.get("species") or "Unknown")
-            age = f"{a.get('age')}yrs Old" if a.get('age') else "Unknown"
-            status = (a.get("status") or "unknown").capitalize()
-            animal_id = a.get("id")
-
-            adopt_btn = create_table_action_button(
-                "Adopt",
-                on_click=lambda e, aid=animal_id: self._on_apply(page, aid)
+        # Create animal cards
+        def create_card_for_animal(animal):
+            aid = animal.get("id")
+            photo_base64 = load_photo(animal.get("photo"))
+            return create_animal_card(
+                animal_id=aid,
+                name=animal.get("name", "Unknown"),
+                species=animal.get("species", "Unknown"),
+                age=animal.get("age", 0),
+                status=animal.get("status", "unknown"),
+                photo_base64=photo_base64,
+                on_adopt=lambda e, id=aid: self._on_apply(page, id),
+                is_admin=False,
+                show_adopt_button=True,
             )
 
-            rows.append(ft.DataRow(cells=[
-                ft.DataCell(ft.Text(name, size=14, color=ft.Colors.BLACK87)),
-                ft.DataCell(ft.Text(species, size=14, color=ft.Colors.BLACK87)),
-                ft.DataCell(ft.Text(age, size=14, color=ft.Colors.BLACK87)),
-                ft.DataCell(ft.Text(status, size=14, color=ft.Colors.BLACK87)),
-                ft.DataCell(adopt_btn),
-            ]))
+        # Create grid of animal cards
+        animal_cards = []
+        if self._all_animals:
+            for animal in self._all_animals:
+                animal_cards.append(create_card_for_animal(animal))
+        else:
+            animal_cards.append(
+                ft.Container(
+                    ft.Column([
+                        ft.Icon(ft.Icons.PETS, size=64, color=ft.Colors.GREY_400),
+                        ft.Text("No animals available for adoption", size=16, color=ft.Colors.BLACK54),
+                    ], horizontal_alignment="center", spacing=10),
+                    padding=40,
+                    alignment=ft.alignment.center,
+                )
+            )
 
-        # Table
-        table = ft.DataTable(
-            columns=[
-                ft.DataColumn(ft.Text("Name", weight="bold", size=14, color=ft.Colors.BLACK87)),
-                ft.DataColumn(ft.Text("Type", weight="bold", size=14, color=ft.Colors.BLACK87)),
-                ft.DataColumn(ft.Text("Age", weight="bold", size=14, color=ft.Colors.BLACK87)),
-                ft.DataColumn(ft.Text("Health Status", weight="bold", size=14, color=ft.Colors.BLACK87)),
-                ft.DataColumn(ft.Text("", weight="bold", size=14)),
-            ],
-            rows=rows,
-            heading_row_color=ft.Colors.WHITE,
-            data_row_min_height=60,
-            border=ft.border.all(1, ft.Colors.GREY_300),
-            border_radius=8,
-        )
-
-        # Card container
-        card = ft.Container(
+        # Main content area
+        main_content = ft.Container(
             ft.Column([
-                title, 
-                ft.Container(table, bgcolor=ft.Colors.WHITE, padding=10),
-                ft.Divider(height=8, color=ft.Colors.TRANSPARENT),
-                create_action_button(
-                    "Back to Dashboard",
-                    on_click=lambda e: page.go("/user"),
-                    outlined=True,
-                    bgcolor=ft.Colors.TEAL_400
+                # Page title
+                create_page_title("Available for Adoption"),
+                # Animal cards grid
+                ft.Container(
+                    ft.Row(
+                        animal_cards,
+                        wrap=True,
+                        spacing=15,
+                        run_spacing=15,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=15, spread_radius=2, color=ft.Colors.BLACK12, offset=(0, 3)),
                 ),
-            ], horizontal_alignment="center", spacing=10),
-            width=700,
-            padding=20,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=12,
-            shadow=ft.BoxShadow(blur_radius=20, spread_radius=5, color=ft.Colors.BLACK12, offset=(0, 5)),
+            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            expand=True,
+            padding=30,
         )
 
-        # Main layout
-        layout = ft.Column([
-            header,
-            card
-        ], horizontal_alignment="center", alignment="center", expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+        # Layout with sidebar
+        layout = ft.Row([
+            sidebar,
+            main_content,
+        ], spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
 
         page.controls.clear()
         page.add(create_gradient_background(layout))

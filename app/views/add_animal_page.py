@@ -53,7 +53,7 @@ class AddAnimalPage:
         
         self._health_dropdown = create_form_dropdown(
             hint_text="Health Status",
-            options=["healthy", "recovering", "injured"],
+            options=["healthy", "recovering", "injured", "adopted"],
             leading_icon=ft.Icons.FAVORITE,
         )
 

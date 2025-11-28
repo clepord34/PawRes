@@ -18,8 +18,9 @@ class AnimalsListPage:
         self.animal_service = AnimalService(db=db_path or app_config.DB_PATH)
         self.page = None  # Store page reference
         self.user_role = "user"  # Store user role
+        self.current_filter = "all"  # Current filter state
 
-    def build(self, page, user_role: str = "user") -> None:
+    def build(self, page, user_role: str = "user", filter_status: str = "all") -> None:
         try:
             import flet as ft
         except Exception as exc:
@@ -28,6 +29,7 @@ class AnimalsListPage:
         # Store references
         self.page = page
         self.user_role = user_role
+        self.current_filter = filter_status
         page.title = "Animals List"
 
         is_admin = user_role == "admin"
@@ -42,7 +44,45 @@ class AnimalsListPage:
             sidebar = create_user_sidebar(page, user_name)
 
         # Get animals from database
-        animals = self.animal_service.get_all_animals()
+        all_animals = self.animal_service.get_all_animals()
+
+        # Apply filter
+        if filter_status == "all":
+            animals = all_animals
+        elif filter_status == "healthy":
+            animals = [a for a in all_animals if (a.get("status") or "").lower() in ("healthy", "available", "adoptable", "ready")]
+        elif filter_status == "recovering":
+            animals = [a for a in all_animals if (a.get("status") or "").lower() == "recovering"]
+        elif filter_status == "injured":
+            animals = [a for a in all_animals if (a.get("status") or "").lower() == "injured"]
+        elif filter_status == "adopted":
+            animals = [a for a in all_animals if (a.get("status") or "").lower() == "adopted"]
+        else:
+            animals = all_animals
+
+        # Create filter dropdown
+        def on_filter_change(e):
+            new_filter = e.control.value
+            self.build(page, user_role=user_role, filter_status=new_filter)
+
+        filter_dropdown = ft.Dropdown(
+            label="Filter by Status",
+            width=200,
+            value=filter_status,
+            options=[
+                ft.dropdown.Option("all", text="All Animals"),
+                ft.dropdown.Option("healthy", text="Healthy"),
+                ft.dropdown.Option("recovering", text="Recovering"),
+                ft.dropdown.Option("injured", text="Injured"),
+                ft.dropdown.Option("adopted", text="Adopted"),
+            ],
+            on_change=on_filter_change,
+            bgcolor=ft.Colors.WHITE,
+            border_color=ft.Colors.GREY_300,
+            focused_border_color=ft.Colors.TEAL_400,
+            color=ft.Colors.BLACK87,
+            text_size=14,
+        )
 
         # Create animal cards using component
         def create_card_for_animal(animal):
@@ -60,6 +100,7 @@ class AnimalsListPage:
                 on_edit=lambda e, id=aid: self._on_edit(page, id) if is_admin else None,
                 on_delete=lambda e, id=aid: self.delete_animal(id) if is_admin else None,
                 is_admin=is_admin,
+                show_adopt_button=not is_admin,  # Only show adopt button for users
             )
 
         # Create grid of animal cards
@@ -68,13 +109,31 @@ class AnimalsListPage:
             for animal in animals:
                 animal_cards.append(create_card_for_animal(animal))
         else:
-            animal_cards.append(ft.Text("No animals found", size=16, color=ft.Colors.BLACK54))
+            animal_cards.append(
+                ft.Container(
+                    ft.Column([
+                        ft.Icon(ft.Icons.PETS, size=64, color=ft.Colors.GREY_400),
+                        ft.Text("No animals found", size=16, color=ft.Colors.BLACK54),
+                    ], horizontal_alignment="center", spacing=10),
+                    padding=40,
+                    alignment=ft.alignment.center,
+                )
+            )
 
         # Main content area
         main_content = ft.Container(
             ft.Column([
                 # Page title
                 create_page_title("Animal List"),
+                # Filter row
+                ft.Container(
+                    ft.Row([
+                        filter_dropdown,
+                        ft.Container(width=20),
+                        ft.Text(f"Showing {len(animals)} animal(s)", size=14, color=ft.Colors.BLACK54),
+                    ], alignment=ft.MainAxisAlignment.START),
+                    padding=ft.padding.only(bottom=15),
+                ),
                 # Animal cards grid
                 ft.Container(
                     ft.Row(
@@ -104,17 +163,7 @@ class AnimalsListPage:
             layout = main_content
 
         page.controls.clear()
-        page.add(ft.Container(
-            layout,
-            expand=True,
-            width=float('inf'),
-            height=float('inf'),
-            gradient=ft.LinearGradient(
-                begin=ft.alignment.top_center,
-                end=ft.alignment.bottom_center,
-                colors=[ft.Colors.LIGHT_BLUE_50, ft.Colors.AMBER_50]
-            )
-        ))
+        page.add(create_gradient_background(layout))
         page.update()
 
     # ---- actions ----
@@ -142,7 +191,7 @@ class AnimalsListPage:
                 
                 # Rebuild the entire page to show updated list
                 print("Rebuilding page...")
-                self.build(self.page, user_role=self.user_role)
+                self.build(self.page, user_role=self.user_role, filter_status=self.current_filter)
                 print("Delete complete!\n")
             else:
                 show_snackbar(self.page, "Failed to delete", error=True)

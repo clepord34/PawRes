@@ -370,6 +370,7 @@ def create_animal_card(
     on_edit: Optional[Callable] = None,
     on_delete: Optional[Callable] = None,
     is_admin: bool = False,
+    show_adopt_button: bool = True,
 ) -> object:
     """Create an animal display card.
     
@@ -384,17 +385,23 @@ def create_animal_card(
         on_edit: Callback for edit button (admin)
         on_delete: Callback for delete button (admin)
         is_admin: Whether to show admin controls
+        show_adopt_button: Whether to show the adopt button (for user view)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
     
     # Status color mapping
+    status_lower = status.lower()
     status_colors = {
         "healthy": ft.Colors.GREEN_600,
         "recovering": ft.Colors.ORANGE_600,
         "injured": ft.Colors.RED_600,
+        "adopted": ft.Colors.PURPLE_600,
     }
-    status_color = status_colors.get(status.lower(), ft.Colors.GREY_600)
+    status_color = status_colors.get(status_lower, ft.Colors.GREY_600)
+    
+    # Determine if animal is adoptable (only healthy animals can be adopted)
+    is_adoptable = status_lower in ("healthy", "available", "adoptable", "ready")
     
     # Animal image
     if photo_base64:
@@ -448,21 +455,34 @@ def create_animal_card(
                 )
             ),
         ], spacing=8, alignment=ft.MainAxisAlignment.CENTER)
-    elif on_adopt:
-        buttons = ft.Row([
-            ft.ElevatedButton(
-                "Adopt",
-                width=120,
-                height=35,
-                on_click=lambda e: on_adopt(animal_id),
-                style=ft.ButtonStyle(
-                    bgcolor=ft.Colors.TEAL_400,
-                    color=ft.Colors.WHITE,
-                    shape=ft.RoundedRectangleBorder(radius=20),
-                    text_style=ft.TextStyle(size=12),
+    elif show_adopt_button and on_adopt:
+        if is_adoptable:
+            buttons = ft.Row([
+                ft.ElevatedButton(
+                    "Adopt",
+                    width=120,
+                    height=35,
+                    on_click=lambda e: on_adopt(animal_id),
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.TEAL_400,
+                        color=ft.Colors.WHITE,
+                        shape=ft.RoundedRectangleBorder(radius=20),
+                        text_style=ft.TextStyle(size=12),
+                    )
+                ),
+            ], spacing=8, alignment=ft.MainAxisAlignment.CENTER)
+        else:
+            # Show disabled button or status message for non-adoptable animals
+            if status_lower == "adopted":
+                buttons = ft.Container(
+                    ft.Text("Already Adopted", size=11, color=ft.Colors.PURPLE_600, weight="w500"),
+                    padding=ft.padding.symmetric(vertical=8),
                 )
-            ),
-        ], spacing=8, alignment=ft.MainAxisAlignment.CENTER)
+            else:
+                buttons = ft.Container(
+                    ft.Text("Not Available", size=11, color=ft.Colors.GREY_500, weight="w500"),
+                    padding=ft.padding.symmetric(vertical=8),
+                )
     else:
         buttons = ft.Container()
     

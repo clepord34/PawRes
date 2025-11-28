@@ -223,15 +223,21 @@ def create_delete_confirmation_dialog(
     if ft is None:
         raise RuntimeError("Flet must be installed to create dialogs")
     
+    dialog = None
+    
     def handle_confirm(e):
-        dialog.open = False
-        page.update()
+        nonlocal dialog
+        if dialog:
+            dialog.open = False
+            page.update()
         if on_confirm:
             on_confirm()
     
     def handle_cancel(e):
-        dialog.open = False
-        page.update()
+        nonlocal dialog
+        if dialog:
+            dialog.open = False
+            page.update()
         if on_cancel:
             on_cancel()
     
@@ -266,7 +272,8 @@ def create_delete_confirmation_dialog(
         actions_alignment=ft.MainAxisAlignment.CENTER,
     )
     
-    page.dialog = dialog
+    # Add dialog to page overlay for Flet 0.21+
+    page.overlay.append(dialog)
     dialog.open = True
     page.update()
     

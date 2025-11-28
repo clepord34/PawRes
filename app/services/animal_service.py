@@ -107,14 +107,50 @@ class AnimalService:
         return True
 
     def delete_animal(self, animal_id: int) -> bool:
-        """Delete an animal by id, including its photo file. Returns True if deleted."""
-        # Get the animal first to check for photo
-        existing = self.db.fetch_one("SELECT id, photo FROM animals WHERE id = ?", (animal_id,))
+        """Delete an animal by id, including its photo file. 
+        
+        Preserves adoption request records for data analytics:
+        - Stores the animal name and species in dedicated columns before deletion
+        - The database ON DELETE SET NULL will set animal_id to NULL automatically
+        - Keeps original status unchanged
+        
+        Note: Rescue missions are user-reported animals, NOT linked to admin animals,
+        so they are not affected by this operation.
+        
+        Returns True if deleted.
+        """
+        # Get the animal first to check for photo, name, and species
+        existing = self.db.fetch_one("SELECT id, photo, name, species FROM animals WHERE id = ?", (animal_id,))
         if not existing:
             return False
         
-        # Delete the photo file if it exists and is a filename (not base64)
+        animal_name = existing.get('name', 'Unknown')
+        animal_species = existing.get('species', 'Unknown')
         photo_data = existing.get('photo')
+        
+        # Store the animal name and species in adoption_requests BEFORE deleting the animal
+        # This preserves the info for display purposes after the animal is deleted
+        # The ON DELETE SET NULL in the foreign key will handle setting animal_id to NULL
+        self.db.execute(
+            "UPDATE adoption_requests SET animal_name = ?, animal_species = ? WHERE animal_id = ?",
+            (animal_name, animal_species, animal_id)
+        )
+        
+        # Count how many records we're preserving
+        preserved = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM adoption_requests WHERE animal_id = ?",
+            (animal_id,)
+        )
+        preserved_count = preserved.get('count', 0) if preserved else 0
+        if preserved_count > 0:
+            print(f"[INFO] Stored animal info ({animal_name}, {animal_species}) in {preserved_count} adoption record(s)")
+        
+        # Delete the animal - ON DELETE SET NULL will automatically set animal_id to NULL
+        # in the adoption_requests table
+        self.db.execute("DELETE FROM animals WHERE id = ?", (animal_id,))
+        print(f"[INFO] Deleted animal {animal_id}: {animal_name}")
+        
+        # Delete the photo file AFTER successful database deletion
         if photo_data and not self.photo_service.is_base64(photo_data):
             try:
                 self.file_store.delete_file(photo_data)
@@ -122,7 +158,6 @@ class AnimalService:
             except FileStoreError as e:
                 print(f"[WARN] Could not delete photo file: {e}")
         
-        self.db.execute("DELETE FROM animals WHERE id = ?", (animal_id,))
         return True
 
     def get_adoptable_animals(self) -> List[Dict[str, Any]]:

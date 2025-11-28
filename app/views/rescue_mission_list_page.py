@@ -8,7 +8,8 @@ from services.map_service import MapService
 import app_config
 from components import (
     create_admin_sidebar, create_mission_status_badge, create_gradient_background,
-    create_page_title, create_section_card, create_map_container, show_snackbar
+    create_page_title, create_section_card, create_map_container, show_snackbar,
+    create_delete_confirmation_dialog
 )
 
 
@@ -34,11 +35,16 @@ class RescueMissionListPage:
             sidebar = None
 
         missions = self.rescue_service.get_all_missions()
+        
+        # Filter out soft-deleted missions from admin view
+        if is_admin:
+            missions = [m for m in missions if (m.get("status") or "").lower() != "deleted"]
 
         # Helper to create status badge
         def make_status_badge(status: str, mission_id: int) -> object:
             # Determine color based on status
-            if status == "Rescued":
+            status_lower = (status or "").lower()
+            if status_lower == "rescued":
                 bg_color = ft.Colors.GREEN_700
                 icon = ft.Icons.CHECK_CIRCLE
             else:  # On-going or default
@@ -112,31 +118,49 @@ class RescueMissionListPage:
                             if line.strip() and not line.startswith("name:") and not line.startswith("type:"):
                                 details = line.strip()
 
+                # Create row with optional delete button for admin
+                row_controls = [
+                    ft.Text(name or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
+                    ft.Text(animal_type or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
+                    ft.Text(location, size=13, color=ft.Colors.BLACK87, expand=3),
+                    ft.Text(details[:30] + "..." if len(details) > 30 else details, size=13, color=ft.Colors.BLACK87, expand=2),
+                    ft.Container(make_status_badge(status, mid), expand=2),
+                ]
+                
+                if is_admin:
+                    # Add close case button for admin
+                    close_btn = ft.IconButton(
+                        icon=ft.Icons.CHECK_CIRCLE_OUTLINE,
+                        icon_color=ft.Colors.GREY_600,
+                        icon_size=20,
+                        tooltip="Close case",
+                        on_click=lambda e, mission_id=mid, mission_name=name: self._on_close_case_click(page, mission_id, mission_name),
+                    )
+                    row_controls.append(ft.Container(close_btn, expand=1))
+
                 table_rows_content.append(
                     ft.Column([
-                        ft.Row([
-                            ft.Text(name or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
-                            ft.Text(animal_type or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
-                            ft.Text(location, size=13, color=ft.Colors.BLACK87, expand=3),
-                            ft.Text(details[:30] + "..." if len(details) > 30 else details, size=13, color=ft.Colors.BLACK87, expand=3),
-                            ft.Container(make_status_badge(status, mid), expand=2),
-                        ], spacing=15),
+                        ft.Row(row_controls, spacing=15),
                         ft.Divider(height=1, color=ft.Colors.GREY_200),
                         ft.Container(height=8),
                     ], spacing=0)
                 )
         
-        # Table container
+        # Table container - add Actions column header for admin
+        header_controls = [
+            ft.Text("Name", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
+            ft.Text("Type", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
+            ft.Text("Location", size=13, weight="w600", color=ft.Colors.BLACK87, expand=3),
+            ft.Text("Details", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
+            ft.Text("Status", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
+        ]
+        if is_admin:
+            header_controls.append(ft.Text("Actions", size=13, weight="w600", color=ft.Colors.BLACK87, expand=1))
+
         table_container = ft.Container(
             ft.Column(
                 [
-                    ft.Row([
-                        ft.Text("Name", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Type", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Location", size=13, weight="w600", color=ft.Colors.BLACK87, expand=3),
-                        ft.Text("Details", size=13, weight="w600", color=ft.Colors.BLACK87, expand=3),
-                        ft.Text("Status", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                    ], spacing=15),
+                    ft.Row(header_controls, spacing=15),
                     ft.Divider(height=1, color=ft.Colors.GREY_300),
                     ft.Container(height=10),
                 ] + (table_rows_content if table_rows_content else [
@@ -230,4 +254,50 @@ class RescueMissionListPage:
                 show_snackbar(page, "Failed to update status", error=True)
         except Exception as exc:
             show_snackbar(page, f"Error: {exc}", error=True)
+
+    def _on_close_case_click(self, page, mission_id: int, mission_name: str) -> None:
+        """Show close case confirmation dialog for a rescue mission."""
+        try:
+            import flet as ft
+        except Exception:
+            return
+
+        def close_dialog(e):
+            dialog.open = False
+            page.update()
+
+        def confirm_close(e):
+            dialog.open = False
+            page.update()
+            try:
+                closed = self.rescue_service.delete_mission(mission_id)
+                if closed:
+                    show_snackbar(page, f"Case '{mission_name or 'Unknown'}' closed successfully")
+                    # Refresh the page
+                    self.build(page, user_role="admin")
+                else:
+                    show_snackbar(page, "Failed to close case", error=True)
+            except Exception as exc:
+                show_snackbar(page, f"Error: {exc}", error=True)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Close Rescue Case"),
+            content=ft.Text(
+                f"Close the rescue case for '{mission_name or 'Unknown'}'?\n\n"
+                "The reporter will still see this in their history as 'Case Closed'."
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=close_dialog),
+                ft.TextButton(
+                    "Close Case",
+                    on_click=confirm_close,
+                    style=ft.ButtonStyle(color=ft.Colors.GREY_700),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
 

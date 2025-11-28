@@ -52,11 +52,15 @@ class AnalyticsService:
         rescued_counts = [0 for _ in day_labels]
         adopted_counts = [0 for _ in day_labels]
 
-        # Count rescued missions by day
-        missions = self.rescue_service.get_all_missions() or []
+        # Count rescued missions by day (include closed/deleted for historical data)
+        # Only count missions that have "Rescued" in their status (e.g., "Rescued", "Rescued|Closed")
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
         for ms in missions:
             dt = ms.get("mission_date")
-            if not dt:
+            status = (ms.get("status") or "").lower()
+            # Check if this mission was rescued (including closed ones)
+            is_rescued = "rescued" in status
+            if not dt or not is_rescued:
                 continue
             # Handle both datetime objects and strings
             if isinstance(dt, datetime):
@@ -195,18 +199,22 @@ class AnalyticsService:
                 return False
             return start <= parsed <= end
         
-        # Get all data
+        # Get all data (use analytics method for missions to include closed ones)
         animals = self.animal_service.get_all_animals() or []
-        missions = self.rescue_service.get_all_missions() or []
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
         requests = self.adoption_service.get_all_requests() or []
         
         # Count animals added this month vs last month
         animals_this_month = len([a for a in animals if is_in_range(a.get("intake_date"), this_month_start, now)])
         animals_last_month = len([a for a in animals if is_in_range(a.get("intake_date"), last_month_start, last_month_end)])
         
-        # Count rescue missions this month vs last month
-        rescues_this_month = len([m for m in missions if is_in_range(m.get("mission_date"), this_month_start, now)])
-        rescues_last_month = len([m for m in missions if is_in_range(m.get("mission_date"), last_month_start, last_month_end)])
+        # Count rescued missions this month vs last month (only those with "rescued" in status)
+        rescues_this_month = len([m for m in missions 
+            if is_in_range(m.get("mission_date"), this_month_start, now)
+            and "rescued" in (m.get("status") or "").lower()])
+        rescues_last_month = len([m for m in missions 
+            if is_in_range(m.get("mission_date"), last_month_start, last_month_end)
+            and "rescued" in (m.get("status") or "").lower()])
         
         # Count adoptions (approved/adopted) this month vs last month
         adoptions_this_month = len([r for r in requests 

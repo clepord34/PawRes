@@ -105,14 +105,16 @@ class Database:
 		CREATE TABLE IF NOT EXISTS adoption_requests (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
-			animal_id INTEGER NOT NULL,
+			animal_id INTEGER,
 			contact TEXT,
 			reason TEXT,
 			status TEXT,
 			request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			notes TEXT,
+			animal_name TEXT,
+			animal_species TEXT,
 			FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-			FOREIGN KEY(animal_id) REFERENCES animals(id) ON DELETE CASCADE
+			FOREIGN KEY(animal_id) REFERENCES animals(id) ON DELETE SET NULL
 		);
 		"""
 
@@ -132,8 +134,82 @@ class Database:
 			if 'photo' not in columns:
 				cur.execute("ALTER TABLE animals ADD COLUMN photo TEXT")
 				conn.commit()
+			
+			# Check if adoption_requests needs migration (animal_id should allow NULL)
+			cur.execute("PRAGMA table_info(adoption_requests)")
+			adoption_columns = {row[1]: row for row in cur.fetchall()}
+			
+			# Check if animal_id column has NOT NULL constraint (notnull is index 3)
+			animal_id_info = adoption_columns.get('animal_id')
+			needs_migration = False
+			
+			if animal_id_info:
+				# notnull is at index 3: 0=cid, 1=name, 2=type, 3=notnull, 4=dflt_value, 5=pk
+				is_not_null = animal_id_info[3] == 1
+				if is_not_null:
+					needs_migration = True
+					print("[INFO] Migrating adoption_requests table to allow NULL animal_id...")
+			
+			# Also check if animal_name column exists
+			if 'animal_name' not in adoption_columns:
+				needs_migration = True
+			
+			# Also check if animal_species column exists
+			if 'animal_species' not in adoption_columns:
+				needs_migration = True
+			
+			if needs_migration:
+				# Need to recreate table with new schema (SQLite doesn't support ALTER COLUMN)
+				cur.execute("PRAGMA foreign_keys = OFF")
+				
+				# Create new table with correct schema
+				cur.execute("""
+					CREATE TABLE IF NOT EXISTS adoption_requests_new (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						user_id INTEGER NOT NULL,
+						animal_id INTEGER,
+						contact TEXT,
+						reason TEXT,
+						status TEXT,
+						request_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+						notes TEXT,
+						animal_name TEXT,
+						animal_species TEXT,
+						FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+						FOREIGN KEY(animal_id) REFERENCES animals(id) ON DELETE SET NULL
+					)
+				""")
+				
+				# Copy data from old table (handle missing columns gracefully)
+				if 'animal_species' in adoption_columns:
+					cur.execute("""
+						INSERT INTO adoption_requests_new (id, user_id, animal_id, contact, reason, status, request_date, notes, animal_name, animal_species)
+						SELECT id, user_id, animal_id, contact, reason, status, request_date, notes, animal_name, animal_species
+						FROM adoption_requests
+					""")
+				elif 'animal_name' in adoption_columns:
+					cur.execute("""
+						INSERT INTO adoption_requests_new (id, user_id, animal_id, contact, reason, status, request_date, notes, animal_name)
+						SELECT id, user_id, animal_id, contact, reason, status, request_date, notes, animal_name
+						FROM adoption_requests
+					""")
+				else:
+					cur.execute("""
+						INSERT INTO adoption_requests_new (id, user_id, animal_id, contact, reason, status, request_date, notes)
+						SELECT id, user_id, animal_id, contact, reason, status, request_date, notes
+						FROM adoption_requests
+					""")
+				
+				# Drop old table and rename new one
+				cur.execute("DROP TABLE adoption_requests")
+				cur.execute("ALTER TABLE adoption_requests_new RENAME TO adoption_requests")
+				
+				conn.commit()
+				cur.execute("PRAGMA foreign_keys = ON")
+				print("[INFO] Successfully migrated adoption_requests table")
+				
 		except Exception as e:
-			# Log but don't fail - photo column is already in the CREATE TABLE statement
+			# Log but don't fail - column might already be in the CREATE TABLE statement
 			print(f"[INFO] Schema migration note: {e}")
 		finally:
 			conn.close()

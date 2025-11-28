@@ -31,11 +31,20 @@ class AdoptionService:
         """Return all adoption requests ordered by most recent."""
         sql = """
             SELECT 
-                ar.*,
+                ar.id,
+                ar.user_id,
+                ar.animal_id,
+                ar.contact,
+                ar.reason,
+                ar.status,
+                ar.request_date,
+                ar.notes,
+                ar.animal_name as stored_animal_name,
+                ar.animal_species as stored_animal_species,
                 u.name as user_name,
                 u.email as user_email,
-                a.name as animal_name,
-                a.species as animal_species
+                COALESCE(a.name, ar.animal_name) as animal_name,
+                COALESCE(a.species, ar.animal_species) as animal_species
             FROM adoption_requests ar
             LEFT JOIN users u ON ar.user_id = u.id
             LEFT JOIN animals a ON ar.animal_id = a.id
@@ -48,12 +57,49 @@ class AdoptionService:
         return self.db.fetch_all("SELECT * FROM adoption_requests WHERE user_id = ? ORDER BY request_date DESC", (user_id,))
 
     def update_status(self, request_id: int, status: str) -> bool:
-        """Update the status of an adoption request. Returns True if updated."""
+        """Update the status of an adoption request. Returns True if updated.
+        
+        If the status is 'approved', also updates the animal's status to 'adopted'.
+        """
+        existing = self.db.fetch_one("SELECT id, animal_id FROM adoption_requests WHERE id = ?", (request_id,))
+        if not existing:
+            return False
+        
+        # Update the adoption request status
+        self.db.execute("UPDATE adoption_requests SET status = ? WHERE id = ?", (status, request_id))
+        
+        # If approved, update the animal's status to 'adopted'
+        status_lower = status.lower()
+        if status_lower == "approved":
+            animal_id = existing.get("animal_id")
+            print(f"[DEBUG] Approving adoption - animal_id: {animal_id}")
+            if animal_id:
+                # Directly update the animal status
+                update_sql = "UPDATE animals SET status = 'adopted' WHERE id = ?"
+                self.db.execute(update_sql, (animal_id,))
+                print(f"[DEBUG] Updated animal {animal_id} status to 'adopted'")
+        
+        return True
+
+    def update_request(self, request_id: int, contact: str, reason: str) -> bool:
+        """Update the contact and reason of an adoption request. Returns True if updated."""
         existing = self.db.fetch_one("SELECT id FROM adoption_requests WHERE id = ?", (request_id,))
         if not existing:
             return False
-        self.db.execute("UPDATE adoption_requests SET status = ? WHERE id = ?", (status, request_id))
+        self.db.execute("UPDATE adoption_requests SET contact = ?, reason = ? WHERE id = ?", (contact, reason, request_id))
         return True
+
+    def delete_request(self, request_id: int) -> bool:
+        """Delete an adoption request. Returns True if deleted."""
+        existing = self.db.fetch_one("SELECT id FROM adoption_requests WHERE id = ?", (request_id,))
+        if not existing:
+            return False
+        self.db.execute("DELETE FROM adoption_requests WHERE id = ?", (request_id,))
+        return True
+
+    def get_request_by_id(self, request_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single adoption request by ID."""
+        return self.db.fetch_one("SELECT * FROM adoption_requests WHERE id = ?", (request_id,))
 
 
 __all__ = ["AdoptionService"]

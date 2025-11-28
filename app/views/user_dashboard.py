@@ -4,6 +4,8 @@ from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
 from io import BytesIO
 import base64
+import threading
+import random
 
 # Set matplotlib backend to Agg before importing pyplot
 import matplotlib
@@ -58,7 +60,8 @@ class UserDashboard:
             user_rescues = []
         
         # Count totals and pending
-        total_adoptions = len(user_adoptions)
+        # Total adoptions = approved adoptions only
+        total_adoptions = len([a for a in user_adoptions if (a.get("status") or "").lower() == "approved"])
         rescue_reports_filed = len(user_rescues)
         pending_adoption_requests = len([a for a in user_adoptions if (a.get("status") or "").lower() == "pending"])
         ongoing_rescue_missions = len([r for r in user_rescues if (r.get("status") or "").lower() == "on-going"])
@@ -80,8 +83,10 @@ class UserDashboard:
         except Exception:
             chart_b64 = None
 
-        # Get featured adoptable animal
+        # Get featured adoptable animals (randomized)
         adoptable_animals = self.animal_service.get_adoptable_animals() or []
+        if adoptable_animals:
+            random.shuffle(adoptable_animals)
         featured_animal = adoptable_animals[0] if adoptable_animals else None
 
         # Sidebar with navigation
@@ -156,37 +161,45 @@ class UserDashboard:
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
         )
 
-        # Featured Adoptables card
-        if featured_animal:
-            animal_name = featured_animal.get("name", "Unknown")
-            animal_age = featured_animal.get("age", "N/A")
-            animal_species = featured_animal.get("species", "Unknown")
-            animal_health = featured_animal.get("health_status", "Unknown")
-            # load_photo handles both filename and legacy base64 formats
-            animal_photo = load_photo(featured_animal.get("photo"))
+        # Featured Adoptables carousel with auto-scroll
+        if adoptable_animals:
+            # State for carousel
+            current_index = [0]  # Use list to allow mutation in closures
+            is_hovered = [False]
+            auto_scroll_timer = [None]
+            
+            # Create animal cards for each adoptable animal (max 5 for carousel)
+            carousel_animals = adoptable_animals[:5]
+            num_animals = len(carousel_animals)
+            
+            def create_animal_card(animal: dict, index: int) -> ft.Control:
+                """Create a card for an animal in the carousel."""
+                animal_id = animal.get("id")
+                animal_name = animal.get("name", "Unknown")
+                animal_age = animal.get("age", "N/A")
+                animal_species = animal.get("species", "Unknown")
+                animal_health = animal.get("status", "Unknown")
+                animal_photo = load_photo(animal.get("photo"))
 
-            if animal_photo:
-                animal_image = ft.Image(
-                    src_base64=animal_photo,
-                    width=200,
-                    height=200,
-                    fit=ft.ImageFit.COVER,
-                    border_radius=8,
-                )
-            else:
-                animal_image = ft.Container(
-                    ft.Icon(ft.Icons.PETS, size=80, color=ft.Colors.GREY_400),
-                    width=200,
-                    height=200,
-                    bgcolor=ft.Colors.GREY_200,
-                    border_radius=8,
-                    alignment=ft.alignment.center,
-                )
+                if animal_photo:
+                    animal_image = ft.Image(
+                        src_base64=animal_photo,
+                        width=200,
+                        height=200,
+                        fit=ft.ImageFit.COVER,
+                        border_radius=8,
+                    )
+                else:
+                    animal_image = ft.Container(
+                        ft.Icon(ft.Icons.PETS, size=80, color=ft.Colors.GREY_400),
+                        width=200,
+                        height=200,
+                        bgcolor=ft.Colors.GREY_200,
+                        border_radius=8,
+                        alignment=ft.alignment.center,
+                    )
 
-            featured_card = ft.Container(
-                ft.Column([
-                    ft.Text("Featured Adoptables", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
+                return ft.Column([
                     animal_image,
                     ft.Container(height=10),
                     ft.Text(f"{animal_name}, {animal_age}yrs old", size=14, weight="bold", color=ft.Colors.BLACK87),
@@ -198,25 +211,123 @@ class UserDashboard:
                     ft.ElevatedButton(
                         "Adopt",
                         width=120,
-                        on_click=lambda e: page.go("/available_adoption"),
+                        on_click=lambda e, aid=animal_id: page.go(f"/adoption_form?animal_id={aid}"),
                         style=ft.ButtonStyle(
                             bgcolor=ft.Colors.TEAL_400,
                             color=ft.Colors.WHITE,
                             shape=ft.RoundedRectangleBorder(radius=20),
                         )
                     ),
+                ], horizontal_alignment="center", spacing=0)
+
+            # Create dot indicators
+            dot_containers = []
+            for i in range(num_animals):
+                dot = ft.Container(
+                    width=10,
+                    height=10,
+                    bgcolor=ft.Colors.ORANGE_400 if i == 0 else ft.Colors.GREY_300,
+                    border_radius=5,
+                    animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+                )
+                dot_containers.append(dot)
+
+            dots_row = ft.Row(dot_containers, spacing=5, alignment="center")
+
+            # Create the carousel content container
+            carousel_content = ft.Container(
+                create_animal_card(carousel_animals[0], 0),
+                alignment=ft.alignment.center,
+                animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+                animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+                scale=1.0,
+                opacity=1.0,
+            )
+
+            def update_carousel(new_index: int):
+                """Update the carousel to show the animal at new_index."""
+                if new_index < 0:
+                    new_index = num_animals - 1
+                elif new_index >= num_animals:
+                    new_index = 0
+                
+                current_index[0] = new_index
+                
+                # Update dots
+                for i, dot in enumerate(dot_containers):
+                    dot.bgcolor = ft.Colors.ORANGE_400 if i == new_index else ft.Colors.GREY_300
+                
+                # Fade out, change content, fade in
+                carousel_content.opacity = 0.0
+                carousel_content.scale = 0.95
+                page.update()
+                
+                # Small delay for animation, then update content
+                def update_content():
+                    carousel_content.content = create_animal_card(carousel_animals[new_index], new_index)
+                    carousel_content.opacity = 1.0
+                    carousel_content.scale = 1.05 if is_hovered[0] else 1.0
+                    page.update()
+                
+                # Use threading timer for the delay
+                threading.Timer(0.15, update_content).start()
+
+            def on_dot_click(index: int):
+                """Handle dot click to navigate to specific slide."""
+                def handler(e):
+                    update_carousel(index)
+                return handler
+
+            # Make dots clickable
+            for i, dot in enumerate(dot_containers):
+                dot.on_click = on_dot_click(i)
+                dot.ink = True
+
+            def start_auto_scroll():
+                """Start auto-scrolling the carousel."""
+                def auto_scroll():
+                    if not is_hovered[0]:
+                        update_carousel(current_index[0] + 1)
+                    # Schedule next auto-scroll
+                    if not is_hovered[0]:
+                        auto_scroll_timer[0] = threading.Timer(3.0, auto_scroll)
+                        auto_scroll_timer[0].start()
+                
+                # Start the first timer
+                auto_scroll_timer[0] = threading.Timer(3.0, auto_scroll)
+                auto_scroll_timer[0].start()
+
+            def on_hover(e):
+                """Handle hover events on the carousel."""
+                is_hovered[0] = e.data == "true"
+                
+                if is_hovered[0]:
+                    # Stop auto-scroll and scale up
+                    if auto_scroll_timer[0]:
+                        auto_scroll_timer[0].cancel()
+                else:
+                    # Resume auto-scroll and scale down
+                    start_auto_scroll()
+                
+                page.update()
+
+            # Start auto-scrolling
+            start_auto_scroll()
+
+            featured_card = ft.Container(
+                ft.Column([
+                    ft.Text("Featured Adoptables", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ft.Container(height=15),
+                    carousel_content,
                     ft.Container(height=20),
-                    ft.Row([
-                        ft.Container(width=10, height=10, bgcolor=ft.Colors.ORANGE_400, border_radius=5),
-                        ft.Container(width=10, height=10, bgcolor=ft.Colors.GREY_300, border_radius=5),
-                        ft.Container(width=10, height=10, bgcolor=ft.Colors.GREY_300, border_radius=5),
-                    ], spacing=5, alignment="center"),
+                    dots_row,
                 ], horizontal_alignment="center", spacing=0),
                 width=280,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                on_hover=on_hover,
             )
         else:
             featured_card = ft.Container(
