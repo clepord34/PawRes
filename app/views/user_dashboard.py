@@ -52,7 +52,7 @@ class UserDashboard:
         # Get user-specific data if user_id exists
         if user_id:
             user_adoptions = [a for a in all_adoptions if a.get("user_id") == user_id]
-            user_rescues = [r for r in all_rescues if r.get("reporter_id") == user_id]
+            user_rescues = [r for r in all_rescues if r.get("user_id") == user_id]
         else:
             user_adoptions = []
             user_rescues = []

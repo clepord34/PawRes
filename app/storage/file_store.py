@@ -267,8 +267,6 @@ class FileStore:
             raise FileStoreError(f"Failed to save file: {e}")
         
         return filename
-        
-        return filename
     
     def read_file_as_base64(self, filename: str) -> str:
         """Read a file and return its content as base64.
@@ -332,6 +330,37 @@ class FileStore:
             return True
         except Exception as e:
             raise FileStoreError(f"Failed to delete file: {e}")
+    
+    def rename_file(self, old_filename: str, new_name: str) -> str:
+        """Rename a file with a new custom name while preserving extension.
+        
+        Args:
+            old_filename: Current filename in storage
+            new_name: New name to use (e.g., animal name like 'ashley')
+            
+        Returns:
+            The new filename after renaming
+            
+        Raises:
+            FileNotFoundError: If the old file doesn't exist
+            FileStoreError: If rename operation fails
+        """
+        old_path = self.uploads_dir / old_filename
+        
+        if not old_path.exists():
+            raise FileNotFoundError(f"File not found: {old_filename}")
+        
+        # Generate new filename with the new name
+        new_filename = self._generate_named_filename(new_name, old_filename)
+        new_path = self.uploads_dir / new_filename
+        
+        try:
+            import shutil
+            shutil.move(str(old_path), str(new_path))
+            print(f"[INFO] Renamed photo: {old_filename} -> {new_filename}")
+            return new_filename
+        except Exception as e:
+            raise FileStoreError(f"Failed to rename file: {e}")
     
     def file_exists(self, filename: str) -> bool:
         """Check if a file exists in storage.

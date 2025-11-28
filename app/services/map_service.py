@@ -150,3 +150,33 @@ class MapService:
         )
         
         return map_control
+    
+    def create_empty_map_placeholder(self, mission_count: int = 0) -> object:
+        """
+        Create a placeholder widget when the map cannot be loaded.
+        
+        Args:
+            mission_count: Number of missions to display in the placeholder
+            
+        Returns:
+            Flet Container with placeholder content
+        """
+        try:
+            import flet as ft
+        except ImportError:
+            return None
+        
+        message = f"{mission_count} rescue mission(s)" if mission_count > 0 else "No rescue missions"
+        
+        return ft.Container(
+            ft.Column([
+                ft.Icon(ft.Icons.MAP_OUTLINED, size=64, color=ft.Colors.GREY_400),
+                ft.Text("Map unavailable", size=16, color=ft.Colors.GREY_600, weight="w500"),
+                ft.Text(message, size=12, color=ft.Colors.GREY_500),
+                ft.Text("Install flet-map and geopy for map features", size=11, color=ft.Colors.GREY_400),
+            ], horizontal_alignment="center", alignment="center", spacing=10),
+            height=300,
+            alignment=ft.alignment.center,
+            bgcolor=ft.Colors.GREY_100,
+            border_radius=8,
+        )

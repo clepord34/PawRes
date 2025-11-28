@@ -54,7 +54,8 @@ class PhotoUploadWidget:
             return False
         # Filenames are typically short and have extensions
         # Base64 is long and doesn't have path separators
-        if len(data) > 200 or '/' not in data and '\\' not in data and '.' not in data[-5:]:
+        # Fixed operator precedence with proper parentheses
+        if len(data) > 200 or ('/' not in data and '\\' not in data and '.' not in data[-5:]):
             try:
                 # Try to decode a small portion to verify it's base64
                 base64.b64decode(data[:100] + '==', validate=True)

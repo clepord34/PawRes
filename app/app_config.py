@@ -24,11 +24,11 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 
 # Application paths
 APP_ROOT = Path(__file__).parent
-STORAGE_DIR = APP_ROOT / "storage/data"
+STORAGE_DIR = APP_ROOT / "storage"
 STORAGE_DIR.mkdir(exist_ok=True)
 
 # Database
-DB_PATH = os.getenv("PAWRES_DB_PATH", str(STORAGE_DIR / "app.db"))
+DB_PATH = os.getenv("PAWRES_DB_PATH", str(STORAGE_DIR / "data/app.db"))
 
 # Default admin credentials
 DEFAULT_ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@gmail.com")

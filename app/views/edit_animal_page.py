@@ -310,6 +310,10 @@ class EditAnimalPage:
                     custom_name=name  # Use animal name in filename
                 )
             
+            # Get original animal data to check if name changed
+            original_animal = self.service.get_animal_by_id(self._animal_id)
+            original_name = original_animal.get('name', '') if original_animal else ''
+            
             success = self.service.update_animal(
                 self._animal_id,
                 type=animal_type,
@@ -318,10 +322,25 @@ class EditAnimalPage:
                 health_status=health_status
             )
             
-            # If photo was updated, update it through the service
+            # If photo was updated with new upload, update it through the service
             # The service will delete the old photo file automatically
             if new_photo_filename and success:
                 self.service.update_animal_photo(self._animal_id, new_photo_filename)
+            elif success and original_name != name and not self._pending_image_bytes:
+                # Name changed but no new photo uploaded - rename existing photo file
+                existing_photo = self._original_photo
+                if existing_photo and not existing_photo.startswith('data:') and len(existing_photo) < 200:
+                    # It's a filename, not base64 - rename it
+                    try:
+                        renamed_filename = self.file_store.rename_file(existing_photo, name)
+                        # Update database with new filename
+                        self.service.db.execute(
+                            "UPDATE animals SET photo = ? WHERE id = ?",
+                            (renamed_filename, self._animal_id)
+                        )
+                        print(f"[INFO] Renamed photo from '{existing_photo}' to '{renamed_filename}'")
+                    except Exception as rename_err:
+                        print(f"[WARN] Could not rename photo file: {rename_err}")
             
             if success:
                 show_snackbar(page, "Animal updated successfully!")

@@ -260,7 +260,7 @@ class AnalyticsService:
         all_rescues = self.rescue_service.get_all_missions() or []
         
         user_adoptions = [a for a in all_adoptions if a.get("user_id") == user_id]
-        user_rescues = [r for r in all_rescues if r.get("reporter_id") == user_id or r.get("user_id") == user_id]
+        user_rescues = [r for r in all_rescues if r.get("user_id") == user_id]
         
         total_adoptions = len(user_adoptions)
         rescue_reports_filed = len(user_rescues)
