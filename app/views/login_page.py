@@ -1,9 +1,11 @@
 """Login page with email/password authentication."""
 from __future__ import annotations
 
+import threading
 from typing import Optional
 
 from services.auth_service import AuthService
+from services.google_auth_service import GoogleAuthService
 from state import get_app_state
 import app_config
 from components import (
@@ -30,10 +32,13 @@ class LoginPage:
     def __init__(self, db_path: Optional[str] = None) -> None:
         # allow injecting a DB path or Database instance via AuthService
         self.auth = AuthService(db_path or app_config.DB_PATH)
+        self.google_auth = GoogleAuthService()
 
         # UI fields will be created when `build()` is called
         self._email_field = None
         self._password_field = None
+        self._google_btn = None
+        self._page = None
 
     def build(self, page) -> None:
         """Build the login UI on the provided `flet.Page` instance."""
@@ -42,6 +47,7 @@ class LoginPage:
         except Exception as exc:  # pragma: no cover - environment may not have flet
             raise RuntimeError("Flet must be installed to build the UI") from exc
 
+        self._page = page
         page.title = "Login"
 
         # Header with logo/title - matching the image design
@@ -72,20 +78,23 @@ class LoginPage:
         )
         
         # Google button - white with border
-        google_btn = ft.Container(
+        # Check if Google OAuth is configured
+        google_configured = self.google_auth.is_configured
+        self._google_btn = ft.Container(
             ft.ElevatedButton(
                 content=ft.Row([
                     ft.Image(src="https://www.google.com/favicon.ico", width=18, height=18),
-                    ft.Text("Google Account", size=14, color=ft.Colors.BLACK87, weight="w500"),
+                    ft.Text("Sign in with Google", size=14, color=ft.Colors.BLACK87 if google_configured else ft.Colors.GREY_400, weight="w500"),
                 ], alignment="center", spacing=10),
                 width=280,
                 height=45,
                 on_click=lambda e: self._on_google(page, e),
+                disabled=not google_configured,
                 style=ft.ButtonStyle(
                     bgcolor=ft.Colors.WHITE,
                     color=ft.Colors.BLACK87,
                     shape=ft.RoundedRectangleBorder(radius=8),
-                    side=ft.BorderSide(1, ft.Colors.GREY_400),
+                    side=ft.BorderSide(1, ft.Colors.GREY_400 if google_configured else ft.Colors.GREY_300),
                 )
             ),
             padding=ft.padding.only(bottom=10),
@@ -124,8 +133,8 @@ class LoginPage:
                     ft.Container(height=8),
                     self._password_field,
                     login_btn,
-                    ft.Text("Log in using your account in:", size=12, color=ft.Colors.BLACK54, text_align="center"),
-                    google_btn,
+                    ft.Text("Or continue with:", size=12, color=ft.Colors.BLACK54, text_align="center"),
+                    self._google_btn,
                     signup_link,
                     ft.Container(
                         ft.Text("Login Page", size=13, color=ft.Colors.BLACK45, text_align="center"),
@@ -199,9 +208,58 @@ class LoginPage:
         page.go(redirect_route)
 
     def _on_google(self, page, e) -> None:
-        # Placeholder for Google login flow. In a desktop/web Flet app you'd
-        # typically open an OAuth flow; here we simply show a message.
-        show_snackbar(page, "Google sign-in is not implemented.")
+        """Handle Google Sign-In button click."""
+        if not self.google_auth.is_configured:
+            show_snackbar(page, "Google Sign-In not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env")
+            return
+        
+        show_snackbar(page, "Opening Google Sign-In... Please check your browser.")
+        
+        def on_google_complete(user_info):
+            """Called when Google Sign-In succeeds."""
+            try:
+                # Register/login the user via OAuth
+                email = user_info.get("email")
+                name = user_info.get("name", email.split("@")[0] if email else "User")
+                picture = user_info.get("picture")
+                
+                user = self.auth.login_oauth(
+                    email=email,
+                    name=name,
+                    oauth_provider="google",
+                    profile_picture=picture
+                )
+                
+                # Update app state
+                app_state = get_app_state()
+                app_state.auth.login({
+                    "id": user["id"],
+                    "email": user["email"],
+                    "name": user["name"],
+                    "role": user.get("role", "user"),
+                    "profile_picture": user.get("profile_picture"),
+                })
+                
+                print(f"[DEBUG] Google user logged in: {email}")
+                
+                # Navigate to appropriate dashboard (must be done on main thread)
+                redirect_route = app_state.auth.get_redirect_route()
+                page.go(redirect_route)
+                
+            except Exception as ex:
+                print(f"[ERROR] Google sign-in processing failed: {ex}")
+                show_snackbar(page, f"Sign-in failed: {ex}")
+        
+        def on_google_error(error_msg):
+            """Called when Google Sign-In fails."""
+            print(f"[ERROR] Google sign-in failed: {error_msg}")
+            show_snackbar(page, f"Google Sign-In failed: {error_msg}")
+        
+        # Run OAuth flow in background thread to not block UI
+        self.google_auth.sign_in_async(
+            on_complete=on_google_complete,
+            on_error=on_google_error
+        )
 
 
 __all__ = ["LoginPage"]

@@ -66,6 +66,8 @@ class Database:
 			phone TEXT,
 			password_hash TEXT,
 			password_salt TEXT,
+			oauth_provider TEXT,
+			profile_picture TEXT,
 			role TEXT DEFAULT 'user',
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
@@ -128,6 +130,17 @@ class Database:
 		conn = self._get_connection()
 		try:
 			cur = conn.cursor()
+			
+			# Check if oauth columns exist in users table (for legacy databases)
+			cur.execute("PRAGMA table_info(users)")
+			user_columns = [row[1] for row in cur.fetchall()]
+			if 'oauth_provider' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN oauth_provider TEXT")
+				conn.commit()
+			if 'profile_picture' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT")
+				conn.commit()
+			
 			# Check if photo column exists in animals table (for legacy databases)
 			cur.execute("PRAGMA table_info(animals)")
 			columns = [row[1] for row in cur.fetchall()]

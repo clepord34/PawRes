@@ -170,6 +170,64 @@ class AuthService:
             return safe
         return None
 
+    def login_oauth(self, email: str, name: str, oauth_provider: str = "google", 
+                    profile_picture: Optional[str] = None) -> Dict[str, Any]:
+        """Login or register a user via OAuth provider.
+        
+        If the user doesn't exist, creates a new account without password.
+        If the user exists with OAuth, logs them in.
+        If the user exists with password, links the OAuth account.
+        
+        Args:
+            email: User's email from OAuth provider
+            name: User's display name from OAuth provider
+            oauth_provider: The OAuth provider name (e.g., 'google')
+            profile_picture: Optional URL to user's profile picture
+            
+        Returns:
+            User dict with account information
+            
+        Raises:
+            AuthServiceError: If operation fails
+        """
+        if not email:
+            raise AuthServiceError("Email is required for OAuth login", AuthResult.INVALID_INPUT)
+        
+        try:
+            # Check if user already exists
+            existing = self.db.fetch_one("SELECT * FROM users WHERE email = ?", (email,))
+            
+            if existing:
+                # User exists - update OAuth info and return
+                self.db.execute(
+                    """UPDATE users SET oauth_provider = ?, profile_picture = ? 
+                       WHERE id = ?""",
+                    (oauth_provider, profile_picture, existing["id"])
+                )
+                safe = dict(existing)
+                safe.pop("password_hash", None)
+                safe.pop("password_salt", None)
+                safe["oauth_provider"] = oauth_provider
+                safe["profile_picture"] = profile_picture
+                return safe
+            
+            # Create new OAuth user (no password)
+            sql = """INSERT INTO users (name, email, oauth_provider, profile_picture, role) 
+                     VALUES (?, ?, ?, ?, ?)"""
+            user_id = self.db.execute(sql, (name, email, oauth_provider, profile_picture, "user"))
+            
+            return {
+                "id": user_id,
+                "name": name,
+                "email": email,
+                "oauth_provider": oauth_provider,
+                "profile_picture": profile_picture,
+                "role": "user",
+            }
+            
+        except Exception as e:
+            raise AuthServiceError(f"OAuth login failed: {e}", AuthResult.DATABASE_ERROR)
+
     def get_user_role(self, user_id: int) -> Optional[str]:
         """Get the role for a user by ID.
         

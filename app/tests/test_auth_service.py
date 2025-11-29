@@ -157,3 +157,68 @@ class TestGetUserRole:
         """Test that get_user_role returns None for non-existent user."""
         role = auth_service.get_user_role(99999)
         assert role is None
+
+
+class TestOAuthLogin:
+    """Tests for OAuth login functionality."""
+
+    def test_login_oauth_creates_new_user(self, auth_service: AuthService):
+        """Test that OAuth login creates a new user if they don't exist."""
+        user = auth_service.login_oauth(
+            email="oauth@example.com",
+            name="OAuth User",
+            oauth_provider="google",
+            profile_picture="https://example.com/photo.jpg"
+        )
+        
+        assert user is not None
+        assert user["email"] == "oauth@example.com"
+        assert user["name"] == "OAuth User"
+        assert user["oauth_provider"] == "google"
+        assert user["profile_picture"] == "https://example.com/photo.jpg"
+        assert user["role"] == "user"
+
+    def test_login_oauth_returns_existing_user(self, auth_service: AuthService):
+        """Test that OAuth login returns existing user and updates OAuth info."""
+        # First OAuth login creates user
+        user1 = auth_service.login_oauth(
+            email="returning@example.com",
+            name="First Name",
+            oauth_provider="google"
+        )
+        
+        # Second OAuth login should return same user
+        user2 = auth_service.login_oauth(
+            email="returning@example.com",
+            name="Updated Name",
+            oauth_provider="google",
+            profile_picture="https://new-photo.jpg"
+        )
+        
+        assert user1["id"] == user2["id"]
+        assert user2["profile_picture"] == "https://new-photo.jpg"
+
+    def test_login_oauth_links_to_password_user(self, auth_service: AuthService):
+        """Test that OAuth login links to existing password-based user."""
+        # Register user with password first
+        user_id = auth_service.register_user(
+            name="Password User",
+            email="hybrid@example.com",
+            password="password123"
+        )
+        
+        # OAuth login with same email should link to existing account
+        oauth_user = auth_service.login_oauth(
+            email="hybrid@example.com",
+            name="OAuth Name",
+            oauth_provider="google"
+        )
+        
+        assert oauth_user["id"] == user_id
+        assert oauth_user["oauth_provider"] == "google"
+        
+        # User should still be able to login with password
+        password_user = auth_service.login("hybrid@example.com", "password123")
+        assert password_user is not None
+        assert password_user["id"] == user_id
+
