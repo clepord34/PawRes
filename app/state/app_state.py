@@ -183,13 +183,30 @@ class AppState(Observable):
     def reset(self) -> None:
         """Reset all state to initial values.
         
-        Call this on logout to clear all cached data.
+        Call this on logout to clear all cached data and prevent memory leaks.
+        This method:
+        - Clears all observer subscriptions
+        - Resets all domain states to initial values
+        - Clears UI notifications
         """
+        # Clear observers from all state managers to prevent memory leaks
+        self._auth.clear_observers()
+        self._animals.clear_observers()
+        self._rescues.clear_observers()
+        self._adoptions.clear_observers()
+        self._ui.clear_observers()
+        
+        # Reset individual states
         self._auth.reset()
         self._animals.reset()
         self._rescues.reset()
         self._adoptions.reset()
         self._ui.clear_notifications()
+        
+        # Re-setup subscriptions for future use
+        self._setup_state_subscriptions()
+        
+        print("[DEBUG] AppState: Full reset completed")
     
     def get_dashboard_stats(self) -> Dict[str, Any]:
         """Get aggregated statistics for dashboard display.

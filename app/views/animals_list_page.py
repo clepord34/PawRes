@@ -1,24 +1,35 @@
-"""Animals list page with role-based actions."""
+"""Animals list page with role-based actions.
+
+Uses AnimalState for state-driven data flow, ensuring consistency
+with the application's state management pattern.
+"""
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 import app_config
-from services.animal_service import AnimalService
+from state import get_app_state
 from services.photo_service import load_photo
 from components import (
     create_admin_sidebar, create_user_sidebar, create_gradient_background,
-    create_page_title, create_animal_card, show_snackbar
+    create_page_title, create_animal_card, create_empty_state, show_snackbar
 )
 
 
 class AnimalsListPage:
+    """Page displaying list of animals with filtering and role-based actions.
+    
+    Uses AnimalState for reactive data management, subscribing to state
+    changes for automatic UI updates.
+    """
+    
     def __init__(self, db_path: Optional[str] = None) -> None:
-        # AnimalService expects 'db' parameter, not 'db_path'
-        self.animal_service = AnimalService(db=db_path or app_config.DB_PATH)
+        self._db_path = db_path or app_config.DB_PATH
+        self._app_state = get_app_state(self._db_path)
         self.page = None  # Store page reference
         self.user_role = "user"  # Store user role
         self.current_filter = "all"  # Current filter state
+        self._unsubscribe: Optional[Callable] = None
 
     def build(self, page, user_role: str = "user", filter_status: str = "all") -> None:
         try:
@@ -43,14 +54,17 @@ class AnimalsListPage:
         else:
             sidebar = create_user_sidebar(page, user_name)
 
-        # Get animals from database
-        all_animals = self.animal_service.get_all_animals()
+        # Load animals through state manager (ensures data is fresh)
+        self._app_state.animals.load_animals()
+        
+        # Get animals from state
+        all_animals = self._app_state.animals.animals
 
         # Apply filter
         if filter_status == "all":
             animals = all_animals
         elif filter_status == "healthy":
-            animals = [a for a in all_animals if (a.get("status") or "").lower() in ("healthy", "available", "adoptable", "ready")]
+            animals = [a for a in all_animals if (a.get("status") or "").lower() in app_config.HEALTHY_STATUSES]
         elif filter_status == "recovering":
             animals = [a for a in all_animals if (a.get("status") or "").lower() == "recovering"]
         elif filter_status == "injured":
@@ -109,16 +123,11 @@ class AnimalsListPage:
             for animal in animals:
                 animal_cards.append(create_card_for_animal(animal))
         else:
-            animal_cards.append(
-                ft.Container(
-                    ft.Column([
-                        ft.Icon(ft.Icons.PETS, size=64, color=ft.Colors.GREY_400),
-                        ft.Text("No animals found", size=16, color=ft.Colors.BLACK54),
-                    ], horizontal_alignment="center", spacing=10),
-                    padding=40,
-                    alignment=ft.alignment.center,
-                )
-            )
+            animal_cards.append(create_empty_state(
+                message="No animals found",
+                icon=ft.Icons.PETS,
+                padding=40
+            ))
 
         # Main content area
         main_content = ft.Container(
@@ -172,17 +181,16 @@ class AnimalsListPage:
         page.go(f"/edit_animal?id={animal_id}")
 
     def delete_animal(self, animal_id: int) -> None:
-        """Delete an animal directly (like todo app clear_clicked)."""
+        """Delete an animal using state manager for consistency."""
         import flet as ft
         
         print(f"\n{'='*60}")
         print(f"DELETING Animal ID: {animal_id}")
-        print(f"Database: {self.animal_service.db.db_path}")
         print(f"{'='*60}")
         
         try:
-            # Perform the delete
-            success = self.animal_service.delete_animal(animal_id)
+            # Use state manager for deletion (handles reload automatically)
+            success = self._app_state.animals.delete_animal(animal_id)
             print(f"Delete result: {success}")
             
             if success:

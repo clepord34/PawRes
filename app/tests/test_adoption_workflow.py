@@ -79,10 +79,10 @@ class TestCompleteAdoptionWorkflow:
         """Test workflow with multiple users requesting different animals."""
         # Create two users
         user1_id = auth_service.register_user(
-            name="User One", email="user1@test.com", password="pass1"
+            name="User One", email="user1@test.com", password="password1"
         )
         user2_id = auth_service.register_user(
-            name="User Two", email="user2@test.com", password="pass2"
+            name="User Two", email="user2@test.com", password="password2"
         )
         
         # Create multiple animals
@@ -135,7 +135,7 @@ class TestAdoptionRequestManagement:
         """Test that admin can approve some requests and reject others."""
         # Setup: Create user and multiple animals
         user_id = auth_service.register_user(
-            name="Multi Adopter", email="multi@test.com", password="pass"
+            name="Multi Adopter", email="multi@test.com", password="password123"
         )
         
         animal1_id = animal_service.add_animal(
@@ -181,7 +181,7 @@ class TestAdoptionRequestManagement:
         user_id = auth_service.register_user(
             name="Persistence Test",
             email="persist@test.com",
-            password="pass"
+            password="password123"
         )
         animal_id = animal_service.add_animal(
             name="TestAnimal",

@@ -145,7 +145,12 @@ class AuthState(StateManager[Dict[str, Any]]):
         self._sync_to_page_session()
     
     def logout(self) -> None:
-        """Process logout, clearing all session data."""
+        """Process logout, clearing all session data.
+        
+        This clears the auth state and syncs to page session.
+        Note: Call AppState.reset() for full logout including all domain states.
+        """
+        self.clear_observers()  # Clear any lingering subscriptions
         self.reset(UserSession().to_dict())
         self._sync_to_page_session()
     

@@ -137,8 +137,8 @@ class TestGetMissions:
     def test_get_all_missions_returns_all(self, rescue_service: RescueService, auth_service: AuthService):
         """Test that all missions are returned."""
         # Create multiple users for different missions
-        user1 = auth_service.register_user(name="User1", email="u1@test.com", password="p")
-        user2 = auth_service.register_user(name="User2", email="u2@test.com", password="p")
+        user1 = auth_service.register_user(name="User1", email="u1@test.com", password="password1")
+        user2 = auth_service.register_user(name="User2", email="u2@test.com", password="password2")
         
         rescue_service.submit_rescue_request(user_id=user1, location="Location 1")
         rescue_service.submit_rescue_request(user_id=user2, location="Location 2")
@@ -149,8 +149,8 @@ class TestGetMissions:
 
     def test_get_user_missions_filters_by_user(self, rescue_service: RescueService, auth_service: AuthService):
         """Test that user missions only returns missions for that user."""
-        user1 = auth_service.register_user(name="User1", email="filter1@test.com", password="p")
-        user2 = auth_service.register_user(name="User2", email="filter2@test.com", password="p")
+        user1 = auth_service.register_user(name="User1", email="filter1@test.com", password="password1")
+        user2 = auth_service.register_user(name="User2", email="filter2@test.com", password="password2")
         
         rescue_service.submit_rescue_request(user_id=user1, location="User 1 - Mission 1")
         rescue_service.submit_rescue_request(user_id=user2, location="User 2 - Mission 1")

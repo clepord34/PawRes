@@ -1,21 +1,31 @@
-"""Rescue missions list with status management and map."""
+"""Rescue missions list with status management and map.
+
+Uses RescueState for state-driven data flow, ensuring consistency
+with the application's state management pattern.
+"""
 from __future__ import annotations
 
 from typing import Optional
 
-from services.rescue_service import RescueService
+from state import get_app_state
 from services.map_service import MapService
 import app_config
 from components import (
     create_admin_sidebar, create_mission_status_badge, create_gradient_background,
-    create_page_title, create_section_card, create_map_container, show_snackbar,
-    create_delete_confirmation_dialog
+    create_page_title, create_section_card, create_map_container, create_empty_state,
+    show_snackbar, create_delete_confirmation_dialog
 )
 
 
 class RescueMissionListPage:
+    """Page for viewing and managing rescue missions.
+    
+    Uses RescueState for reactive data management.
+    """
+    
     def __init__(self, db_path: Optional[str] = None) -> None:
-        self.rescue_service = RescueService(db_path or app_config.DB_PATH)
+        self._db_path = db_path or app_config.DB_PATH
+        self._app_state = get_app_state(self._db_path)
         self.map_service = MapService()
 
     def build(self, page, user_role: str = "user") -> None:
@@ -34,7 +44,9 @@ class RescueMissionListPage:
         else:
             sidebar = None
 
-        missions = self.rescue_service.get_all_missions()
+        # Load missions through state manager
+        self._app_state.rescues.load_missions()
+        missions = self._app_state.rescues.missions
         
         # Filter out soft-deleted missions from admin view
         if is_admin:
@@ -164,10 +176,9 @@ class RescueMissionListPage:
                     ft.Divider(height=1, color=ft.Colors.GREY_300),
                     ft.Container(height=10),
                 ] + (table_rows_content if table_rows_content else [
-                    ft.Container(
-                        ft.Text("No rescue missions found", size=13, color=ft.Colors.BLACK54),
-                        padding=20,
-                        alignment=ft.alignment.center,
+                    create_empty_state(
+                        message="No rescue missions found",
+                        padding=20
                     )
                 ]),
                 spacing=0
@@ -243,8 +254,9 @@ class RescueMissionListPage:
         page.update()
 
     def _on_status_change(self, page, mission_id: int, new_status: str) -> None:
+        """Update mission status using state manager."""
         try:
-            updated = self.rescue_service.update_rescue_status(mission_id, new_status)
+            updated = self._app_state.rescues.update_mission(mission_id, status=new_status)
 
             if updated:
                 show_snackbar(page, "Status updated")
@@ -270,7 +282,8 @@ class RescueMissionListPage:
             dialog.open = False
             page.update()
             try:
-                closed = self.rescue_service.delete_mission(mission_id)
+                # Use state manager for deletion
+                closed = self._app_state.rescues.delete_mission(mission_id)
                 if closed:
                     show_snackbar(page, f"Case '{mission_name or 'Unknown'}' closed successfully")
                     # Refresh the page

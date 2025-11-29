@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 
 from storage.database import Database
+from storage.cache import get_query_cache, QueryCache
 from .animal_service import AnimalService
 from .rescue_service import RescueService
 from .adoption_service import AdoptionService
@@ -12,7 +13,17 @@ import app_config
 
 
 class AnalyticsService:
-    """Service for generating analytics and aggregated statistics."""
+    """Service for generating analytics and aggregated statistics.
+    
+    Provides cached access to analytics data including:
+    - Chart data for rescued/adopted trends
+    - Animal type distribution
+    - Health status counts
+    - Dashboard statistics
+    - Monthly comparison changes
+    
+    Uses QueryCache for performance optimization on expensive queries.
+    """
 
     def __init__(self, db: Optional[Database | str] = None) -> None:
         """Initialize with database connection.
@@ -29,6 +40,12 @@ class AnalyticsService:
         self.animal_service = AnimalService(self.db)
         self.rescue_service = RescueService(self.db)
         self.adoption_service = AdoptionService(self.db)
+        
+        # Use query cache for expensive analytics queries
+        self._cache: QueryCache = get_query_cache()
+        
+        # Cache TTL in seconds (2 minutes for analytics)
+        self._cache_ttl = 120
 
     def get_chart_data(self) -> Tuple[Tuple[List[str], List[int], List[int]], Dict[str, int], Dict[str, int]]:
         """Return aggregated data for charts.
@@ -101,7 +118,7 @@ class AnalyticsService:
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
                 # Consider approved/adopted/completed as successful adoptions
-                if (req.get("status") or "").lower() in ("approved", "adopted", "completed"):
+                if (req.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES:
                     adopted_counts[idx] += 1
 
         # Calculate type distribution and status counts
@@ -145,21 +162,33 @@ class AnalyticsService:
     def get_dashboard_stats(self) -> Dict[str, Any]:
         """Get summary statistics for dashboard display.
         
+        Returns cached results for performance.
+        
         Returns:
             Dictionary with total animals, adoptions, and pending requests
         """
-        animals = self.animal_service.get_all_animals() or []
-        all_requests = self.adoption_service.get_all_requests() or []
+        def _fetch_stats():
+            animals = self.animal_service.get_all_animals() or []
+            all_requests = self.adoption_service.get_all_requests() or []
+            
+            total_animals = len(animals)
+            total_adoptions = len([r for r in all_requests 
+                if (r.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES])
+            pending_applications = len([r for r in all_requests 
+                if (r.get("status") or "").lower() == "pending"])
+            
+            return {
+                "total_animals": total_animals,
+                "total_adoptions": total_adoptions,
+                "pending_applications": pending_applications,
+            }
         
-        total_animals = len(animals)
-        total_adoptions = len([r for r in all_requests if (r.get("status") or "").lower() in ("approved", "adopted")])
-        pending_applications = len([r for r in all_requests if (r.get("status") or "").lower() == "pending"])
-        
-        return {
-            "total_animals": total_animals,
-            "total_adoptions": total_adoptions,
-            "pending_applications": pending_applications,
-        }
+        return self._cache.get_or_fetch(
+            "dashboard_stats",
+            None,
+            _fetch_stats,
+            ttl_seconds=self._cache_ttl
+        )
 
     def get_monthly_changes(self) -> Dict[str, str]:
         """Calculate percentage changes comparing this month vs last month.
@@ -219,10 +248,10 @@ class AnalyticsService:
         # Count adoptions (approved/adopted) this month vs last month
         adoptions_this_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), this_month_start, now) 
-            and (r.get("status") or "").lower() in ("approved", "adopted", "completed")])
+            and (r.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES])
         adoptions_last_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), last_month_start, last_month_end)
-            and (r.get("status") or "").lower() in ("approved", "adopted", "completed")])
+            and (r.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES])
         
         # Count pending applications this month vs last month
         pending_this_month = len([r for r in requests 
@@ -281,6 +310,15 @@ class AnalyticsService:
             "pending_adoption_requests": pending_adoption_requests,
             "ongoing_rescue_missions": ongoing_rescue_missions,
         }
+
+    def invalidate_cache(self) -> None:
+        """Invalidate all cached analytics data.
+        
+        Call this after data modifications that affect analytics
+        (e.g., new animal, new adoption request, etc.)
+        """
+        self._cache.clear()
+        print("[DEBUG] AnalyticsService: Cache invalidated")
 
 
 __all__ = ["AnalyticsService"]

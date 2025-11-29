@@ -163,10 +163,10 @@ class AnimalService:
     def get_adoptable_animals(self) -> List[Dict[str, Any]]:
         """Return animals considered adoptable.
 
-        The service treats animals with `status` in this list as adoptable:
-        `('available','adoptable','healthy','ready')`.
+        Uses ADOPTABLE_STATUSES from app_config to determine which
+        animals are available for adoption.
         """
-        adoptable_states = ("available", "adoptable", "healthy", "ready")
+        adoptable_states = app_config.ADOPTABLE_STATUSES
         placeholders = ",".join(["?" for _ in adoptable_states])
         sql = f"SELECT * FROM animals WHERE status IN ({placeholders}) ORDER BY id"
         rows = self.db.fetch_all(sql, adoptable_states)

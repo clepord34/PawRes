@@ -1,20 +1,29 @@
-"""Page displaying animals available for adoption."""
+"""Page displaying animals available for adoption.
+
+Uses AnimalState for state-driven data flow, ensuring consistency
+with the application's state management pattern.
+"""
 from __future__ import annotations
 from typing import Optional, List, Dict
 
 import app_config
-from services.animal_service import AnimalService
+from state import get_app_state
 from services.photo_service import load_photo
 from components import (
     create_user_sidebar, create_gradient_background,
-    create_page_title, create_animal_card
+    create_page_title, create_animal_card, create_empty_state
 )
 
 
 class AvailableAdoptionPage:
+    """Page for browsing and selecting animals available for adoption.
+    
+    Uses AnimalState for reactive data management.
+    """
+    
     def __init__(self, db_path: Optional[str] = None) -> None:
-        self.animal_service = AnimalService(db_path or app_config.DB_PATH)
-        self._all_animals: List[Dict] = []
+        self._db_path = db_path or app_config.DB_PATH
+        self._app_state = get_app_state(self._db_path)
 
     def build(self, page) -> None:
         try:
@@ -30,8 +39,9 @@ class AvailableAdoptionPage:
         # Create sidebar
         sidebar = create_user_sidebar(page, user_name)
 
-        # Fetch adoptable animals (only healthy/ready animals)
-        self._all_animals = self.animal_service.get_adoptable_animals() or []
+        # Load adoptable animals through state manager
+        self._app_state.animals.load_adoptable_animals()
+        animals = self._app_state.animals.animals
 
         # Create animal cards
         def create_card_for_animal(animal):
@@ -51,20 +61,15 @@ class AvailableAdoptionPage:
 
         # Create grid of animal cards
         animal_cards = []
-        if self._all_animals:
-            for animal in self._all_animals:
+        if animals:
+            for animal in animals:
                 animal_cards.append(create_card_for_animal(animal))
         else:
-            animal_cards.append(
-                ft.Container(
-                    ft.Column([
-                        ft.Icon(ft.Icons.PETS, size=64, color=ft.Colors.GREY_400),
-                        ft.Text("No animals available for adoption", size=16, color=ft.Colors.BLACK54),
-                    ], horizontal_alignment="center", spacing=10),
-                    padding=40,
-                    alignment=ft.alignment.center,
-                )
-            )
+            animal_cards.append(create_empty_state(
+                message="No animals available for adoption",
+                icon=ft.Icons.PETS,
+                padding=40
+            ))
 
         # Main content area
         main_content = ft.Container(

@@ -55,15 +55,84 @@ MAX_EMAIL_LENGTH = 255
 MAX_PHONE_LENGTH = 20
 MAX_DESCRIPTION_LENGTH = 1000
 MAX_NOTES_LENGTH = 2000
+MAX_REASON_LENGTH = 500
+MAX_LOCATION_LENGTH = 500
+MIN_PASSWORD_LENGTH = 6
+MAX_PASSWORD_LENGTH = 128
 
 # Status values
 ANIMAL_STATUS_VALUES = ("available", "adoptable", "healthy", "recovering", "injured", "adopted", "unknown")
 RESCUE_STATUS_VALUES = ("pending", "in_progress", "completed", "cancelled")
 ADOPTION_STATUS_VALUES = ("pending", "approved", "rejected", "completed")
 
+# Adoptable status values (animals that can be adopted)
+ADOPTABLE_STATUSES = ("available", "adoptable", "healthy", "ready")
+
+# Healthy status values for filtering
+HEALTHY_STATUSES = ("healthy", "available", "adoptable", "ready")
+
+# Approved adoption statuses
+APPROVED_ADOPTION_STATUSES = ("approved", "adopted", "completed")
+
 # File upload
 MAX_PHOTO_SIZE_MB = 5
-ALLOWED_PHOTO_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif")
+ALLOWED_PHOTO_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
+ALLOWED_MIME_TYPES = (
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+)
+
+# Upload paths
+UPLOADS_DIR = STORAGE_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_DIR = STORAGE_DIR / "temp"
+TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_upload_path(filename: str) -> Path:
+    """Get absolute path for an uploaded file.
+    
+    Args:
+        filename: The filename (not full path)
+        
+    Returns:
+        Absolute Path to the file in uploads directory
+    """
+    return UPLOADS_DIR / filename
+
+
+def is_valid_status(status: str, status_type: str = "animal") -> bool:
+    """Check if a status value is valid.
+    
+    Args:
+        status: The status string to validate
+        status_type: One of 'animal', 'rescue', or 'adoption'
+        
+    Returns:
+        True if status is valid for the given type
+    """
+    status_lower = status.lower()
+    if status_type == "animal":
+        return status_lower in ANIMAL_STATUS_VALUES
+    elif status_type == "rescue":
+        return status_lower in RESCUE_STATUS_VALUES
+    elif status_type == "adoption":
+        return status_lower in ADOPTION_STATUS_VALUES
+    return False
+
+
+def is_adoptable_status(status: str) -> bool:
+    """Check if an animal status means it's adoptable.
+    
+    Args:
+        status: The animal's status
+        
+    Returns:
+        True if the animal can be adopted
+    """
+    return status.lower() in ADOPTABLE_STATUSES
 
 
 __all__ = [
@@ -87,9 +156,22 @@ __all__ = [
     "MAX_PHONE_LENGTH",
     "MAX_DESCRIPTION_LENGTH",
     "MAX_NOTES_LENGTH",
+    "MAX_REASON_LENGTH",
+    "MAX_LOCATION_LENGTH",
+    "MIN_PASSWORD_LENGTH",
+    "MAX_PASSWORD_LENGTH",
     "ANIMAL_STATUS_VALUES",
     "RESCUE_STATUS_VALUES",
     "ADOPTION_STATUS_VALUES",
+    "ADOPTABLE_STATUSES",
+    "HEALTHY_STATUSES",
+    "APPROVED_ADOPTION_STATUSES",
     "MAX_PHOTO_SIZE_MB",
     "ALLOWED_PHOTO_EXTENSIONS",
+    "ALLOWED_MIME_TYPES",
+    "UPLOADS_DIR",
+    "TEMP_DIR",
+    "get_upload_path",
+    "is_valid_status",
+    "is_adoptable_status",
 ]

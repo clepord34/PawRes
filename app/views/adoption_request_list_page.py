@@ -1,18 +1,29 @@
-"""Admin page for managing adoption requests."""
+"""Admin page for managing adoption requests.
+
+Uses AdoptionState for state-driven data flow, ensuring consistency
+with the application's state management pattern.
+"""
 from __future__ import annotations
 from typing import Optional
 
 import app_config
-from services.adoption_service import AdoptionService
+from state import get_app_state
 from components import (
-    create_admin_sidebar, create_adoption_status_dropdown, create_status_badge, create_gradient_background,
-    create_page_title, create_section_card, show_snackbar
+    create_admin_sidebar, create_adoption_status_dropdown, create_status_badge, 
+    create_gradient_background, create_page_title, create_section_card, 
+    create_empty_state, show_snackbar
 )
 
 
 class AdoptionRequestListPage:
+    """Admin page for viewing and managing adoption requests.
+    
+    Uses AdoptionState for reactive data management.
+    """
+    
     def __init__(self, db_path: Optional[str] = None) -> None:
-        self.adoption_service = AdoptionService(db_path or app_config.DB_PATH)
+        self._db_path = db_path or app_config.DB_PATH
+        self._app_state = get_app_state(self._db_path)
 
     def build(self, page, user_role: str = "admin") -> None:
         try:
@@ -30,8 +41,9 @@ class AdoptionRequestListPage:
         else:
             sidebar = None
 
-        # Fetch all adoption requests
-        requests = self.adoption_service.get_all_requests() or []
+        # Load adoption requests through state manager
+        self._app_state.adoptions.load_requests()
+        requests = self._app_state.adoptions.requests
 
         # Build table rows
         table_rows = []
@@ -169,10 +181,9 @@ class AdoptionRequestListPage:
                 ft.Divider(height=15, color=ft.Colors.GREY_300),
                 table_header,
                 ft.Column(table_rows if table_rows else [
-                    ft.Container(
-                        ft.Text("No adoption requests found", size=16, color=ft.Colors.BLACK54),
-                        padding=40,
-                        alignment=ft.alignment.center,
+                    create_empty_state(
+                        message="No adoption requests found",
+                        padding=40
                     )
                 ], spacing=0, scroll=ft.ScrollMode.AUTO),
             ], spacing=10),
@@ -204,8 +215,9 @@ class AdoptionRequestListPage:
         page.update()
 
     def _on_status_change(self, page, request_id: int, new_status: str) -> None:
+        """Update adoption request status using state manager."""
         try:
-            updated = self.adoption_service.update_status(request_id, new_status)
+            updated = self._app_state.adoptions.update_request_status(request_id, new_status)
 
             if updated:
                 show_snackbar(page, f"Status updated to {new_status}")

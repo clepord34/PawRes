@@ -248,6 +248,60 @@ class RescueState(StateManager[Dict[str, Any]]):
             self.patch_state({"error": str(e)})
             return False
     
+    def update_mission(self, mission_id: int, **fields) -> bool:
+        """Update a mission's fields.
+        
+        Args:
+            mission_id: ID of mission to update
+            **fields: Fields to update (e.g., status='rescued')
+        
+        Returns:
+            True if successful
+        """
+        # Handle status update specially
+        if 'status' in fields and len(fields) == 1:
+            return self.update_status(mission_id, fields['status'])
+        
+        try:
+            service = self._get_service()
+            # For now, we only support status updates
+            if 'status' in fields:
+                success = service.update_rescue_status(mission_id, fields['status'])
+                if success:
+                    self.load_missions()
+                return success
+            return False
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to update mission: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+    
+    def delete_mission(self, mission_id: int) -> bool:
+        """Delete (close) a rescue mission.
+        
+        Args:
+            mission_id: ID of mission to delete
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.delete_mission(mission_id)
+            
+            if success:
+                # Reload missions to get fresh data
+                self.load_missions()
+                print(f"[DEBUG] RescueState: Deleted mission {mission_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to delete mission: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+    
     def select_mission(self, mission_id: Optional[int]) -> None:
         """Select a mission by ID.
         

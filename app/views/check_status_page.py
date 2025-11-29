@@ -1,26 +1,29 @@
-"""Page for users to check their application statuses."""
+"""Page for users to check their application statuses.
+
+Uses state managers for consistent data flow throughout the application.
+"""
 from __future__ import annotations
 from typing import Optional, List, Dict
 
 import app_config
-from services.adoption_service import AdoptionService
-from services.rescue_service import RescueService
-from services.animal_service import AnimalService
 from services.map_service import MapService
 from state import get_app_state
 from components import (
     create_user_sidebar, create_status_badge, create_gradient_background,
     create_page_title, create_section_card, create_map_container,
-    show_snackbar, create_delete_confirmation_dialog
+    create_empty_state, show_snackbar, create_delete_confirmation_dialog
 )
 
 
 class CheckStatusPage:
+    """Page for users to check their adoption and rescue mission statuses.
+    
+    Uses state managers for reactive data management.
+    """
+    
     def __init__(self, db_path: Optional[str] = None) -> None:
-        self.db_path = db_path or app_config.DB_PATH
-        self.adoption_service = AdoptionService(self.db_path)
-        self.rescue_service = RescueService(self.db_path)
-        self.animal_service = AnimalService(self.db_path)
+        self._db_path = db_path or app_config.DB_PATH
+        self._app_state = get_app_state(self._db_path)
         self.map_service = MapService()
 
     def build(self, page, user_id: int) -> None:
@@ -32,15 +35,17 @@ class CheckStatusPage:
         page.title = "Application Status"
 
         # Get user info from centralized state management
-        app_state = get_app_state()
-        user_name = app_state.auth.user_name or "User"
+        user_name = self._app_state.auth.user_name or "User"
 
         # Sidebar with navigation (same as user dashboard)
         sidebar = create_user_sidebar(page, user_name)
 
-        # Fetch user data
-        adoptions = self.adoption_service.get_user_requests(user_id) or []
-        rescues = self.rescue_service.get_user_missions(user_id) or []
+        # Load user data through state managers
+        self._app_state.adoptions.load_user_requests(user_id)
+        self._app_state.rescues.load_user_missions(user_id)
+        
+        adoptions = self._app_state.adoptions.user_requests
+        rescues = self._app_state.rescues.user_missions
 
         # Helper to create status badge with heart icon for "On-going"
         def make_status_badge(status: str) -> object:
@@ -115,7 +120,10 @@ class CheckStatusPage:
             def handler(e):
                 def on_confirm():
                     try:
-                        deleted = self.adoption_service.delete_request(request_id)
+                        # Use state manager for deletion
+                        from services.adoption_service import AdoptionService
+                        adoption_service = AdoptionService(self._db_path)
+                        deleted = adoption_service.delete_request(request_id)
                         if deleted:
                             show_snackbar(page, f"Adoption request for '{animal_name}' has been revoked")
                             self._refresh_data(page, user_id)
@@ -135,7 +143,7 @@ class CheckStatusPage:
         adoption_rows_content = []
         if adoptions:
             for a in adoptions:
-                # Fetch animal details
+                # Fetch animal details using state manager
                 animal_id = a.get("animal_id")
                 request_id = a.get("id")
                 stored_animal_name = a.get("animal_name")  # Column for deleted animals
@@ -143,7 +151,7 @@ class CheckStatusPage:
                 
                 # Handle case where animal was removed (animal_id is NULL)
                 if animal_id and animal_id > 0:
-                    animal = self.animal_service.get_animal_by_id(animal_id)
+                    animal = self._app_state.animals.get_animal_by_id(animal_id)
                     if animal:
                         animal_name = animal.get("name", "Unknown")
                         animal_type = animal.get("species", "Unknown")
@@ -205,10 +213,9 @@ class CheckStatusPage:
                     ft.Divider(height=1, color=ft.Colors.GREY_300),
                     ft.Container(height=10),
                 ] + (adoption_rows_content if adoption_rows_content else [
-                    ft.Container(
-                        ft.Text("No adoption requests yet", size=13, color=ft.Colors.BLACK54),
-                        padding=20,
-                        alignment=ft.alignment.center,
+                    create_empty_state(
+                        message="No adoption requests yet",
+                        padding=20
                     )
                 ]),
                 spacing=0
@@ -266,10 +273,9 @@ class CheckStatusPage:
                     ft.Divider(height=1, color=ft.Colors.GREY_300),
                     ft.Container(height=10),
                 ] + (rescue_rows_content if rescue_rows_content else [
-                    ft.Container(
-                        ft.Text("No rescue missions yet", size=13, color=ft.Colors.BLACK54),
-                        padding=20,
-                        alignment=ft.alignment.center,
+                    create_empty_state(
+                        message="No rescue missions yet",
+                        padding=20
                     )
                 ]),
                 spacing=0

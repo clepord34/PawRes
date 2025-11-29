@@ -227,6 +227,18 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             self.patch_state({"error": str(e)})
             return False
     
+    def update_request_status(self, request_id: int, status: str) -> bool:
+        """Update a request's status (alias for update_status).
+        
+        Args:
+            request_id: ID of request to update
+            status: New status value (approved, denied, pending)
+        
+        Returns:
+            True if successful
+        """
+        return self.update_status(request_id, status)
+    
     def select_request(self, request_id: Optional[int]) -> None:
         """Select a request by ID.
         

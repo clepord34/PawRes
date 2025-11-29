@@ -34,8 +34,7 @@ class AnimalFilter:
         
         # Adoptable filter
         if self.only_adoptable:
-            adoptable_states = ("available", "adoptable", "healthy", "ready")
-            if animal.get("status", "").lower() not in adoptable_states:
+            if animal.get("status", "").lower() not in app_config.ADOPTABLE_STATUSES:
                 return False
         
         return True

@@ -12,6 +12,23 @@ from .buttons import create_nav_button, create_logout_button
 from .profile import create_profile_section
 
 
+def _handle_logout(page: object) -> None:
+    """Handle logout by resetting app state and navigating to login.
+    
+    This ensures all cached data and subscriptions are properly cleared
+    to prevent memory leaks.
+    """
+    try:
+        from state import get_app_state
+        app_state = get_app_state()
+        app_state.reset()
+        print("[DEBUG] Logout: AppState reset completed")
+    except Exception as e:
+        print(f"[WARN] Logout: Could not reset AppState: {e}")
+    
+    page.go("/")
+
+
 def create_admin_sidebar(page: object) -> object:
     """Create an admin sidebar with navigation and profile."""
     if ft is None:
@@ -29,7 +46,7 @@ def create_admin_sidebar(page: object) -> object:
         create_nav_button("View Data Charts", lambda e: page.go("/charts")),
     ]
     
-    logout_btn = create_logout_button(lambda e: page.go("/"))
+    logout_btn = create_logout_button(lambda e: _handle_logout(page))
     profile = create_profile_section("Admin", is_admin=True)
     
     return ft.Container(
@@ -66,7 +83,7 @@ def create_user_sidebar(page: object, user_name: str = "User") -> object:
         create_nav_button("View Animal List", lambda e: page.go("/animals_list")),
     ]
     
-    logout_btn = create_logout_button(lambda e: page.go("/"))
+    logout_btn = create_logout_button(lambda e: _handle_logout(page))
     profile = create_profile_section(user_name, is_admin=False)
     
     return ft.Container(
