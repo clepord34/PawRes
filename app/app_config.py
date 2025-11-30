@@ -6,10 +6,19 @@ from pathlib import Path
 from typing import Optional
 
 
-# Load .env file if python-dotenv is available
+# Determine project root (parent of app/ directory)
+APP_ROOT = Path(__file__).parent
+PROJECT_ROOT = APP_ROOT.parent
+
+# Load .env file from project root if python-dotenv is available
 try:
 	from dotenv import load_dotenv
-	load_dotenv()
+	# Look for .env in project root first, then current directory
+	env_file = PROJECT_ROOT / ".env"
+	if env_file.exists():
+		load_dotenv(env_file)
+	else:
+		load_dotenv()  # Fallback to default behavior
 except ImportError:
 	pass
 
@@ -22,8 +31,7 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 	return value
 
 
-# Application paths
-APP_ROOT = Path(__file__).parent
+# Application paths (APP_ROOT already defined above)
 STORAGE_DIR = APP_ROOT / "storage"
 STORAGE_DIR.mkdir(exist_ok=True)
 
