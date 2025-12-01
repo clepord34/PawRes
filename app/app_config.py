@@ -82,6 +82,340 @@ HEALTHY_STATUSES = ("healthy", "available", "adoptable", "ready")
 # Approved adoption statuses
 APPROVED_ADOPTION_STATUSES = ("approved", "adopted", "completed")
 
+
+# =============================================================================
+# STATUS CONSTANTS - Use these instead of magic strings throughout the app
+# =============================================================================
+
+class RescueStatus:
+    """Standardized rescue mission status values."""
+    PENDING = "pending"
+    ONGOING = "on-going"
+    RESCUED = "rescued"
+    FAILED = "failed"
+    CANCELLED = "cancelled"  # User cancelled their own report
+    REMOVED = "removed"  # Admin removed as invalid/spam/duplicate
+    
+    # Archived status is stored as "original_status|archived" (e.g., "rescued|archived")
+    ARCHIVED_SUFFIX = "|archived"
+    
+    @classmethod
+    def normalize(cls, status: str) -> str:
+        """Normalize a status string to match constant values."""
+        s = (status or "").lower().strip()
+        # Handle archived suffix
+        if cls.ARCHIVED_SUFFIX in s:
+            s = s.replace(cls.ARCHIVED_SUFFIX, "")
+        if s in ("pending", ""): return cls.PENDING
+        if s in ("on-going", "ongoing", "in_progress", "in progress"): return cls.ONGOING
+        if s in ("rescued", "completed"): return cls.RESCUED
+        if s in ("failed",): return cls.FAILED
+        if s in ("cancelled", "canceled"): return cls.CANCELLED
+        if s in ("removed",): return cls.REMOVED
+        return s
+    
+    @classmethod
+    def get_label(cls, status: str) -> str:
+        """Get human-readable label for a status (strips archived suffix for display)."""
+        # For archived items, show original status to users
+        base_status = cls.get_base_status(status)
+        normalized = cls.normalize(base_status)
+        labels = {
+            cls.PENDING: "Pending",
+            cls.ONGOING: "On-going",
+            cls.RESCUED: "Rescued",
+            cls.FAILED: "Failed",
+            cls.CANCELLED: "Cancelled",
+            cls.REMOVED: "Removed",
+        }
+        return labels.get(normalized, status.title())
+    
+    @classmethod
+    def is_cancelled(cls, status: str) -> bool:
+        """Check if a status indicates user cancellation."""
+        return cls.normalize(status) == cls.CANCELLED
+    
+    @classmethod
+    def is_final(cls, status: str) -> bool:
+        """Check if a status is final (rescued/failed/cancelled)."""
+        normalized = cls.normalize(status)
+        return normalized in (cls.RESCUED, cls.FAILED, cls.CANCELLED)
+    
+    @classmethod
+    def is_active(cls, status: str) -> bool:
+        """Check if a status indicates an active (non-final) mission."""
+        normalized = cls.normalize(status)
+        return normalized in (cls.PENDING, cls.ONGOING)
+    
+    @classmethod
+    def is_archived(cls, status: str) -> bool:
+        """Check if a status indicates archived."""
+        return cls.ARCHIVED_SUFFIX in (status or "").lower()
+    
+    @classmethod
+    def is_removed(cls, status: str) -> bool:
+        """Check if a status indicates removed (invalid/spam/duplicate)."""
+        return cls.normalize(status) == cls.REMOVED
+    
+    @classmethod
+    def is_hidden(cls, status: str) -> bool:
+        """Check if a status is hidden from active admin list (archived or removed)."""
+        return cls.is_archived(status) or cls.is_removed(status)
+    
+    @classmethod
+    def get_base_status(cls, status: str) -> str:
+        """Get the base status without archived suffix."""
+        s = (status or "").lower().strip()
+        if cls.ARCHIVED_SUFFIX in s:
+            return s.replace(cls.ARCHIVED_SUFFIX, "")
+        return s
+    
+    @classmethod
+    def make_archived(cls, status: str) -> str:
+        """Add archived suffix to a status."""
+        base = cls.get_base_status(status)
+        return f"{base}{cls.ARCHIVED_SUFFIX}"
+    
+    @classmethod
+    def has_outcome(cls, status: str) -> bool:
+        """Check if this status represents a real outcome (for analytics)."""
+        base = cls.get_base_status(status)
+        normalized = cls.normalize(base)
+        return normalized in (cls.RESCUED, cls.FAILED)
+    
+    @classmethod
+    def counts_in_analytics(cls, status: str) -> bool:
+        """Check if this status should be counted in analytics (not removed)."""
+        return not cls.is_removed(status)
+    
+    @classmethod
+    def all_statuses(cls) -> tuple:
+        """Return all status values (excluding archived variants)."""
+        return (cls.PENDING, cls.ONGOING, cls.RESCUED, cls.FAILED, cls.CANCELLED, cls.REMOVED)
+
+
+class AdoptionStatus:
+    """Standardized adoption request status values."""
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    CANCELLED = "cancelled"  # User cancelled their own request
+    REMOVED = "removed"  # Admin removed as invalid/spam/duplicate
+    
+    # Archived status is stored as "original_status|archived" (e.g., "approved|archived")
+    ARCHIVED_SUFFIX = "|archived"
+    
+    @classmethod
+    def normalize(cls, status: str) -> str:
+        """Normalize a status string to match constant values."""
+        s = (status or "").lower().strip()
+        # Handle archived suffix
+        if cls.ARCHIVED_SUFFIX in s:
+            s = s.replace(cls.ARCHIVED_SUFFIX, "")
+        if s in ("pending", ""): return cls.PENDING
+        if s in ("approved", "adopted", "completed"): return cls.APPROVED
+        if s in ("denied", "rejected"): return cls.DENIED
+        if s in ("cancelled", "canceled", "revoked"): return cls.CANCELLED
+        if s in ("removed",): return cls.REMOVED
+        return s
+    
+    @classmethod
+    def get_label(cls, status: str) -> str:
+        """Get human-readable label for a status (strips archived suffix for display)."""
+        # For archived items, show original status to users
+        base_status = cls.get_base_status(status)
+        normalized = cls.normalize(base_status)
+        labels = {
+            cls.PENDING: "Pending",
+            cls.APPROVED: "Approved",
+            cls.DENIED: "Denied",
+            cls.CANCELLED: "Cancelled",
+            cls.REMOVED: "Removed",
+        }
+        return labels.get(normalized, status.title())
+    
+    @classmethod
+    def is_cancelled(cls, status: str) -> bool:
+        """Check if a status indicates user cancellation."""
+        return cls.normalize(status) == cls.CANCELLED
+    
+    @classmethod
+    def is_final(cls, status: str) -> bool:
+        """Check if a status is final (approved/denied/cancelled)."""
+        normalized = cls.normalize(status)
+        return normalized in (cls.APPROVED, cls.DENIED, cls.CANCELLED)
+    
+    @classmethod
+    def is_archived(cls, status: str) -> bool:
+        """Check if a status indicates archived."""
+        return cls.ARCHIVED_SUFFIX in (status or "").lower()
+    
+    @classmethod
+    def is_removed(cls, status: str) -> bool:
+        """Check if a status indicates removed (invalid/spam/duplicate)."""
+        return cls.normalize(status) == cls.REMOVED
+    
+    @classmethod
+    def is_hidden(cls, status: str) -> bool:
+        """Check if a status is hidden from active admin list (archived or removed)."""
+        return cls.is_archived(status) or cls.is_removed(status)
+    
+    @classmethod
+    def get_base_status(cls, status: str) -> str:
+        """Get the base status without archived suffix."""
+        s = (status or "").lower().strip()
+        if cls.ARCHIVED_SUFFIX in s:
+            return s.replace(cls.ARCHIVED_SUFFIX, "")
+        return s
+    
+    @classmethod
+    def make_archived(cls, status: str) -> str:
+        """Add archived suffix to a status."""
+        base = cls.get_base_status(status)
+        return f"{base}{cls.ARCHIVED_SUFFIX}"
+    
+    @classmethod
+    def has_outcome(cls, status: str) -> bool:
+        """Check if this status represents a real outcome (for analytics)."""
+        base = cls.get_base_status(status)
+        normalized = cls.normalize(base)
+        return normalized in (cls.APPROVED, cls.DENIED)
+    
+    @classmethod
+    def counts_in_analytics(cls, status: str) -> bool:
+        """Check if this status should be counted in analytics (not removed)."""
+        return not cls.is_removed(status)
+    
+    @classmethod
+    def all_statuses(cls) -> tuple:
+        """Return all status values (excluding archived variants)."""
+        return (cls.PENDING, cls.APPROVED, cls.DENIED, cls.CANCELLED, cls.REMOVED)
+
+
+class AnimalStatus:
+    """Standardized animal status values."""
+    AVAILABLE = "available"
+    HEALTHY = "healthy"
+    RECOVERING = "recovering"
+    INJURED = "injured"
+    ADOPTED = "adopted"
+    PROCESSING = "processing"  # Newly rescued, awaiting admin setup
+    REMOVED = "removed"  # Admin removed as invalid/duplicate
+    
+    # Archived status is stored as "original_status|archived" (e.g., "adopted|archived")
+    ARCHIVED_SUFFIX = "|archived"
+    
+    @classmethod
+    def normalize(cls, status: str) -> str:
+        """Normalize a status string to match constant values."""
+        s = (status or "").lower().strip()
+        # Handle archived suffix
+        if cls.ARCHIVED_SUFFIX in s:
+            s = s.replace(cls.ARCHIVED_SUFFIX, "")
+        if s in ("available", "adoptable", "ready"): return cls.AVAILABLE
+        if s in ("healthy",): return cls.HEALTHY
+        if s in ("recovering",): return cls.RECOVERING
+        if s in ("injured",): return cls.INJURED
+        if s in ("adopted",): return cls.ADOPTED
+        if s in ("processing",): return cls.PROCESSING
+        if s in ("removed",): return cls.REMOVED
+        return s
+    
+    @classmethod
+    def is_adoptable(cls, status: str) -> bool:
+        """Check if an animal can be adopted."""
+        base = cls.get_base_status(status)
+        return base.lower() in (cls.AVAILABLE, cls.HEALTHY, "adoptable", "ready")
+    
+    @classmethod
+    def needs_setup(cls, status: str) -> bool:
+        """Check if animal needs admin setup before being visible to users."""
+        return cls.normalize(status) == cls.PROCESSING
+    
+    @classmethod
+    def is_archived(cls, status: str) -> bool:
+        """Check if a status indicates archived."""
+        return cls.ARCHIVED_SUFFIX in (status or "").lower()
+    
+    @classmethod
+    def is_removed(cls, status: str) -> bool:
+        """Check if a status indicates removed (invalid/duplicate)."""
+        return cls.normalize(status) == cls.REMOVED
+    
+    @classmethod
+    def is_hidden(cls, status: str) -> bool:
+        """Check if a status is hidden from active lists (archived or removed)."""
+        return cls.is_archived(status) or cls.is_removed(status)
+    
+    @classmethod
+    def get_base_status(cls, status: str) -> str:
+        """Get the base status without archived suffix."""
+        s = (status or "").lower().strip()
+        if cls.ARCHIVED_SUFFIX in s:
+            return s.replace(cls.ARCHIVED_SUFFIX, "")
+        return s
+    
+    @classmethod
+    def make_archived(cls, status: str) -> str:
+        """Add archived suffix to a status."""
+        base = cls.get_base_status(status)
+        return f"{base}{cls.ARCHIVED_SUFFIX}"
+    
+    @classmethod
+    def get_label(cls, status: str) -> str:
+        """Get human-readable label for a status."""
+        base = cls.get_base_status(status)
+        normalized = cls.normalize(base)
+        labels = {
+            cls.AVAILABLE: "Available",
+            cls.HEALTHY: "Healthy",
+            cls.RECOVERING: "Recovering",
+            cls.INJURED: "Injured",
+            cls.ADOPTED: "Adopted",
+            cls.PROCESSING: "Processing",
+            cls.REMOVED: "Removed",
+        }
+        return labels.get(normalized, status.title())
+    
+    @classmethod
+    def counts_in_analytics(cls, status: str) -> bool:
+        """Check if this status should be counted in analytics (not removed)."""
+        return not cls.is_removed(status)
+
+
+class Urgency:
+    """Standardized urgency levels for rescue missions."""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    
+    # Display labels
+    LOW_LABEL = "Low - Animal appears safe"
+    MEDIUM_LABEL = "Medium - Needs attention soon"
+    HIGH_LABEL = "High - Immediate help needed"
+    
+    @classmethod
+    def get_label(cls, urgency: str) -> str:
+        """Get display label for an urgency level."""
+        labels = {
+            cls.LOW: cls.LOW_LABEL,
+            cls.MEDIUM: cls.MEDIUM_LABEL,
+            cls.HIGH: cls.HIGH_LABEL,
+        }
+        return labels.get((urgency or "").lower(), cls.MEDIUM_LABEL)
+    
+    @classmethod
+    def from_label(cls, label: str) -> str:
+        """Extract urgency level from full label."""
+        if not label:
+            return cls.MEDIUM
+        label_lower = label.lower()
+        if "high" in label_lower:
+            return cls.HIGH
+        elif "low" in label_lower:
+            return cls.LOW
+        return cls.MEDIUM
+
 # File upload
 MAX_PHOTO_SIZE_MB = 5
 ALLOWED_PHOTO_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp")
@@ -174,6 +508,10 @@ __all__ = [
     "ADOPTABLE_STATUSES",
     "HEALTHY_STATUSES",
     "APPROVED_ADOPTION_STATUSES",
+    "RescueStatus",
+    "AdoptionStatus",
+    "AnimalStatus",
+    "Urgency",
     "MAX_PHOTO_SIZE_MB",
     "ALLOWED_PHOTO_EXTENSIONS",
     "ALLOWED_MIME_TYPES",

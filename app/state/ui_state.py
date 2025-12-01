@@ -241,12 +241,10 @@ class UIState(StateManager[Dict[str, Any]]):
             }
             bgcolor = colors.get(notification_type, ft.Colors.GREY_700)
             
-            self._page.snack_bar = ft.SnackBar(
+            self._page.open(ft.SnackBar(
                 ft.Text(message, color=ft.Colors.WHITE),
                 bgcolor=bgcolor
-            )
-            self._page.snack_bar.open = True
-            self._page.update()
+            ))
             
         except Exception as e:
             print(f"[ERROR] UIState: Failed to show snackbar: {e}")

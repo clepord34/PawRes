@@ -40,7 +40,7 @@ class AddAnimalPage:
         # Dropdown and fields with updated styling
         self._type_dropdown = create_form_dropdown(
             hint_text="Pick Animal",
-            options=["dog", "cat"],
+            options=["Dog", "Cat", "Other"],
             leading_icon=ft.Icons.PETS,
         )
         
@@ -53,7 +53,7 @@ class AddAnimalPage:
         
         self._health_dropdown = create_form_dropdown(
             hint_text="Health Status",
-            options=["healthy", "recovering", "injured", "adopted"],
+            options=["healthy", "recovering", "injured"],
             leading_icon=ft.Icons.FAVORITE,
         )
 

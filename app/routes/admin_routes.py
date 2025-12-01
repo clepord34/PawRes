@@ -47,6 +47,14 @@ def render_charts(page, params: Dict[str, Any]) -> None:
     page.update()
 
 
+def render_hidden_items(page, params: Dict[str, Any]) -> None:
+    """Render the hidden items management page."""
+    from views.hidden_items_page import HiddenItemsPage
+    clear_page(page)
+    HiddenItemsPage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
 # ============================================================================
 # ADMIN ROUTES - Add new admin routes here
 # ============================================================================
@@ -79,6 +87,12 @@ ROUTES: Dict[str, Dict[str, Any]] = {
     "/charts": {
         "handler": render_charts,
         "description": "Analytics and charts dashboard",
+        "requires_auth": True,
+        "allowed_roles": ["admin"],
+    },
+    "/hidden_items": {
+        "handler": render_hidden_items,
+        "description": "View and manage archived/removed items",
         "requires_auth": True,
         "allowed_roles": ["admin"],
     },

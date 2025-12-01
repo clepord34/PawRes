@@ -16,6 +16,7 @@ import app_config
 from services.animal_service import AnimalService
 from services.rescue_service import RescueService
 from services.adoption_service import AdoptionService
+from storage.database import Database
 from services.map_service import MapService
 from services.photo_service import load_photo
 from state import get_app_state
@@ -51,17 +52,26 @@ class UserDashboard:
         all_adoptions = self.adoption_service.get_all_requests() or []
         all_rescues = self.rescue_service.get_all_missions() or []
         
+        # Get ALL user rescues including closed cases for accurate count
+        db = Database(self.db_path)
+        all_user_rescues_query = db.fetch_all(
+            "SELECT * FROM rescue_missions WHERE user_id = ? ORDER BY mission_date DESC",
+            (user_id,)
+        ) if user_id else []
+        
         # Get user-specific data if user_id exists
         if user_id:
             user_adoptions = [a for a in all_adoptions if a.get("user_id") == user_id]
-            user_rescues = [r for r in all_rescues if r.get("user_id") == user_id]
+            user_rescues = all_user_rescues_query  # Use all rescues including closed
         else:
             user_adoptions = []
             user_rescues = []
         
         # Count totals and pending
-        # Total adoptions = approved adoptions only
-        total_adoptions = len([a for a in user_adoptions if (a.get("status") or "").lower() == "approved"])
+        # Total adoptions = approved adoptions OR was_approved (even if later deleted)
+        total_adoptions = len([a for a in user_adoptions 
+                              if (a.get("status") or "").lower() == "approved" 
+                              or a.get("was_approved") == 1])
         rescue_reports_filed = len(user_rescues)
         pending_adoption_requests = len([a for a in user_adoptions if (a.get("status") or "").lower() == "pending"])
         ongoing_rescue_missions = len([r for r in user_rescues if (r.get("status") or "").lower() == "on-going"])

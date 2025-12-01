@@ -164,13 +164,15 @@ class AdoptionFormPage:
             width=350,
         )
 
+        # Pre-fill user name from state for logged-in users
+        app_state = get_app_state()
+        if app_state.auth.user_name:
+            self._name_field.value = app_state.auth.user_name
+        
         # Pre-fill form if editing
         if existing_request:
             self._contact_field.value = existing_request.get("contact", "")
             self._reason_field.value = existing_request.get("reason", "")
-            # Get user name from state
-            app_state = get_app_state()
-            self._name_field.value = app_state.auth.user_name or ""
 
         # error display
         self._error_text = ft.Text("", color=ft.Colors.RED, size=12)
@@ -272,6 +274,32 @@ class AdoptionFormPage:
             name = (self._name_field.value or "").strip()
             contact = (self._contact_field.value or "").strip()
             reason = (self._reason_field.value or "").strip()
+
+            # Validate animal is still adoptable (for new requests)
+            if not self._edit_request_id:
+                animal = next((a for a in self.animal_service.get_all_animals() if a.get("id") == animal_id), None)
+                if not animal:
+                    self._error_text.value = "Animal no longer exists in the system."
+                    self._submit_btn.disabled = False
+                    page.update()
+                    return
+                
+                animal_status = (animal.get("status") or "").lower()
+                if animal_status == "adopted":
+                    self._error_text.value = "This animal has already been adopted."
+                    self._submit_btn.disabled = False
+                    page.update()
+                    return
+                if animal_status == "processing":
+                    self._error_text.value = "This animal is not yet available for adoption."
+                    self._submit_btn.disabled = False
+                    page.update()
+                    return
+                if animal_status not in ("healthy", "available", "adoptable", "ready", "recovering"):
+                    self._error_text.value = f"This animal is currently '{animal_status}' and cannot be adopted."
+                    self._submit_btn.disabled = False
+                    page.update()
+                    return
 
             # Get user_id from centralized state management
             app_state = get_app_state()

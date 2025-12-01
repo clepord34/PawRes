@@ -117,9 +117,7 @@ class PhotoUploadWidget:
             self._original_filename = file_info.name
             
             if not file_path:
-                self.page.snack_bar = ft.SnackBar(ft.Text("Unable to access file. Please try again."))
-                self.page.snack_bar.open = True
-                self.page.update()
+                self.page.open(ft.SnackBar(ft.Text("Unable to access file. Please try again.")))
                 return
             
             try:
@@ -145,24 +143,16 @@ class PhotoUploadWidget:
                     border_radius=8,
                 )
                 
-                self.page.snack_bar = ft.SnackBar(ft.Text(f"Photo selected: {self._original_filename}"))
-                self.page.snack_bar.open = True
-                self.page.update()
+                self.page.open(ft.SnackBar(ft.Text(f"Photo selected: {self._original_filename}")))
                 
             except FileStoreError as ex:
-                self.page.snack_bar = ft.SnackBar(ft.Text(f"Upload error: {str(ex)}"))
-                self.page.snack_bar.open = True
-                self.page.update()
+                self.page.open(ft.SnackBar(ft.Text(f"Upload error: {str(ex)}")))
             except Exception as ex:
                 import traceback
                 traceback.print_exc()
-                self.page.snack_bar = ft.SnackBar(ft.Text(f"Error loading photo: {str(ex)}"))
-                self.page.snack_bar.open = True
-                self.page.update()
+                self.page.open(ft.SnackBar(ft.Text(f"Error loading photo: {str(ex)}")))
         else:
-            self.page.snack_bar = ft.SnackBar(ft.Text("No file selected."))
-            self.page.snack_bar.open = True
-            self.page.update()
+            self.page.open(ft.SnackBar(ft.Text("No file selected.")))
     
     def save_with_name(self, animal_name: str) -> Optional[str]:
         """Save the pending image to FileStore with the animal's name.

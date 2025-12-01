@@ -235,30 +235,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
             self.patch_state({"error": str(e)})
             return False
     
-    def delete_animal(self, animal_id: int) -> bool:
-        """Delete an animal.
-        
-        Args:
-            animal_id: ID of animal to delete
-        
-        Returns:
-            True if successful
-        """
-        try:
-            service = self._get_service()
-            success = service.delete_animal(animal_id)
-            
-            if success:
-                # Reload animals to get fresh data
-                self.load_animals()
-            
-            return success
-            
-        except Exception as e:
-            print(f"[ERROR] AnimalState: Failed to delete animal: {e}")
-            self.patch_state({"error": str(e)})
-            return False
-    
     def select_animal(self, animal_id: Optional[int]) -> None:
         """Select an animal by ID.
         
@@ -352,3 +328,158 @@ class AnimalState(StateManager[Dict[str, Any]]):
             return animals
         
         return [a for a in animals if filter_criteria.matches(a)]
+
+    # -------------------------------------------------------------------------
+    # Archive / Remove / Restore / Permanent Delete Methods
+    # -------------------------------------------------------------------------
+
+    def archive_animal(self, animal_id: int, admin_id: int, note: Optional[str] = None) -> bool:
+        """Archive an animal (soft-hide, still counts in analytics).
+        
+        Args:
+            animal_id: ID of animal to archive
+            admin_id: ID of admin performing the action
+            note: Optional note explaining why
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.archive_animal(animal_id, admin_id, note)
+            
+            if success:
+                self.load_animals()
+                print(f"[DEBUG] AnimalState: Archived animal {animal_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AnimalState: Failed to archive animal: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def remove_animal(self, animal_id: int, admin_id: int, reason: str, 
+                      cascade_adoptions: bool = True) -> Dict[str, Any]:
+        """Remove an animal (soft-delete, excluded from analytics).
+        
+        If cascade_adoptions is True, also auto-denies pending adoption requests.
+        
+        Args:
+            animal_id: ID of animal to remove
+            admin_id: ID of admin performing the action
+            reason: Reason for removal (spam, duplicate, test, etc.)
+            cascade_adoptions: If True, auto-denies pending adoption requests
+        
+        Returns:
+            Dict with 'success' bool and 'adoptions_affected' count
+        """
+        try:
+            service = self._get_service()
+            result = service.remove_animal(animal_id, admin_id, reason, cascade_adoptions)
+            
+            if result.get("success"):
+                self.load_animals()
+                print(f"[DEBUG] AnimalState: Removed animal {animal_id}, affected {result.get('adoptions_affected', 0)} adoptions")
+            
+            return result
+            
+        except Exception as e:
+            print(f"[ERROR] AnimalState: Failed to remove animal: {e}")
+            self.patch_state({"error": str(e)})
+            return {"success": False, "adoptions_affected": 0}
+
+    def restore_animal(self, animal_id: int) -> bool:
+        """Restore an archived or removed animal to its previous status.
+        
+        Args:
+            animal_id: ID of animal to restore
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.restore_animal(animal_id)
+            
+            if success:
+                self.load_animals()
+                print(f"[DEBUG] AnimalState: Restored animal {animal_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AnimalState: Failed to restore animal: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def permanently_delete_animal(self, animal_id: int) -> Dict[str, Any]:
+        """Permanently delete a REMOVED animal from the database.
+        
+        Only works on removed animals. Also deletes photo file.
+        This cannot be undone.
+        
+        Args:
+            animal_id: ID of animal to delete
+        
+        Returns:
+            Dict with 'success' bool and 'photo_deleted' bool
+        """
+        try:
+            service = self._get_service()
+            result = service.permanently_delete_animal(animal_id)
+            
+            if result.get("success"):
+                self.load_animals()
+                print(f"[DEBUG] AnimalState: Permanently deleted animal {animal_id}")
+            
+            return result
+            
+        except Exception as e:
+            print(f"[ERROR] AnimalState: Failed to permanently delete animal: {e}")
+            self.patch_state({"error": str(e)})
+            return {"success": False, "photo_deleted": False}
+
+    def load_active_animals(self) -> None:
+        """Load only active (non-hidden) animals.
+        
+        Excludes archived and removed animals.
+        """
+        self.patch_state({"is_loading": True, "error": None})
+        
+        try:
+            service = self._get_service()
+            animals = service.get_active_animals() or []
+            
+            # Apply current filter
+            filtered = self._apply_filter(animals, self.current_filter)
+            
+            self.update_state({
+                "animals": animals,
+                "filtered_animals": filtered,
+                "selected_animal": self.state.get("selected_animal"),
+                "filter": self.state.get("filter"),
+                "is_loading": False,
+                "error": None,
+            })
+            
+            print(f"[DEBUG] AnimalState: Loaded {len(animals)} active animals")
+            
+        except Exception as e:
+            print(f"[ERROR] AnimalState: Failed to load active animals: {e}")
+            self.patch_state({"is_loading": False, "error": str(e)})
+
+    def load_hidden_animals(self) -> List[Dict[str, Any]]:
+        """Load hidden (archived/removed) animals.
+        
+        Returns:
+            List of hidden animals
+        """
+        try:
+            service = self._get_service()
+            return service.get_hidden_animals() or []
+            
+        except Exception as e:
+            print(f"[ERROR] AnimalState: Failed to load hidden animals: {e}")
+            self.patch_state({"error": str(e)})
+            return []

@@ -23,6 +23,14 @@ def render_signup(page, params: Dict[str, Any]) -> None:
     page.update()
 
 
+def render_emergency_rescue(page, params: Dict[str, Any]) -> None:
+    """Render the emergency rescue page (no login required)."""
+    from views.emergency_rescue_page import EmergencyRescuePage
+    clear_page(page)
+    EmergencyRescuePage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
 # ============================================================================
 # AUTH ROUTES - Add new authentication routes here
 # ============================================================================
@@ -37,6 +45,12 @@ ROUTES: Dict[str, Dict[str, Any]] = {
     "/signup": {
         "handler": render_signup,
         "description": "User registration page",
+        "requires_auth": False,
+        "allowed_roles": None,
+    },
+    "/emergency_rescue": {
+        "handler": render_emergency_rescue,
+        "description": "Emergency rescue report (no login required)",
         "requires_auth": False,
         "allowed_roles": None,
     },

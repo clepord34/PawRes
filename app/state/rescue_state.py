@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from .base import StateManager
 import app_config
+from app_config import RescueStatus
 
 
 @dataclass 
@@ -170,7 +171,7 @@ class RescueState(StateManager[Dict[str, Any]]):
         animal_type: str,
         name: str,
         details: str,
-        status: str = "pending",
+        status: str = RescueStatus.PENDING,
         geocode: bool = True
     ) -> Optional[int]:
         """Submit a new rescue request.
@@ -277,31 +278,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             self.patch_state({"error": str(e)})
             return False
     
-    def delete_mission(self, mission_id: int) -> bool:
-        """Delete (close) a rescue mission.
-        
-        Args:
-            mission_id: ID of mission to delete
-        
-        Returns:
-            True if successful
-        """
-        try:
-            service = self._get_service()
-            success = service.delete_mission(mission_id)
-            
-            if success:
-                # Reload missions to get fresh data
-                self.load_missions()
-                print(f"[DEBUG] RescueState: Deleted mission {mission_id}")
-            
-            return success
-            
-        except Exception as e:
-            print(f"[ERROR] RescueState: Failed to delete mission: {e}")
-            self.patch_state({"error": str(e)})
-            return False
-    
     def select_mission(self, mission_id: Optional[int]) -> None:
         """Select a mission by ID.
         
@@ -391,12 +367,166 @@ class RescueState(StateManager[Dict[str, Any]]):
         """
         missions = self.missions
         
-        ongoing_count = len([m for m in missions if (m.get("status") or "").lower() in ("pending", "on-going")])
-        rescued_count = len([m for m in missions if (m.get("status") or "").lower() == "rescued"])
+        # Count by status using RescueStatus constants
+        ongoing_count = len([m for m in missions if RescueStatus.normalize(m.get("status") or "") in (RescueStatus.PENDING, RescueStatus.ONGOING)])
+        rescued_count = len([m for m in missions if RescueStatus.normalize(m.get("status") or "") == RescueStatus.RESCUED])
+        failed_count = len([m for m in missions if RescueStatus.normalize(m.get("status") or "") == RescueStatus.FAILED])
         
         return {
             "total": len(missions),
             "ongoing": ongoing_count,
             "rescued": rescued_count,
+            "failed": failed_count,
             "with_coordinates": len(self.missions_with_coordinates),
         }
+
+    # -------------------------------------------------------------------------
+    # Archive / Remove / Restore / Permanent Delete Methods
+    # -------------------------------------------------------------------------
+
+    def archive_mission(self, mission_id: int, admin_id: int, note: Optional[str] = None) -> bool:
+        """Archive a rescue mission (soft-hide, still counts in analytics).
+        
+        Args:
+            mission_id: ID of mission to archive
+            admin_id: ID of admin performing the action
+            note: Optional note explaining why
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.archive_mission(mission_id, admin_id, note)
+            
+            if success:
+                self.load_missions()
+                print(f"[DEBUG] RescueState: Archived mission {mission_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to archive mission: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def remove_mission(self, mission_id: int, admin_id: int, reason: str) -> bool:
+        """Remove a rescue mission (soft-delete, excluded from analytics).
+        
+        Args:
+            mission_id: ID of mission to remove
+            admin_id: ID of admin performing the action
+            reason: Reason for removal (spam, duplicate, test, etc.)
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.remove_mission(mission_id, admin_id, reason)
+            
+            if success:
+                self.load_missions()
+                print(f"[DEBUG] RescueState: Removed mission {mission_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to remove mission: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def restore_mission(self, mission_id: int) -> bool:
+        """Restore an archived or removed mission to its previous status.
+        
+        Args:
+            mission_id: ID of mission to restore
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.restore_mission(mission_id)
+            
+            if success:
+                self.load_missions()
+                print(f"[DEBUG] RescueState: Restored mission {mission_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to restore mission: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def permanently_delete_mission(self, mission_id: int) -> bool:
+        """Permanently delete a REMOVED mission from the database.
+        
+        Only works on removed missions. This cannot be undone.
+        
+        Args:
+            mission_id: ID of mission to delete
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.permanently_delete_mission(mission_id)
+            
+            if success:
+                self.load_missions()
+                print(f"[DEBUG] RescueState: Permanently deleted mission {mission_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to permanently delete mission: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def load_active_missions(self) -> None:
+        """Load only active (non-hidden) rescue missions.
+        
+        Excludes archived and removed missions.
+        """
+        self.patch_state({"is_loading": True, "error": None})
+        
+        try:
+            service = self._get_service()
+            missions = service.get_active_missions() or []
+            
+            # Apply current filter
+            filtered = self._apply_filter(missions, self.current_filter)
+            
+            self.update_state({
+                "missions": missions,
+                "filtered_missions": filtered,
+                "user_missions": self.state.get("user_missions", []),
+                "selected_mission": self.state.get("selected_mission"),
+                "filter": self.state.get("filter"),
+                "is_loading": False,
+                "error": None,
+            })
+            
+            print(f"[DEBUG] RescueState: Loaded {len(missions)} active missions")
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to load active missions: {e}")
+            self.patch_state({"is_loading": False, "error": str(e)})
+
+    def load_hidden_missions(self) -> List[Dict[str, Any]]:
+        """Load hidden (archived/removed) rescue missions.
+        
+        Returns:
+            List of hidden missions
+        """
+        try:
+            service = self._get_service()
+            return service.get_hidden_missions() or []
+            
+        except Exception as e:
+            print(f"[ERROR] RescueState: Failed to load hidden missions: {e}")
+            self.patch_state({"error": str(e)})
+            return []

@@ -10,6 +10,7 @@ from .animal_service import AnimalService
 from .rescue_service import RescueService
 from .adoption_service import AdoptionService
 import app_config
+from app_config import RescueStatus, AdoptionStatus, AnimalStatus
 
 
 class AnalyticsService:
@@ -69,14 +70,17 @@ class AnalyticsService:
         rescued_counts = [0 for _ in day_labels]
         adopted_counts = [0 for _ in day_labels]
 
-        # Count rescued missions by day (include closed/deleted for historical data)
-        # Only count missions that have "Rescued" in their status (e.g., "Rescued", "Rescued|Closed")
+        # Count rescued missions by day (include archived for historical data)
+        # Only count missions that have "Rescued" in their status (e.g., "Rescued", "rescued|archived")
+        # Excludes "removed" status items via get_all_missions_for_analytics()
         missions = self.rescue_service.get_all_missions_for_analytics() or []
         for ms in missions:
             dt = ms.get("mission_date")
             status = (ms.get("status") or "").lower()
-            # Check if this mission was rescued (including closed ones)
-            is_rescued = "rescued" in status
+            # Check if this mission was rescued (including archived ones)
+            # Get base status to check for "rescued" 
+            base_status = RescueStatus.get_base_status(status)
+            is_rescued = base_status == RescueStatus.RESCUED
             if not dt or not is_rescued:
                 continue
             # Handle both datetime objects and strings
@@ -97,7 +101,8 @@ class AnalyticsService:
                 rescued_counts[idx] += 1
 
         # Count adopted animals by day
-        requests = self.adoption_service.get_all_requests() or []
+        # Excludes "removed" status items via get_all_requests_for_analytics()
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
         for req in requests:
             dt = req.get("request_date")
             if not dt:
@@ -117,8 +122,11 @@ class AnalyticsService:
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
-                # Consider approved/adopted/completed as successful adoptions
-                if (req.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES:
+                # Consider approved/adopted/completed OR was_approved as successful adoptions
+                # Get base status to check (handles "approved|archived" format)
+                status_lower = (req.get("status") or "").lower()
+                base_status = AdoptionStatus.get_base_status(status_lower)
+                if base_status in app_config.APPROVED_ADOPTION_STATUSES or req.get("was_approved") == 1:
                     adopted_counts[idx] += 1
 
         # Calculate type distribution and status counts
@@ -129,12 +137,14 @@ class AnalyticsService:
     def get_animal_statistics(self) -> Tuple[Dict[str, int], Dict[str, int]]:
         """Calculate animal type distribution and health status counts.
         
+        Excludes "removed" animals from counts.
+        
         Returns:
             Tuple of (type_distribution, status_counts) dictionaries.
             - type_distribution: Empty dict if no animals, otherwise counts by species
             - status_counts: Always contains 'healthy', 'recovering', 'injured' keys (with 0 if none)
         """
-        animals = self.animal_service.get_all_animals() or []
+        animals = self.animal_service.get_all_animals_for_analytics() or []
         type_dist: Dict[str, int] = {}
         # Always include all three health status categories
         status_counts: Dict[str, int] = {
@@ -144,14 +154,18 @@ class AnalyticsService:
         }
         
         for a in animals:
-            t = (a.get("species") or "Unknown")
+            # Normalize species name to Title Case for consistent grouping
+            t = (a.get("species") or "Unknown").strip().capitalize()
             s = (a.get("status") or "unknown").lower()
+            # Get base status (handles "healthy|archived" format)
+            base_s = AnimalStatus.get_base_status(s)
             type_dist[t] = type_dist.get(t, 0) + 1
-            # Map status to one of the three categories
-            if s in status_counts:
-                status_counts[s] += 1
-            elif s in ("unknown", ""):
-                # Don't count unknown statuses in any category
+            # Map status to one of the three health categories
+            # Skip adopted and processing - they're not health statuses
+            if base_s in status_counts:
+                status_counts[base_s] += 1
+            elif base_s in ("adopted", "processing", "unknown", ""):
+                # Don't count these in health status chart
                 pass
             else:
                 # Any other status goes to 'injured' as fallback
@@ -162,20 +176,24 @@ class AnalyticsService:
     def get_dashboard_stats(self) -> Dict[str, Any]:
         """Get summary statistics for dashboard display.
         
+        Excludes "removed" items from all counts.
         Returns cached results for performance.
         
         Returns:
             Dictionary with total animals, adoptions, and pending requests
         """
         def _fetch_stats():
-            animals = self.animal_service.get_all_animals() or []
-            all_requests = self.adoption_service.get_all_requests() or []
+            animals = self.animal_service.get_all_animals_for_analytics() or []
+            all_requests = self.adoption_service.get_all_requests_for_analytics() or []
             
             total_animals = len(animals)
+            # Count approved OR was_approved (preserves count even after archiving)
+            # Get base status to handle "approved|archived" format
             total_adoptions = len([r for r in all_requests 
-                if (r.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES])
+                if AdoptionStatus.get_base_status((r.get("status") or "").lower()) in app_config.APPROVED_ADOPTION_STATUSES
+                or r.get("was_approved") == 1])
             pending_applications = len([r for r in all_requests 
-                if (r.get("status") or "").lower() == "pending"])
+                if AdoptionStatus.get_base_status((r.get("status") or "").lower()) == "pending"])
             
             return {
                 "total_animals": total_animals,
@@ -228,38 +246,42 @@ class AnalyticsService:
                 return False
             return start <= parsed <= end
         
-        # Get all data (use analytics method for missions to include closed ones)
-        animals = self.animal_service.get_all_animals() or []
+        # Get all data (use analytics methods to exclude "removed" items)
+        animals = self.animal_service.get_all_animals_for_analytics() or []
         missions = self.rescue_service.get_all_missions_for_analytics() or []
-        requests = self.adoption_service.get_all_requests() or []
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
         
         # Count animals added this month vs last month
         animals_this_month = len([a for a in animals if is_in_range(a.get("intake_date"), this_month_start, now)])
         animals_last_month = len([a for a in animals if is_in_range(a.get("intake_date"), last_month_start, last_month_end)])
         
         # Count rescued missions this month vs last month (only those with "rescued" in status)
+        # Use get_base_status to handle "rescued|archived" format
         rescues_this_month = len([m for m in missions 
             if is_in_range(m.get("mission_date"), this_month_start, now)
-            and "rescued" in (m.get("status") or "").lower()])
+            and RescueStatus.get_base_status((m.get("status") or "").lower()) == RescueStatus.RESCUED])
         rescues_last_month = len([m for m in missions 
             if is_in_range(m.get("mission_date"), last_month_start, last_month_end)
-            and "rescued" in (m.get("status") or "").lower()])
+            and RescueStatus.get_base_status((m.get("status") or "").lower()) == RescueStatus.RESCUED])
         
-        # Count adoptions (approved/adopted) this month vs last month
+        # Count adoptions (approved/adopted OR was_approved) this month vs last month
+        # Use get_base_status to handle "approved|archived" format
         adoptions_this_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), this_month_start, now) 
-            and (r.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES])
+            and (AdoptionStatus.get_base_status((r.get("status") or "").lower()) in app_config.APPROVED_ADOPTION_STATUSES
+                 or r.get("was_approved") == 1)])
         adoptions_last_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), last_month_start, last_month_end)
-            and (r.get("status") or "").lower() in app_config.APPROVED_ADOPTION_STATUSES])
+            and (AdoptionStatus.get_base_status((r.get("status") or "").lower()) in app_config.APPROVED_ADOPTION_STATUSES
+                 or r.get("was_approved") == 1)])
         
         # Count pending applications this month vs last month
         pending_this_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), this_month_start, now)
-            and (r.get("status") or "").lower() == "pending"])
+            and AdoptionStatus.get_base_status((r.get("status") or "").lower()) == "pending"])
         pending_last_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), last_month_start, last_month_end)
-            and (r.get("status") or "").lower() == "pending"])
+            and AdoptionStatus.get_base_status((r.get("status") or "").lower()) == "pending"])
         
         def calc_change(current: int, previous: int) -> str:
             """Calculate percentage change and format as string."""
@@ -287,22 +309,30 @@ class AnalyticsService:
     def get_user_activity_stats(self, user_id: int) -> Dict[str, Any]:
         """Get activity statistics for a specific user.
         
+        Excludes "removed" items from counts.
+        
         Args:
             user_id: The user's ID
             
         Returns:
             Dictionary with user's adoption and rescue statistics
         """
-        all_adoptions = self.adoption_service.get_all_requests() or []
-        all_rescues = self.rescue_service.get_all_missions() or []
+        all_adoptions = self.adoption_service.get_all_requests_for_analytics() or []
+        all_rescues = self.rescue_service.get_all_missions_for_analytics() or []
         
         user_adoptions = [a for a in all_adoptions if a.get("user_id") == user_id]
         user_rescues = [r for r in all_rescues if r.get("user_id") == user_id]
         
-        total_adoptions = len(user_adoptions)
+        # Count approved OR was_approved (preserves count even after archiving)
+        # Use get_base_status to handle "approved|archived" format
+        total_adoptions = len([a for a in user_adoptions 
+                              if AdoptionStatus.get_base_status((a.get("status") or "").lower()) == "approved"
+                              or a.get("was_approved") == 1])
         rescue_reports_filed = len(user_rescues)
-        pending_adoption_requests = len([a for a in user_adoptions if (a.get("status") or "").lower() == "pending"])
-        ongoing_rescue_missions = len([r for r in user_rescues if (r.get("status") or "").lower() == "on-going"])
+        pending_adoption_requests = len([a for a in user_adoptions 
+                                        if AdoptionStatus.get_base_status((a.get("status") or "").lower()) == "pending"])
+        ongoing_rescue_missions = len([r for r in user_rescues 
+                                       if RescueStatus.get_base_status((r.get("status") or "").lower()) == "on-going"])
         
         return {
             "total_adoptions": total_adoptions,

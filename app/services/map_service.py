@@ -3,13 +3,17 @@ from __future__ import annotations
 
 from typing import Optional, Tuple, List
 import logging
+import time
 import app_config
+from app_config import RescueStatus
 
 try:
     from geopy.geocoders import Nominatim
     from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+    from geopy.extra.rate_limiter import RateLimiter
 except ImportError:
     Nominatim = None
+    RateLimiter = None
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +25,35 @@ class MapService:
     DEFAULT_CENTER = app_config.DEFAULT_MAP_CENTER
     DEFAULT_ZOOM = app_config.DEFAULT_MAP_ZOOM
     
+    # Class-level timestamp to track last request across instances
+    _last_request_time = 0
+    
     def __init__(self):
         """Initialize the map service."""
         if Nominatim is None:
             logger.warning("geopy not installed, geocoding will not work")
             self.geocoder = None
+            self._geocode = None
+            self._reverse = None
         else:
-            # Initialize geocoder with a user agent
-            self.geocoder = Nominatim(user_agent="pawres_app", timeout=10)
+            # Initialize geocoder with a user agent and longer timeout
+            self.geocoder = Nominatim(user_agent="pawres_rescue_app_v1", timeout=30)
+            
+            # Use rate limiter to respect Nominatim's 1 request/second policy
+            if RateLimiter:
+                self._geocode = RateLimiter(self.geocoder.geocode, min_delay_seconds=1.5)
+                self._reverse = RateLimiter(self.geocoder.reverse, min_delay_seconds=1.5)
+            else:
+                self._geocode = self.geocoder.geocode
+                self._reverse = self.geocoder.reverse
+    
+    def _wait_for_rate_limit(self):
+        """Ensure we don't exceed rate limits."""
+        current_time = time.time()
+        time_since_last = current_time - MapService._last_request_time
+        if time_since_last < 1.5:
+            time.sleep(1.5 - time_since_last)
+        MapService._last_request_time = time.time()
     
     def geocode_location(self, location: str) -> Optional[Tuple[float, float]]:
         """
@@ -44,8 +69,9 @@ class MapService:
             return None
         
         try:
+            self._wait_for_rate_limit()
             # Try to geocode the location
-            result = self.geocoder.geocode(location)
+            result = self._geocode(location) if self._geocode else None
             if result:
                 logger.info(f"Geocoded '{location}' to ({result.latitude}, {result.longitude})")
                 return (result.latitude, result.longitude)
@@ -74,8 +100,9 @@ class MapService:
             return None
         
         try:
+            self._wait_for_rate_limit()
             # Try to reverse geocode the coordinates
-            result = self.geocoder.reverse((latitude, longitude), language='en')
+            result = self._reverse((latitude, longitude), language='en') if self._reverse else None
             if result:
                 logger.info(f"Reverse geocoded ({latitude}, {longitude}) to '{result.address}'")
                 return result.address
@@ -108,13 +135,13 @@ class MapService:
             logger.error("flet or flet-map not installed")
             return None
         
-        # Filter missions that have coordinates AND are not deleted/closed
+        # Filter missions that have coordinates AND are not hidden (archived/removed) or cancelled
         missions_with_coords = [
             m for m in missions 
             if m.get('latitude') is not None 
             and m.get('longitude') is not None
-            and (m.get('status') or '').lower() != 'deleted'
-            and '|closed' not in (m.get('status') or '').lower()
+            and not RescueStatus.is_hidden(m.get('status') or '')
+            and not RescueStatus.is_cancelled(m.get('status') or '')
         ]
         
         # Determine map center
@@ -138,29 +165,27 @@ class MapService:
             notes = mission.get('notes', '') or ''
             mission_id = mission.get('id', 0)
             
-            # Parse notes to extract name, type, urgency, and details
-            reporter_name = "Anonymous"
-            animal_type = "Animal"
-            urgency = "Medium"
-            description = ""
+            # Use new structured columns (fallback to parsing notes for legacy data)
+            reporter_name = mission.get('reporter_name') or "Anonymous"
+            animal_name = mission.get('animal_name') or ""
+            animal_type = mission.get('animal_type') or "Animal"
+            urgency = (mission.get('urgency') or 'medium').capitalize()
+            description = notes[:50] + "..." if len(notes) > 50 else notes
             
-            for line in notes.split('\n'):
-                line = line.strip()
-                if line.startswith('name:'):
-                    reporter_name = line.replace('name:', '').strip()
-                elif line.startswith('type:'):
-                    animal_type = line.replace('type:', '').strip()
-                elif line.startswith('[Urgency:'):
-                    # Extract urgency from "[Urgency: High - Immediate help needed]"
-                    urgency_match = line.replace('[Urgency:', '').replace(']', '').strip()
-                    if 'High' in urgency_match:
-                        urgency = 'High'
-                    elif 'Low' in urgency_match:
-                        urgency = 'Low'
-                    else:
-                        urgency = 'Medium'
-                elif line and not line.startswith('['):
-                    description = line[:50] + "..." if len(line) > 50 else line
+            # For legacy data, try to parse from notes if columns are empty
+            if not mission.get('urgency'):
+                for line in notes.split('\n'):
+                    line = line.strip()
+                    if line.startswith('[Urgency:'):
+                        # Extract urgency from "[Urgency: High - Immediate help needed]"
+                        urgency_match = line.replace('[Urgency:', '').replace(']', '').strip()
+                        if 'High' in urgency_match:
+                            urgency = 'High'
+                        elif 'Low' in urgency_match:
+                            urgency = 'Low'
+                        else:
+                            urgency = 'Medium'
+                        break
             
             # Determine marker color and icon based on status and urgency
             if status.lower() == 'rescued':
@@ -200,13 +225,22 @@ class MapService:
             status_display = status.replace('_', ' ').title()
             
             # Build tooltip with all relevant info
-            tooltip_lines = [
-                f"🐾 {animal_type}",
+            # Show animal name if available, otherwise just the type
+            if animal_name:
+                tooltip_lines = [
+                    f"🐾 {animal_name} ({animal_type})",
+                ]
+            else:
+                tooltip_lines = [
+                    f"🐾 {animal_type}",
+                ]
+            
+            tooltip_lines.extend([
                 f"📍 {location[:40]}..." if len(location) > 40 else f"📍 {location}",
                 f"⚡ Urgency: {urgency}",
                 f"📋 Status: {status_display}",
                 f"👤 Reporter: {reporter_name}",
-            ]
+            ])
             if description:
                 tooltip_lines.append(f"📝 {description}")
             

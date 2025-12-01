@@ -44,6 +44,7 @@ def create_admin_sidebar(page: object) -> object:
         create_nav_button("View Rescue Missions", lambda e: page.go("/rescue_missions?admin=1")),
         create_nav_button("Adoption Requests", lambda e: page.go("/adoption_requests")),
         create_nav_button("View Data Charts", lambda e: page.go("/charts")),
+        create_nav_button("Hidden Items", lambda e: page.go("/hidden_items")),
     ]
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))

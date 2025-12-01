@@ -9,11 +9,13 @@ from typing import Optional
 
 from state import get_app_state
 from services.map_service import MapService
+from services.rescue_service import RescueService
 import app_config
+from app_config import RescueStatus
 from components import (
     create_admin_sidebar, create_mission_status_badge, create_gradient_background,
     create_page_title, create_section_card, create_map_container, create_empty_state,
-    show_snackbar, create_delete_confirmation_dialog
+    show_snackbar, create_archive_dialog, create_remove_dialog
 )
 
 
@@ -44,22 +46,43 @@ class RescueMissionListPage:
         else:
             sidebar = None
 
-        # Load missions through state manager
-        self._app_state.rescues.load_missions()
-        missions = self._app_state.rescues.missions
-        
-        # Filter out soft-deleted missions from admin view
+        # Load missions through state manager (active only for admin, excludes archived/removed)
         if is_admin:
-            missions = [m for m in missions if (m.get("status") or "").lower() != "deleted"]
+            self._app_state.rescues.load_active_missions()
+        else:
+            self._app_state.rescues.load_missions()
+        missions = self._app_state.rescues.missions
 
         # Helper to create status badge
         def make_status_badge(status: str, mission_id: int) -> object:
-            # Determine color based on status
-            status_lower = (status or "").lower()
-            if status_lower == "rescued":
+            # Determine color based on status using RescueStatus constants
+            normalized = RescueStatus.normalize(status)
+            
+            # Check if status is cancelled (user cancelled) - show locked grey badge
+            if RescueStatus.is_cancelled(status):
+                return ft.Container(
+                    ft.Row([
+                        ft.Icon(ft.Icons.CANCEL, color=ft.Colors.WHITE, size=14),
+                        ft.Text("Cancelled", color=ft.Colors.WHITE, size=12, weight="w500"),
+                        ft.Icon(ft.Icons.LOCK, color=ft.Colors.WHITE70, size=12),
+                    ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                    bgcolor=ft.Colors.GREY_600,
+                    border_radius=15,
+                    alignment=ft.alignment.center,
+                    tooltip="Cancelled by user - status locked",
+                )
+            
+            if normalized == RescueStatus.RESCUED:
                 bg_color = ft.Colors.GREEN_700
                 icon = ft.Icons.CHECK_CIRCLE
-            else:  # On-going or default
+            elif normalized == RescueStatus.FAILED:
+                bg_color = ft.Colors.RED_700
+                icon = ft.Icons.CANCEL
+            elif normalized == RescueStatus.ONGOING:
+                bg_color = ft.Colors.TEAL_600
+                icon = ft.Icons.PETS
+            else:  # PENDING or default
                 bg_color = ft.Colors.ORANGE_700
                 icon = ft.Icons.PETS
             
@@ -72,19 +95,24 @@ class RescueMissionListPage:
                     ft.PopupMenuButton(
                         content=ft.Row([
                             ft.Icon(icon, color=ft.Colors.WHITE, size=14),
-                            ft.Text(status, color=ft.Colors.WHITE, size=12, weight="w500"),
+                            ft.Text(RescueStatus.get_label(status), color=ft.Colors.WHITE, size=12, weight="w500"),
                             ft.Icon(ft.Icons.ARROW_DROP_DOWN, color=ft.Colors.WHITE, size=16),
                         ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
                         items=[
                             ft.PopupMenuItem(
-                                text="On-going",
+                                text=RescueStatus.get_label(RescueStatus.ONGOING),
                                 icon=ft.Icons.PETS,
-                                on_click=lambda e: change_status(e, "On-going"),
+                                on_click=lambda e: change_status(e, RescueStatus.ONGOING),
                             ),
                             ft.PopupMenuItem(
-                                text="Rescued",
+                                text=RescueStatus.get_label(RescueStatus.RESCUED),
                                 icon=ft.Icons.CHECK_CIRCLE,
-                                on_click=lambda e: change_status(e, "Rescued"),
+                                on_click=lambda e: change_status(e, RescueStatus.RESCUED),
+                            ),
+                            ft.PopupMenuItem(
+                                text=RescueStatus.get_label(RescueStatus.FAILED),
+                                icon=ft.Icons.CANCEL,
+                                on_click=lambda e: change_status(e, RescueStatus.FAILED),
                             ),
                         ],
                     ),
@@ -98,13 +126,77 @@ class RescueMissionListPage:
                 return ft.Container(
                     ft.Row([
                         ft.Icon(icon, color=ft.Colors.WHITE, size=14),
-                        ft.Text(status, color=ft.Colors.WHITE, size=12, weight="w500"),
+                        ft.Text(RescueStatus.get_label(status), color=ft.Colors.WHITE, size=12, weight="w500"),
                     ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
                     padding=ft.padding.symmetric(horizontal=12, vertical=6),
                     bgcolor=bg_color,
                     border_radius=15,
                     alignment=ft.alignment.center,
                 )
+
+        # Helper to create admin action buttons (Archive/Remove)
+        def make_admin_actions(mission_id: int, mission_name: str) -> object:
+            # Use default argument to capture value at definition time
+            def handle_archive(e, mid=mission_id):
+                print(f"[DEBUG] Archive clicked for mission {mid}")
+                def on_confirm(note):
+                    print(f"[DEBUG] Archive confirmed with note: {note}")
+                    success = self._app_state.rescues.archive_mission(
+                        mid, 
+                        self._app_state.auth.user_id, 
+                        note
+                    )
+                    print(f"[DEBUG] Archive result: {success}")
+                    if success:
+                        show_snackbar(page, "Mission archived")
+                        self.build(page, user_role="admin")
+                    else:
+                        show_snackbar(page, "Failed to archive mission", error=True)
+                
+                create_archive_dialog(
+                    page,
+                    item_type="rescue mission",
+                    item_name=f"#{mid}",
+                    on_confirm=on_confirm,
+                )
+            
+            def handle_remove(e, mid=mission_id):
+                print(f"[DEBUG] Remove clicked for mission {mid}")
+                def on_confirm(reason):
+                    success = self._app_state.rescues.remove_mission(
+                        mid,
+                        self._app_state.auth.user_id,
+                        reason
+                    )
+                    if success:
+                        show_snackbar(page, "Mission removed")
+                        self.build(page, user_role="admin")
+                    else:
+                        show_snackbar(page, "Failed to remove mission", error=True)
+                
+                create_remove_dialog(
+                    page,
+                    item_type="rescue mission",
+                    item_name=f"#{mid}",
+                    on_confirm=on_confirm,
+                )
+            
+            return ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.ARCHIVE_OUTLINED,
+                    icon_color=ft.Colors.AMBER_700,
+                    icon_size=20,
+                    tooltip="Archive",
+                    on_click=handle_archive,
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE_OUTLINE,
+                    icon_color=ft.Colors.RED_600,
+                    icon_size=20,
+                    tooltip="Remove",
+                    on_click=handle_remove,
+                ),
+            ], spacing=4)
 
         # Build table rows content
         table_rows_content = []
@@ -115,22 +207,12 @@ class RescueMissionListPage:
                 notes = str(m.get("notes", ""))
                 status = str(m.get("status", ""))
 
-                # Parse notes to extract name and type
-                name = ""
-                animal_type = ""
-                details = ""
-                if notes:
-                    lines = notes.split("\n")
-                    for line in lines:
-                        if line.startswith("name:"):
-                            name = line.replace("name:", "").strip()
-                        elif line.startswith("type:"):
-                            animal_type = line.replace("type:", "").strip()
-                        else:
-                            if line.strip() and not line.startswith("name:") and not line.startswith("type:"):
-                                details = line.strip()
+                # Use new columns instead of notes parsing
+                name = m.get("animal_name") or m.get("reporter_name") or ""
+                animal_type = m.get("animal_type") or ""
+                details = notes  # Notes now contains only situation description
 
-                # Create row with optional delete button for admin
+                # Create row
                 row_controls = [
                     ft.Text(name or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
                     ft.Text(animal_type or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
@@ -139,16 +221,9 @@ class RescueMissionListPage:
                     ft.Container(make_status_badge(status, mid), expand=2),
                 ]
                 
+                # Add admin actions column
                 if is_admin:
-                    # Add close case button for admin
-                    close_btn = ft.IconButton(
-                        icon=ft.Icons.CHECK_CIRCLE_OUTLINE,
-                        icon_color=ft.Colors.GREY_600,
-                        icon_size=20,
-                        tooltip="Close case",
-                        on_click=lambda e, mission_id=mid, mission_name=name: self._on_close_case_click(page, mission_id, mission_name),
-                    )
-                    row_controls.append(ft.Container(close_btn, expand=1))
+                    row_controls.append(ft.Container(make_admin_actions(mid, name), expand=1))
 
                 table_rows_content.append(
                     ft.Column([
@@ -158,7 +233,7 @@ class RescueMissionListPage:
                     ], spacing=0)
                 )
         
-        # Table container - add Actions column header for admin
+        # Table container
         header_controls = [
             ft.Text("Name", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
             ft.Text("Type", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
@@ -166,6 +241,8 @@ class RescueMissionListPage:
             ft.Text("Details", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
             ft.Text("Status", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
         ]
+        
+        # Add Actions header for admin
         if is_admin:
             header_controls.append(ft.Text("Actions", size=13, weight="w600", color=ft.Colors.BLACK87, expand=1))
 
@@ -188,7 +265,7 @@ class RescueMissionListPage:
             border_radius=8,
         )
 
-        # Map with rescue mission markers
+        # Map with rescue mission markers (already filtered to active only)
         map_widget = self.map_service.create_map_with_markers(missions)
         
         if map_widget:
@@ -223,22 +300,25 @@ class RescueMissionListPage:
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
             )
 
+        # Build content list
+        content_items = [
+            create_page_title("Rescue Mission List"),
+            ft.Container(height=20),
+            # Rescue Mission List Section
+            create_section_card(
+                title="Rescue Missions",
+                content=table_container,
+                show_divider=True,
+            ),
+            ft.Container(height=20),
+            # Map Container
+            map_container,
+            ft.Container(height=30),
+        ]
+
         # Main content area
         main_content = ft.Container(
-            ft.Column([
-                create_page_title("Rescue Mission List"),
-                ft.Container(height=20),
-                # Rescue Mission List Section
-                create_section_card(
-                    title="Rescue Mission List",
-                    content=table_container,
-                    show_divider=True,
-                ),
-                ft.Container(height=20),
-                # Map Container
-                map_container,
-                ft.Container(height=30),
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
+            ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
             padding=30,
             expand=True,
         )
@@ -266,51 +346,4 @@ class RescueMissionListPage:
                 show_snackbar(page, "Failed to update status", error=True)
         except Exception as exc:
             show_snackbar(page, f"Error: {exc}", error=True)
-
-    def _on_close_case_click(self, page, mission_id: int, mission_name: str) -> None:
-        """Show close case confirmation dialog for a rescue mission."""
-        try:
-            import flet as ft
-        except Exception:
-            return
-
-        def close_dialog(e):
-            dialog.open = False
-            page.update()
-
-        def confirm_close(e):
-            dialog.open = False
-            page.update()
-            try:
-                # Use state manager for deletion
-                closed = self._app_state.rescues.delete_mission(mission_id)
-                if closed:
-                    show_snackbar(page, f"Case '{mission_name or 'Unknown'}' closed successfully")
-                    # Refresh the page
-                    self.build(page, user_role="admin")
-                else:
-                    show_snackbar(page, "Failed to close case", error=True)
-            except Exception as exc:
-                show_snackbar(page, f"Error: {exc}", error=True)
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Close Rescue Case"),
-            content=ft.Text(
-                f"Close the rescue case for '{mission_name or 'Unknown'}'?\n\n"
-                "The reporter will still see this in their history as 'Case Closed'."
-            ),
-            actions=[
-                ft.TextButton("Cancel", on_click=close_dialog),
-                ft.TextButton(
-                    "Close Case",
-                    on_click=confirm_close,
-                    style=ft.ButtonStyle(color=ft.Colors.GREY_700),
-                ),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.overlay.append(dialog)
-        dialog.open = True
-        page.update()
 

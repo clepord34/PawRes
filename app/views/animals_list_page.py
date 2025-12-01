@@ -8,11 +8,14 @@ from __future__ import annotations
 from typing import Any, Callable, List, Optional
 
 import app_config
+from app_config import AnimalStatus
 from state import get_app_state
 from services.photo_service import load_photo
+from services.rescue_service import RescueService
 from components import (
     create_admin_sidebar, create_user_sidebar, create_gradient_background,
-    create_page_title, create_animal_card, create_empty_state, show_snackbar
+    create_page_title, create_animal_card, create_empty_state, show_snackbar,
+    create_archive_dialog, create_remove_dialog
 )
 
 
@@ -26,6 +29,7 @@ class AnimalsListPage:
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
         self._app_state = get_app_state(self._db_path)
+        self._rescue_service = RescueService(self._db_path)
         self.page = None  # Store page reference
         self.user_role = "user"  # Store user role
         self.current_filter = "all"  # Current filter state
@@ -55,10 +59,20 @@ class AnimalsListPage:
             sidebar = create_user_sidebar(page, user_name)
 
         # Load animals through state manager (ensures data is fresh)
-        self._app_state.animals.load_animals()
+        # Admin sees active (non-hidden) animals only in main list
+        if is_admin:
+            self._app_state.animals.load_active_animals()
+        else:
+            self._app_state.animals.load_animals()
         
         # Get animals from state
         all_animals = self._app_state.animals.animals
+        
+        # Filter out 'processing' animals for non-admin users
+        # These are newly rescued animals awaiting admin setup
+        if not is_admin:
+            all_animals = [a for a in all_animals 
+                         if (a.get("status") or "").lower() != app_config.AnimalStatus.PROCESSING]
 
         # Apply filter
         if filter_status == "all":
@@ -71,25 +85,36 @@ class AnimalsListPage:
             animals = [a for a in all_animals if (a.get("status") or "").lower() == "injured"]
         elif filter_status == "adopted":
             animals = [a for a in all_animals if (a.get("status") or "").lower() == "adopted"]
+        elif filter_status == "rescued":
+            animals = [a for a in all_animals if a.get("rescue_mission_id") is not None]
+        elif filter_status == "processing":
+            animals = [a for a in all_animals if (a.get("status") or "").lower() == app_config.AnimalStatus.PROCESSING]
         else:
             animals = all_animals
 
-        # Create filter dropdown
+        # Create filter dropdown - admin gets extra "Needs Setup" option
         def on_filter_change(e):
             new_filter = e.control.value
             self.build(page, user_role=user_role, filter_status=new_filter)
 
+        filter_options = [
+            ft.dropdown.Option("all", text="All Animals"),
+            ft.dropdown.Option("healthy", text="Healthy"),
+            ft.dropdown.Option("recovering", text="Recovering"),
+            ft.dropdown.Option("injured", text="Injured"),
+            ft.dropdown.Option("adopted", text="Adopted"),
+            ft.dropdown.Option("rescued", text="🧡 Recently Rescued"),
+        ]
+        
+        # Add "Needs Setup" filter for admin only
+        if is_admin:
+            filter_options.append(ft.dropdown.Option("processing", text="⏳ Needs Setup"))
+        
         filter_dropdown = ft.Dropdown(
             label="Filter by Status",
             width=200,
             value=filter_status,
-            options=[
-                ft.dropdown.Option("all", text="All Animals"),
-                ft.dropdown.Option("healthy", text="Healthy"),
-                ft.dropdown.Option("recovering", text="Recovering"),
-                ft.dropdown.Option("injured", text="Injured"),
-                ft.dropdown.Option("adopted", text="Adopted"),
-            ],
+            options=filter_options,
             on_change=on_filter_change,
             bgcolor=ft.Colors.WHITE,
             border_color=ft.Colors.GREY_300,
@@ -101,20 +126,83 @@ class AnimalsListPage:
         # Create animal cards using component
         def create_card_for_animal(animal):
             aid = animal.get("id")
+            aname = animal.get("name", "Unknown")
             # Load photo (handles both filename and legacy base64)
             photo_base64 = load_photo(animal.get("photo"))
+            # Check if animal came from a rescue mission and get details
+            rescue_mission_id = animal.get("rescue_mission_id")
+            rescue_info = None
+            if rescue_mission_id:
+                mission = self._rescue_service.get_mission_by_id(rescue_mission_id)
+                if mission:
+                    rescue_info = {
+                        "location": mission.get("location", "Unknown"),
+                        "date": mission.get("mission_date", ""),
+                        "reporter": mission.get("reporter_name", ""),
+                        "urgency": mission.get("urgency", ""),
+                        "description": mission.get("notes", ""),  # Rescue description/notes
+                    }
+            is_rescued = rescue_mission_id is not None
+            
+            # Archive/Remove handlers for admin
+            def handle_archive(animal_id):
+                def on_confirm(note):
+                    success = self._app_state.animals.archive_animal(
+                        animal_id,
+                        self._app_state.auth.user_id,
+                        note
+                    )
+                    if success:
+                        show_snackbar(page, "Animal archived")
+                        self.build(page, user_role=user_role, filter_status=self.current_filter)
+                    else:
+                        show_snackbar(page, "Failed to archive animal", error=True)
+                
+                create_archive_dialog(
+                    page,
+                    item_type="animal",
+                    item_name=aname,
+                    on_confirm=on_confirm,
+                )
+            
+            def handle_remove(animal_id):
+                def on_confirm(reason):
+                    result = self._app_state.animals.remove_animal(
+                        animal_id,
+                        self._app_state.auth.user_id,
+                        reason
+                    )
+                    if result.get("success"):
+                        msg = "Animal removed"
+                        if result.get("adoptions_affected", 0) > 0:
+                            msg += f" ({result['adoptions_affected']} pending adoptions auto-denied)"
+                        show_snackbar(page, msg)
+                        self.build(page, user_role=user_role, filter_status=self.current_filter)
+                    else:
+                        show_snackbar(page, "Failed to remove animal", error=True)
+                
+                create_remove_dialog(
+                    page,
+                    item_type="animal",
+                    item_name=aname,
+                    on_confirm=on_confirm,
+                )
+            
             return create_animal_card(
                 animal_id=aid,
-                name=animal.get("name", "Unknown"),
+                name=aname,
                 species=animal.get("species", "Unknown"),
                 age=animal.get("age", 0),
                 status=animal.get("status", "unknown"),
                 photo_base64=photo_base64,
                 on_adopt=lambda e, id=aid: page.go(f"/adoption_form?animal_id={id}"),
                 on_edit=lambda e, id=aid: self._on_edit(page, id) if is_admin else None,
-                on_delete=lambda e, id=aid: self.delete_animal(id) if is_admin else None,
+                on_archive=handle_archive if is_admin else None,
+                on_remove=handle_remove if is_admin else None,
                 is_admin=is_admin,
                 show_adopt_button=not is_admin,  # Only show adopt button for users
+                is_rescued=is_rescued,
+                rescue_info=rescue_info,
             )
 
         # Create grid of animal cards
@@ -179,36 +267,6 @@ class AnimalsListPage:
     def _on_edit(self, page, animal_id: int) -> None:
         # navigate to edit page with query param
         page.go(f"/edit_animal?id={animal_id}")
-
-    def delete_animal(self, animal_id: int) -> None:
-        """Delete an animal using state manager for consistency."""
-        import flet as ft
-        
-        print(f"\n{'='*60}")
-        print(f"DELETING Animal ID: {animal_id}")
-        print(f"{'='*60}")
-        
-        try:
-            # Use state manager for deletion (handles reload automatically)
-            success = self._app_state.animals.delete_animal(animal_id)
-            print(f"Delete result: {success}")
-            
-            if success:
-                # Show success message
-                show_snackbar(self.page, "✓ Animal deleted!")
-                
-                # Rebuild the entire page to show updated list
-                print("Rebuilding page...")
-                self.build(self.page, user_role=self.user_role, filter_status=self.current_filter)
-                print("Delete complete!\n")
-            else:
-                show_snackbar(self.page, "Failed to delete", error=True)
-                
-        except Exception as ex:
-            print(f"ERROR: {ex}")
-            import traceback
-            traceback.print_exc()
-            show_snackbar(self.page, f"Error: {str(ex)}", error=True)
 
 
 __all__ = ["AnimalsListPage"]

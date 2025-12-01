@@ -50,7 +50,10 @@ from .dialogs import (
     create_error_dialog,
     create_success_dialog,
     create_confirmation_dialog,
-    create_delete_confirmation_dialog,
+    create_archive_dialog,
+    create_remove_dialog,
+    create_permanent_delete_dialog,
+    create_restore_dialog,
 )
 
 # Utility functions
@@ -102,7 +105,10 @@ __all__ = [
     "create_error_dialog",
     "create_success_dialog",
     "create_confirmation_dialog",
-    "create_delete_confirmation_dialog",
+    "create_archive_dialog",
+    "create_remove_dialog",
+    "create_permanent_delete_dialog",
+    "create_restore_dialog",
     # Utils
     "fig_to_base64",
     "is_matplotlib_available",

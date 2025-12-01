@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from .base import StateManager
 import app_config
+from app_config import AdoptionStatus
 
 
 @dataclass
@@ -102,7 +103,7 @@ class AdoptionState(StateManager[Dict[str, Any]]):
         """Get only pending requests."""
         return [
             r for r in self.requests 
-            if (r.get("status") or "").lower() == "pending"
+            if AdoptionStatus.normalize(r.get("status") or "") == AdoptionStatus.PENDING
         ]
     
     @property
@@ -110,7 +111,7 @@ class AdoptionState(StateManager[Dict[str, Any]]):
         """Get only approved requests."""
         return [
             r for r in self.requests 
-            if (r.get("status") or "").lower() in ("approved", "adopted", "completed")
+            if AdoptionStatus.normalize(r.get("status") or "") == AdoptionStatus.APPROVED
         ]
     
     def load_requests(self) -> None:
@@ -168,7 +169,7 @@ class AdoptionState(StateManager[Dict[str, Any]]):
         animal_id: int,
         contact: str,
         reason: str,
-        status: str = "pending"
+        status: str = AdoptionStatus.PENDING
     ) -> Optional[int]:
         """Submit a new adoption request.
         
@@ -328,9 +329,13 @@ class AdoptionState(StateManager[Dict[str, Any]]):
         """
         requests = self.requests
         
-        pending_count = len([r for r in requests if (r.get("status") or "").lower() == "pending"])
-        approved_count = len([r for r in requests if (r.get("status") or "").lower() in ("approved", "adopted", "completed")])
-        denied_count = len([r for r in requests if (r.get("status") or "").lower() == "denied"])
+        # Count by status using AdoptionStatus constants
+        pending_count = len([r for r in requests if AdoptionStatus.normalize(r.get("status") or "") == AdoptionStatus.PENDING])
+        # Count approved OR was_approved (preserves count even after deletion)
+        approved_count = len([r for r in requests 
+                             if AdoptionStatus.normalize(r.get("status") or "") == AdoptionStatus.APPROVED
+                             or r.get("was_approved") == 1])
+        denied_count = len([r for r in requests if AdoptionStatus.normalize(r.get("status") or "") == AdoptionStatus.DENIED])
         
         return {
             "total": len(requests),
@@ -338,3 +343,180 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             "approved": approved_count,
             "denied": denied_count,
         }
+
+    # -------------------------------------------------------------------------
+    # Archive / Remove / Restore / Permanent Delete Methods
+    # -------------------------------------------------------------------------
+
+    def deny_request(self, request_id: int, admin_id: int, reason: str) -> bool:
+        """Deny an adoption request with a reason.
+        
+        Args:
+            request_id: ID of request to deny
+            admin_id: ID of admin performing the action
+            reason: Reason for denial
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.deny_request(request_id, admin_id, reason)
+            
+            if success:
+                self.load_requests()
+                print(f"[DEBUG] AdoptionState: Denied request {request_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to deny request: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def archive_request(self, request_id: int, admin_id: int, note: Optional[str] = None) -> bool:
+        """Archive an adoption request (soft-hide, still counts in analytics).
+        
+        Args:
+            request_id: ID of request to archive
+            admin_id: ID of admin performing the action
+            note: Optional note explaining why
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.archive_request(request_id, admin_id, note)
+            
+            if success:
+                self.load_requests()
+                print(f"[DEBUG] AdoptionState: Archived request {request_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to archive request: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def remove_request(self, request_id: int, admin_id: int, reason: str) -> bool:
+        """Remove an adoption request (soft-delete, excluded from analytics).
+        
+        Args:
+            request_id: ID of request to remove
+            admin_id: ID of admin performing the action
+            reason: Reason for removal (spam, duplicate, test, etc.)
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.remove_request(request_id, admin_id, reason)
+            
+            if success:
+                self.load_requests()
+                print(f"[DEBUG] AdoptionState: Removed request {request_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to remove request: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def restore_request(self, request_id: int) -> bool:
+        """Restore an archived or removed request to its previous status.
+        
+        Args:
+            request_id: ID of request to restore
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.restore_request(request_id)
+            
+            if success:
+                self.load_requests()
+                print(f"[DEBUG] AdoptionState: Restored request {request_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to restore request: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def permanently_delete_request(self, request_id: int) -> bool:
+        """Permanently delete a REMOVED request from the database.
+        
+        Only works on removed requests. This cannot be undone.
+        
+        Args:
+            request_id: ID of request to delete
+        
+        Returns:
+            True if successful
+        """
+        try:
+            service = self._get_service()
+            success = service.permanently_delete_request(request_id)
+            
+            if success:
+                self.load_requests()
+                print(f"[DEBUG] AdoptionState: Permanently deleted request {request_id}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to permanently delete request: {e}")
+            self.patch_state({"error": str(e)})
+            return False
+
+    def load_active_requests(self) -> None:
+        """Load only active (non-hidden) adoption requests.
+        
+        Excludes archived and removed requests.
+        """
+        self.patch_state({"is_loading": True, "error": None})
+        
+        try:
+            service = self._get_service()
+            requests = service.get_active_requests() or []
+            
+            # Apply current filter
+            filtered = self._apply_filter(requests, self.current_filter)
+            
+            self.update_state({
+                "requests": requests,
+                "filtered_requests": filtered,
+                "user_requests": self.state.get("user_requests", []),
+                "selected_request": self.state.get("selected_request"),
+                "filter": self.state.get("filter"),
+                "is_loading": False,
+                "error": None,
+            })
+            
+            print(f"[DEBUG] AdoptionState: Loaded {len(requests)} active requests")
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to load active requests: {e}")
+            self.patch_state({"is_loading": False, "error": str(e)})
+
+    def load_hidden_requests(self) -> List[Dict[str, Any]]:
+        """Load hidden (archived/removed) adoption requests.
+        
+        Returns:
+            List of hidden requests
+        """
+        try:
+            service = self._get_service()
+            return service.get_hidden_requests() or []
+            
+        except Exception as e:
+            print(f"[ERROR] AdoptionState: Failed to load hidden requests: {e}")
+            self.patch_state({"error": str(e)})
+            return []

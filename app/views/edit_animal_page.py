@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qs
 
 import app_config
 from services.animal_service import AnimalService
+from services.rescue_service import RescueService
 from services.photo_service import load_photo
 from storage.file_store import get_file_store
 from components import (
@@ -21,6 +22,7 @@ from components import (
 class EditAnimalPage:
     def __init__(self, db_path: Optional[str] = None) -> None:
         self.service = AnimalService(db_path or app_config.DB_PATH)
+        self.rescue_service = RescueService(db_path or app_config.DB_PATH)
         self.file_store = get_file_store()
         self._type_dropdown = None
         self._name_field = None
@@ -83,9 +85,7 @@ class EditAnimalPage:
                 file_path = file_info.path
                 original_name = file_info.name
                 if not file_path:
-                    page.snack_bar = ft.SnackBar(ft.Text("Unable to access file. Please try again."))
-                    page.snack_bar.open = True
-                    page.update()
+                    page.open(ft.SnackBar(ft.Text("Unable to access file. Please try again.")))
                     return
                 
                 try:
@@ -151,6 +151,83 @@ class EditAnimalPage:
                 alignment=ft.alignment.center,
             )
         
+        # Fetch rescue mission info if this animal came from a rescue
+        rescue_mission_id = animal.get("rescue_mission_id")
+        rescue_info_btn = None
+        if rescue_mission_id:
+            mission = self.rescue_service.get_mission_by_id(rescue_mission_id)
+            if mission:
+                # Format rescue date
+                rescue_date = mission.get("created_at", "")
+                if rescue_date:
+                    try:
+                        from datetime import datetime
+                        if isinstance(rescue_date, str):
+                            dt = datetime.fromisoformat(rescue_date.replace('Z', '+00:00'))
+                            rescue_date = dt.strftime("%b %d, %Y")
+                    except:
+                        pass
+                
+                info_data = {
+                    "location": mission.get("location", "Unknown location"),
+                    "date": rescue_date,
+                    "reporter": mission.get("reporter_name") or "Anonymous",
+                    "urgency": (mission.get("urgency") or "unknown").capitalize(),
+                    "description": mission.get("notes", ""),
+                    "name": animal.get("name", "Unknown"),
+                }
+                
+                def show_rescue_info(e, data=info_data):
+                    content_items = [
+                        ft.Row([ft.Icon(ft.Icons.LOCATION_ON, size=18, color=ft.Colors.TEAL_600), 
+                               ft.Text("Location:", weight="w600", size=13)], spacing=8),
+                        ft.Text(data["location"], size=12, color=ft.Colors.BLACK87),
+                        ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                        ft.Row([ft.Icon(ft.Icons.CALENDAR_TODAY, size=18, color=ft.Colors.TEAL_600),
+                               ft.Text("Rescue Date:", weight="w600", size=13)], spacing=8),
+                        ft.Text(data["date"] or "Not recorded", size=12, color=ft.Colors.BLACK87),
+                        ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                        ft.Row([ft.Icon(ft.Icons.PERSON, size=18, color=ft.Colors.TEAL_600),
+                               ft.Text("Reported By:", weight="w600", size=13)], spacing=8),
+                        ft.Text(data["reporter"] or "Anonymous", size=12, color=ft.Colors.BLACK87),
+                        ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                        ft.Row([ft.Icon(ft.Icons.WARNING_AMBER, size=18, color=ft.Colors.ORANGE_600),
+                               ft.Text("Urgency Level:", weight="w600", size=13)], spacing=8),
+                        ft.Text(data["urgency"], size=12, color=ft.Colors.BLACK87),
+                    ]
+                    
+                    if data["description"]:
+                        content_items.extend([
+                            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                            ft.Row([ft.Icon(ft.Icons.DESCRIPTION, size=18, color=ft.Colors.TEAL_600),
+                                   ft.Text("Description:", weight="w600", size=13)], spacing=8),
+                            ft.Text(data["description"], size=12, color=ft.Colors.BLACK87),
+                        ])
+                    
+                    dlg = ft.AlertDialog(
+                        title=ft.Text(f"Rescue Details: {data['name']}", size=16, weight="bold"),
+                        content=ft.Container(
+                            ft.Column(content_items, spacing=2, tight=True, scroll=ft.ScrollMode.AUTO),
+                            width=300,
+                            height=280,
+                            padding=10,
+                        ),
+                        actions=[
+                            ft.TextButton("Close", on_click=lambda e: page.close(dlg)),
+                        ],
+                        actions_alignment=ft.MainAxisAlignment.END,
+                    )
+                    page.open(dlg)
+                
+                rescue_info_btn = ft.IconButton(
+                    icon=ft.Icons.INFO_OUTLINE,
+                    icon_color=ft.Colors.ORANGE_600,
+                    icon_size=20,
+                    tooltip="View rescue mission details",
+                    on_click=show_rescue_info,
+                )
+
+        # Photo container (info button moved to card top-right)
         photo_container = ft.Container(
             ft.Column([
                 self._photo_display,
@@ -173,11 +250,13 @@ class EditAnimalPage:
         )
 
         # Pre-fill form with existing data
+        # Capitalize species for display and matching dropdown values
+        species_value = (animal.get("species") or "").capitalize()
         self._type_dropdown = create_form_dropdown(
             hint_text="Pick Animal",
-            options=["dog", "cat"],
+            options=["Dog", "Cat", "Other"],
             leading_icon=ft.Icons.PETS,
-            value=animal.get("species", "")
+            value=species_value if species_value in ["Dog", "Cat", "Other"] else ""
         )
         
         self._name_field = create_form_text_field(
@@ -185,15 +264,18 @@ class EditAnimalPage:
             value=animal.get("name", "")
         )
         
+        # Handle age - show empty if None or not set
+        age_value = animal.get("age")
+        age_display = str(age_value) if age_value is not None else ""
         self._age_field = create_form_text_field(
             hint_text="Enter animal Age...",
             keyboard_type=ft.KeyboardType.NUMBER,
-            value=str(animal.get("age", ""))
+            value=age_display
         )
         
         self._health_dropdown = create_form_dropdown(
             hint_text="Health Status",
-            options=["healthy", "recovering", "injured", "adopted"],
+            options=["healthy", "recovering", "injured"],
             leading_icon=ft.Icons.FAVORITE,
             value=animal.get("status", "")
         )
@@ -232,7 +314,7 @@ class EditAnimalPage:
         age_label = create_form_label("Age")
         health_label = create_form_label("Health Status")
 
-        card = ft.Container(
+        card_content = ft.Container(
             ft.Column([
                 photo_container,
                 ft.Container(type_label, width=280, alignment=ft.alignment.center_left),
@@ -265,6 +347,19 @@ class EditAnimalPage:
                 offset=(0, 10)
             ),
         )
+        
+        # Wrap card with info button at top right if from rescue mission
+        if rescue_info_btn:
+            card = ft.Stack([
+                card_content,
+                ft.Container(
+                    rescue_info_btn,
+                    right=10,
+                    top=10,
+                ),
+            ])
+        else:
+            card = card_content
 
         # Main layout
         layout = ft.Column([
@@ -287,17 +382,20 @@ class EditAnimalPage:
         age_str = (self._age_field.value or "").strip()
         health_status = (self._health_dropdown.value or "").strip()
 
-        if not animal_type or not name or not age_str or not health_status:
-            show_snackbar(page, "All fields are required")
+        if not animal_type or not name or not health_status:
+            show_snackbar(page, "Animal type, name, and health status are required")
             return
 
-        try:
-            age = int(age_str)
-            if age < 0:
-                raise ValueError("Age must be non-negative")
-        except ValueError:
-            show_snackbar(page, "Age must be a valid non-negative number")
-            return
+        # Age is optional - set to None if not provided
+        age = None
+        if age_str:
+            try:
+                age = int(age_str)
+                if age < 0:
+                    raise ValueError("Age must be non-negative")
+            except ValueError:
+                show_snackbar(page, "Age must be a valid non-negative number")
+                return
 
         try:
             # Save new photo with animal name if there's a pending upload

@@ -112,6 +112,26 @@ class LoginPage:
                 )
             )
         ], alignment="center", spacing=5)
+        
+        # Emergency Report Button
+        emergency_btn = ft.Container(
+            ft.ElevatedButton(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.EMERGENCY, size=18, color=ft.Colors.WHITE),
+                    ft.Text("Emergency Report Rescue", size=14, color=ft.Colors.WHITE, weight="w600"),
+                ], alignment="center", spacing=8),
+                width=280,
+                height=48,
+                on_click=lambda e: page.go("/emergency_rescue"),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.RED_600,
+                    color=ft.Colors.WHITE,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                    elevation=3,
+                )
+            ),
+            padding=ft.padding.only(top=15),
+        )
 
         # Label above email field
         email_label = create_form_label("Email Address", icon=ft.Icons.EMAIL)
@@ -136,6 +156,7 @@ class LoginPage:
                     ft.Text("Or continue with:", size=12, color=ft.Colors.BLACK54, text_align="center"),
                     self._google_btn,
                     signup_link,
+                    emergency_btn,
                     ft.Container(
                         ft.Text("Login Page", size=13, color=ft.Colors.BLACK45, text_align="center"),
                         padding=ft.padding.only(top=10),
