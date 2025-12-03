@@ -69,9 +69,9 @@ class RescueFormPage:
             value=user_name_value,
         )
         
-        # Reporter phone field (optional)
+        # Reporter phone field (required for contact)
         self._phone_field = create_form_text_field(
-            label="Phone Number (Optional)",
+            label="Phone Number",
             hint_text="For rescue team contact",
             width=400,
         )
@@ -284,6 +284,7 @@ class RescueFormPage:
         animal_type = (self._type_dropdown.value or "").strip()
         urgency = (self._urgency_dropdown.value or "").strip()
         name = (self._name_field.value or "").strip()
+        phone = (self._phone_field.value or "").strip()
         location = (self._location_field.value or "").strip()
         details = (self._details_field.value or "").strip()
 
@@ -293,6 +294,8 @@ class RescueFormPage:
             return False, "Please select an urgency level."
         if not name:
             return False, "Please enter your name."
+        if not phone:
+            return False, "Please enter your phone number so we can contact you."
         if not location:
             return False, "Please enter or detect the location."
         if not details:

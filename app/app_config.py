@@ -35,6 +35,9 @@ def get_env(key: str, default: Optional[str] = None, required: bool = False) -> 
 STORAGE_DIR = APP_ROOT / "storage"
 STORAGE_DIR.mkdir(exist_ok=True)
 
+# Assets directory
+ASSETS_DIR = APP_ROOT / "assets"
+
 # Database
 DB_PATH = os.getenv("PAWRES_DB_PATH", str(STORAGE_DIR / "data/app.db"))
 

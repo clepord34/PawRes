@@ -114,7 +114,7 @@ class HiddenItemsPage:
         self._refresh_content()
         
         # Sidebar
-        sidebar = create_admin_sidebar(page)
+        sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Main layout
         main_content = ft.Container(

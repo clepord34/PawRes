@@ -54,9 +54,9 @@ class AnimalsListPage:
 
         # Create sidebar based on user role using components
         if is_admin:
-            sidebar = create_admin_sidebar(page)
+            sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
-            sidebar = create_user_sidebar(page, user_name)
+            sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         # Load animals through state manager (ensures data is fresh)
         # Admin sees active (non-hidden) animals only in main list
@@ -136,11 +136,14 @@ class AnimalsListPage:
                 mission = self._rescue_service.get_mission_by_id(rescue_mission_id)
                 if mission:
                     rescue_info = {
+                        "mission_id": rescue_mission_id,
                         "location": mission.get("location", "Unknown"),
                         "date": mission.get("mission_date", ""),
                         "reporter": mission.get("reporter_name", ""),
+                        "contact": mission.get("reporter_phone", ""),
                         "urgency": mission.get("urgency", ""),
-                        "description": mission.get("notes", ""),  # Rescue description/notes
+                        "description": mission.get("notes", ""),
+                        "source": "Emergency" if mission.get("user_id") is None else "User",
                     }
             is_rescued = rescue_mission_id is not None
             

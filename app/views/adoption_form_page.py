@@ -8,7 +8,7 @@ from services.animal_service import AnimalService
 from services.photo_service import load_photo
 from state import get_app_state
 from components import (
-    create_page_header, create_content_card, create_action_button, create_gradient_background,
+    create_page_header, create_gradient_background,
     create_form_text_field, show_snackbar
 )
 
@@ -69,16 +69,16 @@ class AdoptionFormPage:
                 if photo_data:
                     self._animal_photo_container.content = ft.Image(
                         src_base64=photo_data,
-                        width=150,
-                        height=150,
+                        width=120,
+                        height=120,
                         fit=ft.ImageFit.COVER,
                         border_radius=8,
                     )
                 else:
                     self._animal_photo_container.content = ft.Container(
-                        ft.Icon(ft.Icons.PETS, size=60, color=ft.Colors.GREY_400),
-                        width=150,
-                        height=150,
+                        ft.Icon(ft.Icons.PETS, size=50, color=ft.Colors.GREY_400),
+                        width=120,
+                        height=120,
                         bgcolor=ft.Colors.GREY_200,
                         border_radius=8,
                         alignment=ft.alignment.center,
@@ -95,8 +95,8 @@ class AdoptionFormPage:
                         ft.Icon(ft.Icons.PETS, size=40, color=ft.Colors.GREY_400),
                         ft.Text("Select an animal", size=11, color=ft.Colors.GREY_500),
                     ], horizontal_alignment="center", alignment="center", spacing=5),
-                    width=150,
-                    height=150,
+                    width=120,
+                    height=120,
                     bgcolor=ft.Colors.GREY_100,
                     border_radius=8,
                     alignment=ft.alignment.center,
@@ -113,10 +113,10 @@ class AdoptionFormPage:
                 update_animal_photo(None)
 
         self._animal_dropdown = ft.Dropdown(
-            label="Select Animal",
-            width=350,
+            label="Select Animal to Adopt",
+            width=400,
             options=animal_options,
-            hint_text="Choose animal to adopt",
+            hint_text="Choose an animal",
             bgcolor=ft.Colors.WHITE,
             border_color=ft.Colors.GREY_300,
             focused_border_color=ft.Colors.TEAL_400,
@@ -132,8 +132,8 @@ class AdoptionFormPage:
                     ft.Icon(ft.Icons.PETS, size=40, color=ft.Colors.GREY_400),
                     ft.Text("Select an animal", size=11, color=ft.Colors.GREY_500),
                 ], horizontal_alignment="center", alignment="center", spacing=5),
-                width=150,
-                height=150,
+                width=120,
+                height=120,
                 bgcolor=ft.Colors.GREY_100,
                 border_radius=8,
                 alignment=ft.alignment.center,
@@ -148,20 +148,23 @@ class AdoptionFormPage:
         if animal_id is not None:
             self._animal_dropdown.value = str(animal_id)
 
-        # form fields
+        # Form fields with improved styling
         self._name_field = create_form_text_field(
-            label="Your Name", 
-            width=350,
+            label="Your Full Name", 
+            hint_text="Enter your full name",
+            width=400,
         )
         self._contact_field = create_form_text_field(
-            label="Contact Info (Phone/Email)", 
-            width=350,
+            label="Contact Information", 
+            hint_text="Phone number or email address",
+            width=400,
         )
         self._reason_field = create_form_text_field(
-            label="Reason for Adoption (Optional)",
+            label="Why do you want to adopt? (Optional)",
+            hint_text="Tell us about your home, experience with pets, etc.",
             multiline=True,
             min_lines=3,
-            width=350,
+            width=400,
         )
 
         # Pre-fill user name from state for logged-in users
@@ -174,54 +177,134 @@ class AdoptionFormPage:
             self._contact_field.value = existing_request.get("contact", "")
             self._reason_field.value = existing_request.get("reason", "")
 
-        # error display
-        self._error_text = ft.Text("", color=ft.Colors.RED, size=12)
+        # Error display
+        self._error_text = ft.Text("", color=ft.Colors.RED_600, size=12, text_align=ft.TextAlign.CENTER)
 
-        # submit and cancel buttons
+        # Submit and cancel buttons with improved styling
         submit_text = "Update Application" if edit_request_id else "Submit Application"
-        self._submit_btn = create_action_button(
-            submit_text,
-            on_click=lambda e: self._on_submit(page)
+        submit_icon = ft.Icons.EDIT if edit_request_id else ft.Icons.SEND
+        
+        self._submit_btn = ft.ElevatedButton(
+            content=ft.Row(
+                [ft.Icon(submit_icon, size=18), ft.Text(submit_text, size=14, weight="w500")],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            width=180,
+            height=48,
+            on_click=lambda e: self._on_submit(page),
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.TEAL_600,
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=10),
+                elevation=2,
+            )
         )
-        cancel_btn = create_action_button(
-            "Cancel",
+        
+        cancel_btn = ft.OutlinedButton(
+            content=ft.Text("Cancel", size=14, weight="w500"),
+            width=120,
+            height=48,
             on_click=lambda e: page.go("/check_status") if edit_request_id else page.go("/available_adoption"),
-            outlined=True,
-            bgcolor=ft.Colors.TEAL_400
+            style=ft.ButtonStyle(
+                color=ft.Colors.GREY_700,
+                shape=ft.RoundedRectangleBorder(radius=10),
+                side=ft.BorderSide(1.5, ft.Colors.GREY_400),
+            )
         )
 
-        # Title text
+        # Title section
         title_text = "Edit Adoption Application" if edit_request_id else "Adoption Application"
-        subtitle_text = "Update your application details" if edit_request_id else "Fill in your details to adopt"
+        subtitle_text = "Update your application details" if edit_request_id else "Give a loving home to an animal in need"
+        title_icon = ft.Icons.EDIT if edit_request_id else ft.Icons.FAVORITE
+        
+        title_section = ft.Container(
+            ft.Column([
+                ft.Row([
+                    ft.Icon(title_icon, color=ft.Colors.TEAL_700, size=28),
+                    ft.Text(title_text, size=24, weight="bold", color=ft.Colors.BLACK87),
+                ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
+                ft.Text(subtitle_text, size=13, color=ft.Colors.GREY_600),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+            padding=ft.padding.only(bottom=10),
+        )
+        
+        # Animal selection section
+        animal_section = ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.PETS, color=ft.Colors.TEAL_700, size=20),
+                ft.Text("Animal Selection", size=14, weight="w600", color=ft.Colors.TEAL_700),
+            ], spacing=8),
+            ft.Container(height=8),
+            ft.Container(self._animal_photo_container, alignment=ft.alignment.center),
+            self._animal_info_text,
+            ft.Container(height=5),
+            self._animal_dropdown,
+        ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        
+        # Adopter information section
+        adopter_section = ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.PERSON, color=ft.Colors.TEAL_700, size=20),
+                ft.Text("Your Information", size=14, weight="w600", color=ft.Colors.TEAL_700),
+            ], spacing=8),
+            self._name_field,
+            self._contact_field,
+        ], spacing=12)
+        
+        # Additional details section
+        details_section = ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.DESCRIPTION, color=ft.Colors.TEAL_700, size=20),
+                ft.Text("Additional Details", size=14, weight="w600", color=ft.Colors.TEAL_700),
+            ], spacing=8),
+            self._reason_field,
+        ], spacing=12)
 
-        # Card container
+        # Card container with improved layout
         card = ft.Container(
             ft.Column([
-                ft.Text(title_text, size=22, weight="bold", color=ft.Colors.BLACK87),
-                ft.Text(subtitle_text, size=12, color=ft.Colors.BLACK54),
-                ft.Divider(height=12, color=ft.Colors.GREY_300),
-                self._animal_photo_container,
-                self._animal_info_text,
-                ft.Container(height=5),
-                self._animal_dropdown,
-                self._name_field,
-                self._contact_field,
-                self._reason_field,
-                ft.Row([self._submit_btn, cancel_btn], spacing=12, alignment="center"),
+                title_section,
+                ft.Divider(height=1, color=ft.Colors.GREY_300),
+                ft.Container(height=15),
+                
+                # Form sections
+                animal_section,
+                ft.Container(height=15),
+                adopter_section,
+                ft.Container(height=8),
+                details_section,
+                
+                ft.Container(height=15),
+                
+                # Error text
                 self._error_text,
-            ], spacing=10, horizontal_alignment="center"),
-            width=550,
-            padding=25,
+                
+                # Action buttons
+                ft.Row(
+                    [self._submit_btn, cancel_btn],
+                    spacing=16,
+                    alignment=ft.MainAxisAlignment.CENTER
+                ),
+            ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=480,
+            padding=30,
             bgcolor=ft.Colors.WHITE,
-            border_radius=12,
-            shadow=ft.BoxShadow(blur_radius=20, spread_radius=5, color=ft.Colors.BLACK12, offset=(0, 5)),
+            border_radius=16,
+            shadow=ft.BoxShadow(
+                blur_radius=25,
+                spread_radius=2,
+                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+                offset=(0, 8)
+            ),
         )
 
         # Main layout
         layout = ft.Column([
             header,
-            card
-        ], horizontal_alignment="center", alignment="center", expand=True, spacing=10, scroll=ft.ScrollMode.AUTO)
+            card,
+            ft.Container(height=20),  # Bottom padding
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, scroll=ft.ScrollMode.AUTO)
 
         page.controls.clear()
         page.add(create_gradient_background(layout))

@@ -154,7 +154,7 @@ class EmergencyRescuePage:
         # Submit and back buttons
         self._submit_btn = ft.ElevatedButton(
             content=ft.Row(
-                [ft.Icon(ft.Icons.EMERGENCY, size=18), ft.Text("Submit Emergency Report", size=14, weight="w600")],
+                [ft.Icon(ft.Icons.EMERGENCY, size=15), ft.Text("Submit Emergency Report", size=12, weight="w600")],
                 spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
@@ -445,7 +445,7 @@ class EmergencyRescuePage:
                 animal_type=animal_type,
                 name=None,  # Animal name assigned by admin later
                 details=details,  # Just the description
-                status=RescueStatus.ONGOING,  # Emergency reports start as On-going
+                status=RescueStatus.PENDING,  # All new reports start as Pending (admin hasn't reviewed yet)
                 latitude=latitude,
                 longitude=longitude,
                 reporter_name=reporter_name,

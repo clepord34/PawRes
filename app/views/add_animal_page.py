@@ -1,25 +1,23 @@
 """Form page for adding new animals to the system."""
 from __future__ import annotations
 
+import os
+import shutil
 from typing import Optional
 
 from services.animal_service import AnimalService
+from services.import_service import ImportService
 import app_config
 from components import (
-    create_header, create_photo_upload_widget, create_action_button, create_gradient_background,
-    create_form_text_field, create_form_dropdown, create_form_label, show_snackbar
+    create_page_header, create_gradient_background, create_animal_form, show_snackbar
 )
 
 
 class AddAnimalPage:
     def __init__(self, db_path: Optional[str] = None) -> None:
-        self.service = AnimalService(db_path or app_config.DB_PATH)
-        self._type_dropdown = None
-        self._name_field = None
-        self._age_field = None
-        self._health_dropdown = None
-        self._photo_widget = None  # Store the photo widget instance
-        self._photo_base64 = None  # Store the base64 data directly
+        self.db_path = db_path or app_config.DB_PATH
+        self.service = AnimalService(self.db_path)
+        self.import_service = ImportService(self.db_path)
 
     def build(self, page) -> None:
         """Build the add animal form on the provided `flet.Page`."""
@@ -30,142 +28,284 @@ class AddAnimalPage:
 
         page.title = "Add Animal"
 
-        # Header with logo - smaller and gray
-        header = create_header(title="Add Animal", icon_size=50, title_size=28, subtitle="", padding=ft.padding.only(bottom=20))
+        # Header with logo
+        header = create_page_header("Paw Rescue")
 
-        # Photo upload section using component
-        self._photo_widget = create_photo_upload_widget(page)
-        photo_container = self._photo_widget.build()
+        def handle_submit(form_data):
+            """Handle form submission."""
+            try:
+                # Save photo with animal name (deferred save)
+                photo_filename = None
+                photo_widget = form_data.get("photo_widget")
+                if photo_widget:
+                    photo_filename = photo_widget.save_with_name(form_data["name"])
 
-        # Dropdown and fields with updated styling
-        self._type_dropdown = create_form_dropdown(
-            hint_text="Pick Animal",
-            options=["Dog", "Cat", "Other"],
-            leading_icon=ft.Icons.PETS,
-        )
+                # Insert into DB via AnimalService
+                animal_id = self.service.add_animal(
+                    name=form_data["name"],
+                    type=form_data["type"],
+                    age=form_data["age"],
+                    health_status=form_data["health_status"],
+                    photo=photo_filename,
+                )
+
+                show_snackbar(page, f"Animal added successfully (ID: {animal_id})")
+                page.go("/admin")
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                show_snackbar(page, f"Error: {str(exc)}", error=True)
+
+        def handle_cancel():
+            """Handle cancel button click."""
+            page.go("/admin")
+
+        # =====================================================================
+        # Bulk Import Dialog
+        # =====================================================================
         
-        self._name_field = create_form_text_field(hint_text="Enter animal name...")
-        
-        self._age_field = create_form_text_field(
-            hint_text="Enter animal Age...",
-            keyboard_type=ft.KeyboardType.NUMBER,
-        )
-        
-        self._health_dropdown = create_form_dropdown(
-            hint_text="Health Status",
-            options=["healthy", "recovering", "injured"],
-            leading_icon=ft.Icons.FAVORITE,
+        def show_bulk_import_dialog():
+            """Show the bulk import dialog."""
+            
+            # File picker for import
+            def on_import_file_selected(e: ft.FilePickerResultEvent):
+                """Handle import file selection."""
+                if not e.files or len(e.files) == 0:
+                    return
+                
+                file_path = e.files[0].path
+                if not file_path:
+                    show_snackbar(page, "Could not access the selected file", error=True)
+                    return
+                
+                # Close the bulk import dialog first
+                page.close(bulk_import_dlg)
+                
+                # Show loading snackbar
+                show_snackbar(page, "Importing animals...")
+                
+                try:
+                    # Run import
+                    result = self.import_service.import_from_file(file_path)
+                    
+                    # Show result dialog
+                    self._show_import_result_dialog(page, result)
+                    
+                except Exception as exc:
+                    import traceback
+                    traceback.print_exc()
+                    show_snackbar(page, f"Import error: {str(exc)}", error=True)
+            
+            file_picker = ft.FilePicker(on_result=on_import_file_selected)
+            page.overlay.append(file_picker)
+            page.update()
+            
+            def on_import_click(e):
+                """Open file picker for import."""
+                file_picker.pick_files(
+                    allowed_extensions=["csv", "xlsx", "xls"],
+                    dialog_title="Select Import File",
+                )
+            
+            def on_download_csv(e):
+                """Download CSV template."""
+                csv_path = ImportService.get_csv_template_path()
+                if not os.path.exists(csv_path):
+                    # Generate template if it doesn't exist
+                    if not ImportService.generate_csv_template(csv_path):
+                        show_snackbar(page, "Failed to create CSV template", error=True)
+                        return
+                self._download_template(page, csv_path, "animal_import_template.csv")
+            
+            def on_download_excel(e):
+                """Download Excel template."""
+                excel_path = ImportService.get_excel_template_path()
+                if not os.path.exists(excel_path):
+                    # Generate template if it doesn't exist
+                    if not ImportService.generate_excel_template(excel_path):
+                        show_snackbar(page, "Failed to create Excel template", error=True)
+                        return
+                self._download_template(page, excel_path, "animal_import_template.xlsx")
+            
+            # Template download buttons
+            csv_btn = ft.TextButton(
+                "CSV",
+                icon=ft.Icons.DOWNLOAD,
+                on_click=on_download_csv,
+                style=ft.ButtonStyle(color=ft.Colors.TEAL_700),
+            )
+            
+            excel_btn = ft.TextButton(
+                "Excel",
+                icon=ft.Icons.DOWNLOAD,
+                on_click=on_download_excel,
+                style=ft.ButtonStyle(color=ft.Colors.TEAL_700),
+            )
+            
+            # Import button
+            import_btn = ft.ElevatedButton(
+                "📁 Select File to Import",
+                on_click=on_import_click,
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.TEAL_600,
+                    color=ft.Colors.WHITE,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                ),
+                width=220,
+                height=40,
+            )
+            
+            # Dialog content
+            content = ft.Column([
+                ft.Text(
+                    "Import multiple animals from a CSV or Excel file",
+                    size=13,
+                    color=ft.Colors.GREY_700,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Row([
+                    ft.Text("Download Template:", size=12, color=ft.Colors.GREY_700),
+                    csv_btn,
+                    excel_btn,
+                ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
+                import_btn,
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12, tight=True)
+            
+            bulk_import_dlg = ft.AlertDialog(
+                title=ft.Row([
+                    ft.Icon(ft.Icons.UPLOAD_FILE, color=ft.Colors.TEAL_700, size=24),
+                    ft.Text("Bulk Import", size=18, weight="w600", color=ft.Colors.TEAL_700),
+                ], spacing=10),
+                content=content,
+                actions=[
+                    ft.TextButton("Cancel", on_click=lambda e: page.close(bulk_import_dlg)),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            
+            page.open(bulk_import_dlg)
+
+        # Create the animal form using shared component
+        animal_form = create_animal_form(
+            page=page,
+            mode="add",
+            on_submit=handle_submit,
+            on_cancel=handle_cancel,
+            on_bulk_import=show_bulk_import_dialog,
         )
 
-        # Buttons
-        back_btn = create_action_button(
-            "Back to Dashboard",
-            on_click=lambda e: page.go("/admin"),
-            width=130,
-            height=45,
-            outlined=True,
-            bgcolor=ft.Colors.TEAL_600
-        )
-        
-        submit_btn = create_action_button(
-            "Submit",
-            on_click=lambda e: self._on_submit(page, e),
-            width=130,
-            height=45
-        )
-
-        # Labels for fields
-        type_label = create_form_label("Choose what type")
-        name_label = create_form_label("Animal Name")
-        age_label = create_form_label("Age")
-        health_label = create_form_label("Health Status")
-
-        # Card with form
-        card = ft.Container(
-            ft.Column([
-                photo_container,
-                ft.Container(type_label, width=280, alignment=ft.alignment.center_left),
-                ft.Container(height=5),
-                self._type_dropdown,
-                ft.Container(height=10),
-                ft.Container(name_label, width=280, alignment=ft.alignment.center_left),
-                ft.Container(height=5),
-                self._name_field,
-                ft.Container(height=10),
-                ft.Container(age_label, width=280, alignment=ft.alignment.center_left),
-                ft.Container(height=5),
-                self._age_field,
-                ft.Container(height=10),
-                ft.Container(health_label, width=280, alignment=ft.alignment.center_left),
-                ft.Container(height=5),
-                self._health_dropdown,
-                ft.Container(height=20),
-                ft.Row([back_btn, submit_btn], alignment="center", spacing=15),
-            ], horizontal_alignment="center", spacing=0),
-            padding=35,
-            alignment=ft.alignment.center,
-            width=400,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=16,
-            shadow=ft.BoxShadow(
-                blur_radius=30, 
-                spread_radius=0, 
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK), 
-                offset=(0, 10)
-            ),
-        )
+        # Build the form card
+        card = animal_form.build()
 
         # Main layout
-        layout = ft.Column([header, card], alignment="center", horizontal_alignment="center", expand=True, scroll=ft.ScrollMode.AUTO)
+        layout = ft.Column([
+            header,
+            card,
+            ft.Container(height=20),  # Bottom padding
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10, scroll=ft.ScrollMode.AUTO)
 
         page.controls.clear()
         page.add(create_gradient_background(layout))
         page.update()
-
-    def _on_submit(self, page, e) -> None:
-        try:
-            import flet as ft
-        except Exception:
+    
+    def _download_template(self, page, src_path: str, filename: str) -> None:
+        """Copy template file to a user-accessible location."""
+        import flet as ft
+        
+        def on_save_result(e: ft.FilePickerResultEvent):
+            if e.path:
+                try:
+                    shutil.copy2(src_path, e.path)
+                    show_snackbar(page, f"Template saved to: {e.path}")
+                except Exception as ex:
+                    show_snackbar(page, f"Error saving template: {ex}", error=True)
+        
+        # Create file picker for save dialog
+        save_picker = ft.FilePicker(on_result=on_save_result)
+        page.overlay.append(save_picker)
+        page.update()
+        
+        # Open save dialog
+        save_picker.save_file(
+            file_name=filename,
+            allowed_extensions=["csv", "xlsx"] if filename.endswith(".xlsx") else ["csv"],
+            dialog_title=f"Save {filename}",
+        )
+    
+    def _show_import_result_dialog(self, page, result) -> None:
+        """Show dialog with import results."""
+        import flet as ft
+        
+        if result.success_count == 0 and not result.errors:
+            # Empty file
+            show_snackbar(page, "No animals found in the file", error=True)
             return
-
-        animal_type = (self._type_dropdown.value or "").strip()
-        name = (self._name_field.value or "").strip()
-        age_str = (self._age_field.value or "").strip()
-        health_status = (self._health_dropdown.value or "").strip()
-
-        if not animal_type or not name or not age_str or not health_status:
-            show_snackbar(page, "All fields are required")
-            return
-
-        try:
-            age = int(age_str)
-            if age < 0:
-                raise ValueError("Age must be non-negative")
-        except ValueError:
-            show_snackbar(page, "Age must be a valid non-negative number")
-            return
-
-        try:
-            # Save photo with animal name (deferred save)
-            photo_filename = None
-            if self._photo_widget:
-                photo_filename = self._photo_widget.save_with_name(name)
-
-            # Insert into DB via AnimalService
-            animal_id = self.service.add_animal(
-                name=name,
-                type=animal_type,
-                age=age,
-                health_status=health_status,
-                photo=photo_filename,  # Stores filename like 'pipay_20251125_abc1.jpg'
+        
+        # Build content based on result
+        if result.all_failed:
+            icon = ft.Icon(ft.Icons.ERROR, color=ft.Colors.RED_600, size=32)
+            title = ft.Text("Import Failed", size=16, weight="bold", color=ft.Colors.RED_600)
+            summary = ft.Text(f"No animals imported. All {len(result.errors)} rows had errors.", size=12)
+        elif result.has_errors:
+            icon = ft.Icon(ft.Icons.WARNING, color=ft.Colors.ORANGE_600, size=32)
+            title = ft.Text("Completed with Errors", size=16, weight="bold", color=ft.Colors.ORANGE_700)
+            summary = ft.Row([
+                ft.Text(f"✓ {result.success_count} imported", size=12, color=ft.Colors.GREEN_700),
+                ft.Text(f"✗ {len(result.errors)} failed", size=12, color=ft.Colors.RED_600),
+            ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
+        else:
+            icon = ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN_600, size=32)
+            title = ft.Text("Import Successful", size=16, weight="bold", color=ft.Colors.GREEN_700)
+            summary = ft.Text(f"Successfully imported {result.success_count} animals!", size=12)
+        
+        # Error details (if any)
+        error_section = None
+        if result.errors:
+            error_items = []
+            for err in result.errors[:5]:  # Show max 5 errors
+                error_items.append(
+                    ft.Text(f"• Row {err.row}: {err.message}", size=10, color=ft.Colors.RED_700)
+                )
+            if len(result.errors) > 5:
+                error_items.append(
+                    ft.Text(f"  ... and {len(result.errors) - 5} more", size=10, color=ft.Colors.GREY_600, italic=True)
+                )
+            
+            error_section = ft.Container(
+                ft.Column([
+                    ft.Text("Errors:", size=11, weight="w600", color=ft.Colors.RED_700),
+                    ft.Column(error_items, spacing=2, scroll=ft.ScrollMode.AUTO, height=80),
+                ], spacing=4),
+                bgcolor=ft.Colors.RED_50,
+                padding=8,
+                border_radius=6,
             )
-
-            show_snackbar(page, f"Animal added successfully (ID: {animal_id})")
-            page.go("/admin")
-        except Exception as exc:
-            import traceback
-            traceback.print_exc()
-            show_snackbar(page, f"Error: {str(exc)}", error=True)
+        
+        # Build dialog content
+        content_items = [icon, title, summary]
+        if error_section:
+            content_items.append(error_section)
+        
+        # Action buttons
+        actions = []
+        if result.success_count > 0:
+            actions.append(
+                ft.TextButton(
+                    "View Animals",
+                    on_click=lambda e: (page.close(dlg), page.go("/animals_list?admin=1")),
+                )
+            )
+        actions.append(
+            ft.TextButton("OK", on_click=lambda e: page.close(dlg))
+        )
+        
+        dlg = ft.AlertDialog(
+            content=ft.Column(content_items, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8, tight=True),
+            actions=actions,
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        page.open(dlg)
 
 
 __all__ = ["AddAnimalPage"]

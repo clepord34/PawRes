@@ -26,15 +26,19 @@ def main(page) -> None:
 	app_state.initialize(page)
 
 	page.title = "Rescue/Adoption App"
-	page.window_width = app_config.DEFAULT_WINDOW_WIDTH
-	page.window_height = app_config.DEFAULT_WINDOW_HEIGHT
-	page.window_min_width = app_config.DEFAULT_WINDOW_MIN_WIDTH
-	page.window_min_height = app_config.DEFAULT_WINDOW_MIN_HEIGHT
+	page.window.center()
+	page.window.min_width = app_config.DEFAULT_WINDOW_MIN_WIDTH
+	page.window.min_height = app_config.DEFAULT_WINDOW_MIN_HEIGHT
 	page.vertical_alignment = ft.MainAxisAlignment.CENTER
 	page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 	page.padding = 0
 	page.spacing = 0
 	page.bgcolor = ft.Colors.TRANSPARENT
+	page.theme_mode = ft.ThemeMode.LIGHT
+	
+	# Delay maximizing to avoid black screen rendering glitch on Windows
+	page.update()
+	page.window.maximized = True
 
 	def _render_error_page(message: str, details: str = "") -> None:
 		"""Render an error page with a home button."""

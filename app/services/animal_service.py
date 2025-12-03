@@ -38,20 +38,18 @@ class AnimalService:
         type: str,
         age: Optional[int] = None,
         health_status: str = "unknown",
-        breed: Optional[str] = None,
-        description: Optional[str] = None,
         photo: Optional[str] = None,
     ) -> int:
         """Insert a new animal and return its id.
 
         Note: `type` maps to the `species` column in the DB; `health_status`
-        maps to `status`. `photo` should be base64-encoded image data.
+        maps to `status`. `photo` should be a filename from FileStore.
         """
         sql = (
-            "INSERT INTO animals (name, species, breed, age, status, description, photo) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO animals (name, species, age, status, photo) "
+            "VALUES (?, ?, ?, ?, ?)"
         )
-        last_id = self.db.execute(sql, (name, type, breed, age, health_status, description, photo))
+        last_id = self.db.execute(sql, (name, type, age, health_status, photo))
         return last_id
 
     def get_all_animals(self) -> List[Dict[str, Any]]:
@@ -86,8 +84,8 @@ class AnimalService:
     def update_animal(self, animal_id: int, **fields: Any) -> bool:
         """Update allowed fields for an animal. Returns True if updated.
 
-        Allowed fields: `name`, `type` (mapped to `species`), `breed`,
-        `age`, `health_status` (mapped to `status`), `description`, `photo`.
+        Allowed fields: `name`, `type` (mapped to `species`),
+        `age`, `health_status` (mapped to `status`), `photo`.
         """
         if not fields:
             return False
@@ -97,9 +95,7 @@ class AnimalService:
             "type": "species",
             "health_status": "status",
             "name": "name",
-            "breed": "breed",
             "age": "age",
-            "description": "description",
             "photo": "photo",
         }
 

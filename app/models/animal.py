@@ -17,12 +17,10 @@ class Animal:
     id: Optional[int] = None
     name: str = ""
     species: str = ""  # e.g., "Dog", "Cat", "Other"
-    breed: Optional[str] = None
     age: Optional[int] = None
     status: str = app_config.AnimalStatus.AVAILABLE
     intake_date: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    description: Optional[str] = None
     photo: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -46,12 +44,10 @@ class Animal:
             id=data.get("id"),
             name=data.get("name", ""),
             species=data.get("species", ""),
-            breed=data.get("breed"),
             age=data.get("age"),
             status=data.get("status", app_config.AnimalStatus.AVAILABLE),
             intake_date=data.get("intake_date"),
             updated_at=data.get("updated_at"),
-            description=data.get("description"),
             photo=data.get("photo"),
         )
 

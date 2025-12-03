@@ -79,12 +79,10 @@ class Database:
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT,
 			species TEXT,
-			breed TEXT,
 			age INTEGER,
 			status TEXT,
 			intake_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			description TEXT,
 			photo TEXT,
 			rescue_mission_id INTEGER,
 			FOREIGN KEY(rescue_mission_id) REFERENCES rescue_missions(id) ON DELETE SET NULL

@@ -20,6 +20,7 @@ def create_form_text_field(
     prefix_icon: Optional[object] = None,
     value: str = "",
     on_change: Optional[Callable] = None,
+    on_submit: Optional[Callable] = None,
 ) -> object:
     """Create a standardized text field for forms.
     
@@ -35,17 +36,10 @@ def create_form_text_field(
         prefix_icon: Icon to show at start of field
         value: Initial value
         on_change: Callback when value changes
+        on_submit: Callback when Enter key is pressed
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create form fields")
-    
-    # Build prefix container if icon provided
-    prefix = None
-    if prefix_icon:
-        prefix = ft.Container(
-            ft.Icon(prefix_icon, size=20, color=ft.Colors.BLACK54),
-            padding=ft.padding.only(left=12, right=8),
-        )
     
     field_kwargs = {
         "width": width,
@@ -54,7 +48,7 @@ def create_form_text_field(
         "focused_border_color": ft.Colors.TEAL_400,
         "text_size": 14,
         "color": ft.Colors.BLACK,
-        "content_padding": ft.padding.all(12) if not prefix else ft.padding.only(left=15, right=10, top=10, bottom=10),
+        "content_padding": ft.padding.symmetric(horizontal=15, vertical=12),
     }
     
     if label:
@@ -62,8 +56,9 @@ def create_form_text_field(
     else:
         field_kwargs["hint_text"] = hint_text
     
-    if prefix:
-        field_kwargs["prefix"] = prefix
+    # Use prefix_icon property directly - this shows the icon at all times
+    if prefix_icon:
+        field_kwargs["prefix_icon"] = prefix_icon
     
     if password:
         field_kwargs["password"] = True
@@ -84,6 +79,9 @@ def create_form_text_field(
     if on_change:
         field_kwargs["on_change"] = on_change
     
+    if on_submit:
+        field_kwargs["on_submit"] = on_submit
+    
     return ft.TextField(**field_kwargs)
 
 
@@ -96,6 +94,7 @@ def create_form_dropdown(
     leading_icon: Optional[object] = None,
     value: Optional[str] = None,
     on_change: Optional[Callable] = None,
+    menu_height: Optional[int] = None,
 ) -> object:
     """Create a standardized dropdown for forms.
     
@@ -108,6 +107,7 @@ def create_form_dropdown(
         leading_icon: Icon to show at start of dropdown
         value: Initial selected value
         on_change: Callback when selection changes
+        menu_height: Maximum height of the dropdown menu (limits visible items)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create form fields")
@@ -139,6 +139,9 @@ def create_form_dropdown(
     
     if on_change:
         dropdown_kwargs["on_change"] = on_change
+    
+    if menu_height is not None:
+        dropdown_kwargs["menu_height"] = menu_height
     
     return ft.Dropdown(**dropdown_kwargs)
 

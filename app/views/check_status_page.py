@@ -12,7 +12,8 @@ from state import get_app_state
 from components import (
     create_user_sidebar, create_status_badge, create_gradient_background,
     create_page_title, create_section_card, create_map_container,
-    create_empty_state, show_snackbar, create_confirmation_dialog
+    create_empty_state, show_snackbar, create_confirmation_dialog,
+    create_scrollable_data_table
 )
 
 
@@ -39,7 +40,7 @@ class CheckStatusPage:
         user_name = self._app_state.auth.user_name or "User"
 
         # Sidebar with navigation (same as user dashboard)
-        sidebar = create_user_sidebar(page, user_name)
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         # Load user data through state managers
         self._app_state.adoptions.load_user_requests(user_id)
@@ -88,25 +89,23 @@ class CheckStatusPage:
                         ft.Icon(ft.Icons.CANCEL, color=ft.Colors.WHITE, size=14),
                         ft.Text("Cancelled", color=ft.Colors.WHITE, size=12, weight="w500"),
                     ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
                     bgcolor=ft.Colors.GREY_600,
                     border_radius=15,
-                    alignment=ft.alignment.center,
+                    margin=ft.margin.symmetric(vertical=4),
                 )
             elif is_removed:
                 # Show removed status with reason
                 reason_text = removal_reason or "Administrative action"
                 return ft.Container(
-                    ft.Column([
-                        ft.Row([
-                            ft.Icon(ft.Icons.DELETE_OUTLINE, color=ft.Colors.WHITE, size=14),
-                            ft.Text("Removed", color=ft.Colors.WHITE, size=12, weight="w500"),
-                        ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                    ft.Row([
+                        ft.Icon(ft.Icons.DELETE_OUTLINE, color=ft.Colors.WHITE, size=14),
+                        ft.Text("Removed", color=ft.Colors.WHITE, size=12, weight="w500"),
+                    ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
                     bgcolor=ft.Colors.RED_700,
                     border_radius=15,
-                    alignment=ft.alignment.center,
+                    margin=ft.margin.symmetric(vertical=4),
                     tooltip=f"Removed: {reason_text}",
                 )
             elif is_archived:
@@ -117,70 +116,65 @@ class CheckStatusPage:
                 # This will show the original status badge (rescued, pending, approved, etc.)
                 return make_status_badge(base_status, admin_message, is_rescue)
             elif is_rescue:
-                # Use RescueStatus for rescue missions
+                # Use RescueStatus for rescue missions (matching admin styling)
                 normalized = RescueStatus.normalize(status)
-                if normalized == RescueStatus.ONGOING:
-                    return ft.Container(
-                        ft.Row([
-                            ft.Icon(ft.Icons.FAVORITE, color=ft.Colors.WHITE, size=14),
-                            ft.Text(RescueStatus.get_label(RescueStatus.ONGOING), color=ft.Colors.WHITE, size=12, weight="w500"),
-                        ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                        bgcolor=ft.Colors.TEAL_400,
-                        border_radius=15,
-                        alignment=ft.alignment.center,
-                    )
-                elif normalized == RescueStatus.RESCUED:
-                    return ft.Container(
-                        ft.Row([
-                            ft.Icon(ft.Icons.FAVORITE, color=ft.Colors.WHITE, size=14),
-                            ft.Text(RescueStatus.get_label(RescueStatus.RESCUED), color=ft.Colors.WHITE, size=12, weight="w500"),
-                        ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                        bgcolor=ft.Colors.TEAL_400,
-                        border_radius=15,
-                        alignment=ft.alignment.center,
-                    )
+                if normalized == RescueStatus.RESCUED:
+                    bg_color = ft.Colors.GREEN_700
+                    icon = ft.Icons.CHECK_CIRCLE
                 elif normalized == RescueStatus.FAILED:
-                    return ft.Container(
-                        ft.Row([
-                            ft.Icon(ft.Icons.CANCEL, color=ft.Colors.WHITE, size=14),
-                            ft.Text(RescueStatus.get_label(RescueStatus.FAILED), color=ft.Colors.WHITE, size=12, weight="w500"),
-                        ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                        bgcolor=ft.Colors.RED_600,
-                        border_radius=15,
-                        alignment=ft.alignment.center,
-                    )
+                    bg_color = ft.Colors.RED_700
+                    icon = ft.Icons.CANCEL
+                elif normalized == RescueStatus.ONGOING:
+                    bg_color = ft.Colors.TEAL_600
+                    icon = ft.Icons.PETS
                 elif normalized == RescueStatus.PENDING:
-                    color = ft.Colors.YELLOW_700
-                    text = RescueStatus.get_label(RescueStatus.PENDING)
+                    bg_color = ft.Colors.ORANGE_700
+                    icon = ft.Icons.PENDING
                 else:
-                    color = ft.Colors.GREY_600
-                    text = status.title()
+                    bg_color = ft.Colors.GREY_600
+                    icon = ft.Icons.HELP_OUTLINE
+                
+                return ft.Container(
+                    ft.Row([
+                        ft.Icon(icon, color=ft.Colors.WHITE, size=14),
+                        ft.Text(RescueStatus.get_label(status), color=ft.Colors.WHITE, size=12, weight="w500"),
+                    ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                    bgcolor=bg_color,
+                    border_radius=15,
+                    margin=ft.margin.symmetric(vertical=4),
+                )
             else:
-                # Use AdoptionStatus for adoption requests
+                # Use AdoptionStatus for adoption requests (match admin badge style with icons)
                 normalized = AdoptionStatus.normalize(status)
                 if normalized == AdoptionStatus.PENDING:
-                    color = ft.Colors.YELLOW_700
+                    bg_color = ft.Colors.ORANGE_700
+                    icon = ft.Icons.PENDING
                     text = AdoptionStatus.get_label(AdoptionStatus.PENDING)
                 elif normalized == AdoptionStatus.APPROVED:
-                    color = ft.Colors.GREEN_600
+                    bg_color = ft.Colors.GREEN_700
+                    icon = ft.Icons.CHECK_CIRCLE
                     text = AdoptionStatus.get_label(AdoptionStatus.APPROVED)
                 elif normalized == AdoptionStatus.DENIED:
-                    color = ft.Colors.RED_600
+                    bg_color = ft.Colors.RED_700
+                    icon = ft.Icons.CANCEL
                     text = AdoptionStatus.get_label(AdoptionStatus.DENIED)
                 else:
-                    color = ft.Colors.GREY_600
+                    bg_color = ft.Colors.GREY_600
+                    icon = ft.Icons.HELP_OUTLINE
                     text = status.title()
-            
-            return ft.Container(
-                ft.Text(text, color=ft.Colors.WHITE, size=12, weight="w500"),
-                padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                bgcolor=color,
-                border_radius=15,
-                alignment=ft.alignment.center,
-            )
+                
+                # Return adoption badge with icon (same style as admin)
+                return ft.Container(
+                    ft.Row([
+                        ft.Icon(icon, color=ft.Colors.WHITE, size=14),
+                        ft.Text(text, color=ft.Colors.WHITE, size=12, weight="w500"),
+                    ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                    bgcolor=bg_color,
+                    border_radius=15,
+                    margin=ft.margin.symmetric(vertical=4),
+                )
 
         # Helper function to handle edit button click
         def on_edit_click(request_id: int, animal_id: int):
@@ -216,7 +210,7 @@ class CheckStatusPage:
             return handler
 
         # Build adoption requests table content
-        adoption_rows_content = []
+        adoption_rows = []
         if adoptions:
             for a in adoptions:
                 # Fetch animal details using state manager
@@ -274,9 +268,9 @@ class CheckStatusPage:
                 
                 # Build animal name display - strikethrough if animal deleted
                 if animal_was_deleted:
-                    animal_name_display = ft.Text(animal_name, size=13, color=ft.Colors.GREY_500, italic=True)
+                    animal_name_display = ft.Text(animal_name, size=12, color=ft.Colors.GREY_500, italic=True)
                 else:
-                    animal_name_display = ft.Text(animal_name, size=13, color=ft.Colors.BLACK87)
+                    animal_name_display = ft.Text(animal_name, size=12, color=ft.Colors.BLACK87)
                 
                 # Build status display - combine status with "Animal Deleted" if applicable
                 if animal_was_deleted:
@@ -292,41 +286,40 @@ class CheckStatusPage:
                     status_display = make_status_badge(status, admin_message, is_rescue=False,
                                                       removal_reason=removal_reason, archive_note=archive_note)
                 
-                adoption_rows_content.append(
-                    ft.Column([
-                        ft.Row([
-                            ft.Container(animal_name_display, expand=2),
-                            ft.Text(animal_type, size=13, color=ft.Colors.GREY_500 if animal_was_deleted else ft.Colors.BLACK87, expand=2),
-                            ft.Container(status_display, expand=2),
-                            ft.Container(actions, expand=2),
-                        ], spacing=20),
-                        ft.Divider(height=1, color=ft.Colors.GREY_200),
-                        ft.Container(height=8),
-                    ], spacing=0)
-                )
+                # Get reason for adoption
+                reason = a.get("reason", "")
+                reason_display = reason[:30] + "..." if len(reason) > 30 else reason
+                
+                # Build row data for DataTable (with reason column)
+                adoption_rows.append([
+                    animal_name_display,
+                    ft.Text(animal_type, size=12, color=ft.Colors.GREY_500 if animal_was_deleted else ft.Colors.BLACK87),
+                    ft.Container(
+                        ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
+                        tooltip=reason if len(reason) > 30 else None,
+                    ),
+                    status_display,
+                    actions,
+                ])
 
-        adoption_table = ft.Container(
-            ft.Column(
-                [
-                    ft.Row([
-                        ft.Text("Animal Name", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Type", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Status", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Actions", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                    ], spacing=20),
-                    ft.Divider(height=1, color=ft.Colors.GREY_300),
-                    ft.Container(height=10),
-                ] + (adoption_rows_content if adoption_rows_content else [
-                    create_empty_state(
-                        message="No adoption requests yet",
-                        padding=20
-                    )
-                ]),
-                spacing=0
-            ),
-            padding=20,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=8,
+        # Define adoption table columns with expand values
+        adoption_columns = [
+            {"label": "Animal Name", "expand": 2},
+            {"label": "Type", "expand": 1},
+            {"label": "Reason", "expand": 3},
+            {"label": "Status", "expand": 2},
+            {"label": "Actions", "expand": 2},
+        ]
+
+        # Create scrollable DataTable for adoptions
+        adoption_table = create_scrollable_data_table(
+            columns=adoption_columns,
+            rows=adoption_rows,
+            height=250,
+            empty_message="No adoption requests yet",
+            column_spacing=20,
+            heading_row_height=45,
+            data_row_height=55,
         )
 
         # Helper for cancel rescue mission click
@@ -354,7 +347,7 @@ class CheckStatusPage:
             return handler
 
         # Build rescue missions table
-        rescue_rows_content = []
+        rescue_rows = []
         if rescues:
             for r in rescues:
                 mission_id = r.get("id")
@@ -364,7 +357,7 @@ class CheckStatusPage:
                 
                 # Details from notes (now just contains situation description)
                 details = r.get("notes", "")
-                details_display = details[:30] + "..." if len(details) > 30 else details
+                details_display = details[:25] + "..." if len(details) > 25 else details
                 
                 status = r.get("status", "pending")
                 admin_message = r.get("admin_message", "")
@@ -382,59 +375,58 @@ class CheckStatusPage:
                             style=ft.ButtonStyle(color=ft.Colors.RED_600),
                             on_click=on_cancel_rescue_click(mission_id, animal_type, location),
                         ),
-                    ], spacing=5)
+                    ], spacing=5, tight=True)
                 else:
-                    rescue_actions = ft.Text("-", size=13, color=ft.Colors.BLACK54)
+                    rescue_actions = ft.Text("-", size=12, color=ft.Colors.BLACK54)
                 
-                rescue_rows_content.append(
-                    ft.Column([
-                        ft.Row([
-                            ft.Text(animal_type, size=13, color=ft.Colors.BLACK87, expand=2),
-                            ft.Text(location, size=13, color=ft.Colors.BLACK87, expand=3),
-                            ft.Text(details_display, size=13, color=ft.Colors.BLACK87, expand=3),
-                            ft.Container(make_status_badge(status, admin_message, is_rescue=True,
-                                                          removal_reason=removal_reason, archive_note=archive_note), expand=2),
-                            ft.Container(rescue_actions, expand=2),
-                        ], spacing=15),
-                        ft.Divider(height=1, color=ft.Colors.GREY_200),
-                        ft.Container(height=8),
-                    ], spacing=0)
-                )
+                # Build row data
+                rescue_rows.append([
+                    ft.Text(animal_type, size=12, color=ft.Colors.BLACK87),
+                    ft.Container(
+                        ft.Text(location[:20] + "..." if len(location) > 20 else location, size=12, color=ft.Colors.BLACK87),
+                        tooltip=location if len(location) > 20 else None,
+                    ),
+                    # Urgency badge
+                    self._create_urgency_badge(r.get("urgency")),
+                    ft.Container(
+                        ft.Text(details_display, size=12, color=ft.Colors.BLACK87),
+                        tooltip=details if len(details) > 25 else None,
+                    ),
+                    make_status_badge(status, admin_message, is_rescue=True,
+                                      removal_reason=removal_reason, archive_note=archive_note),
+                    rescue_actions,
+                ])
 
-        rescue_table = ft.Container(
-            ft.Column(
-                [
-                    ft.Row([
-                        ft.Text("Type", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Location", size=13, weight="w600", color=ft.Colors.BLACK87, expand=3),
-                        ft.Text("Details", size=13, weight="w600", color=ft.Colors.BLACK87, expand=3),
-                        ft.Text("Status", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                        ft.Text("Actions", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-                    ], spacing=15),
-                    ft.Divider(height=1, color=ft.Colors.GREY_300),
-                    ft.Container(height=10),
-                ] + (rescue_rows_content if rescue_rows_content else [
-                    create_empty_state(
-                        message="No rescue missions yet",
-                        padding=20
-                    )
-                ]),
-                spacing=0
-            ),
-            padding=20,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=8,
+        # Define rescue table columns with expand values
+        rescue_columns = [
+            {"label": "Type", "expand": 1},
+            {"label": "Location", "expand": 2},
+            {"label": "Urgency", "expand": 1},
+            {"label": "Details", "expand": 2},
+            {"label": "Status", "expand": 2},
+            {"label": "Actions", "expand": 2},
+        ]
+
+        # Create scrollable DataTable for rescues
+        rescue_table = create_scrollable_data_table(
+            columns=rescue_columns,
+            rows=rescue_rows,
+            height=250,
+            empty_message="No rescue missions yet",
+            column_spacing=15,
+            heading_row_height=45,
+            data_row_height=55,
         )
 
-        # Realtime Rescue Mission map with user's ACTIVE missions only
-        # Exclude cancelled, archived, and removed items from the map
-        active_rescues_for_map = [
+        # Realtime Rescue Mission map with user's missions
+        # Exclude only cancelled and removed items from the map
+        # Archived missions SHOULD appear (user wants to see their completed missions)
+        rescues_for_map = [
             r for r in rescues 
             if not RescueStatus.is_cancelled(r.get("status") or "")
-            and not RescueStatus.is_archived(r.get("status") or "")
             and not RescueStatus.is_removed(r.get("status") or "")
         ]
-        map_widget = self.map_service.create_map_with_markers(active_rescues_for_map)
+        map_widget = self.map_service.create_map_with_markers(rescues_for_map)
         
         if map_widget:
             map_container = ft.Container(
@@ -443,7 +435,7 @@ class CheckStatusPage:
                     ft.Container(height=15),
                     ft.Container(
                         map_widget,
-                        height=350,
+                        height=500,
                         border_radius=8,
                         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
                         border=ft.border.all(1, ft.Colors.GREY_300),
@@ -460,7 +452,7 @@ class CheckStatusPage:
                 ft.Column([
                     ft.Text("Your Rescue Mission Locations", size=16, weight="w600", color=ft.Colors.BLACK87),
                     ft.Container(height=15),
-                    self.map_service.create_empty_map_placeholder(len(active_rescues_for_map)),
+                    self.map_service.create_empty_map_placeholder(len(rescues_for_map)),
                 ], spacing=0),
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
@@ -499,6 +491,27 @@ class CheckStatusPage:
         page.controls.clear()
         page.add(create_gradient_background(main_layout))
         page.update()
+
+    def _create_urgency_badge(self, urgency: str) -> ft.Container:
+        """Create a color-coded urgency badge."""
+        import flet as ft
+        urgency_lower = (urgency or "low").lower()
+        colors = {
+            "low": ft.Colors.GREEN_700,
+            "medium": ft.Colors.ORANGE_700,
+            "high": ft.Colors.RED_700,
+        }
+        return ft.Container(
+            content=ft.Text(
+                urgency_lower.capitalize(),
+                size=11,
+                weight=ft.FontWeight.W_500,
+                color=ft.Colors.WHITE,
+            ),
+            bgcolor=colors.get(urgency_lower, ft.Colors.GREY_600),
+            padding=ft.padding.symmetric(horizontal=8, vertical=2),
+            border_radius=4,
+        )
 
     def _refresh_data(self, page, user_id: int) -> None:
         """Refresh the page by rebuilding with latest data."""

@@ -15,7 +15,7 @@ from app_config import RescueStatus
 from components import (
     create_admin_sidebar, create_mission_status_badge, create_gradient_background,
     create_page_title, create_section_card, create_map_container, create_empty_state,
-    show_snackbar, create_archive_dialog, create_remove_dialog
+    show_snackbar, create_archive_dialog, create_remove_dialog, create_scrollable_data_table
 )
 
 
@@ -42,7 +42,7 @@ class RescueMissionListPage:
 
         # Sidebar (for admin only)
         if is_admin:
-            sidebar = create_admin_sidebar(page)
+            sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
             sidebar = None
 
@@ -63,13 +63,12 @@ class RescueMissionListPage:
                 return ft.Container(
                     ft.Row([
                         ft.Icon(ft.Icons.CANCEL, color=ft.Colors.WHITE, size=14),
-                        ft.Text("Cancelled", color=ft.Colors.WHITE, size=12, weight="w500"),
+                        ft.Text("Cancelled", color=ft.Colors.WHITE, size=11, weight="w500"),
                         ft.Icon(ft.Icons.LOCK, color=ft.Colors.WHITE70, size=12),
                     ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
                     bgcolor=ft.Colors.GREY_600,
                     border_radius=15,
-                    alignment=ft.alignment.center,
                     tooltip="Cancelled by user - status locked",
                 )
             
@@ -84,7 +83,7 @@ class RescueMissionListPage:
                 icon = ft.Icons.PETS
             else:  # PENDING or default
                 bg_color = ft.Colors.ORANGE_700
-                icon = ft.Icons.PETS
+                icon = ft.Icons.PENDING
             
             if is_admin:
                 # Admin can change status with custom dropdown
@@ -95,8 +94,8 @@ class RescueMissionListPage:
                     ft.PopupMenuButton(
                         content=ft.Row([
                             ft.Icon(icon, color=ft.Colors.WHITE, size=14),
-                            ft.Text(RescueStatus.get_label(status), color=ft.Colors.WHITE, size=12, weight="w500"),
-                            ft.Icon(ft.Icons.ARROW_DROP_DOWN, color=ft.Colors.WHITE, size=16),
+                            ft.Text(RescueStatus.get_label(status), color=ft.Colors.WHITE, size=11, weight="w500"),
+                            ft.Icon(ft.Icons.ARROW_DROP_DOWN, color=ft.Colors.WHITE, size=14),
                         ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
                         items=[
                             ft.PopupMenuItem(
@@ -116,10 +115,9 @@ class RescueMissionListPage:
                             ),
                         ],
                     ),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
                     bgcolor=bg_color,
                     border_radius=15,
-                    alignment=ft.alignment.center,
                 )
             else:
                 # User sees static badge
@@ -128,10 +126,9 @@ class RescueMissionListPage:
                         ft.Icon(icon, color=ft.Colors.WHITE, size=14),
                         ft.Text(RescueStatus.get_label(status), color=ft.Colors.WHITE, size=12, weight="w500"),
                     ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
                     bgcolor=bg_color,
                     border_radius=15,
-                    alignment=ft.alignment.center,
                 )
 
         # Helper to create admin action buttons (Archive/Remove)
@@ -185,21 +182,21 @@ class RescueMissionListPage:
                 ft.IconButton(
                     icon=ft.Icons.ARCHIVE_OUTLINED,
                     icon_color=ft.Colors.AMBER_700,
-                    icon_size=20,
+                    icon_size=15,
                     tooltip="Archive",
                     on_click=handle_archive,
                 ),
                 ft.IconButton(
                     icon=ft.Icons.DELETE_OUTLINE,
                     icon_color=ft.Colors.RED_600,
-                    icon_size=20,
+                    icon_size=15,
                     tooltip="Remove",
                     on_click=handle_remove,
                 ),
-            ], spacing=4)
+            ], spacing=0, tight=True)
 
-        # Build table rows content
-        table_rows_content = []
+        # Build table rows for DataTable
+        table_rows = []
         if missions:
             for m in missions:
                 mid = m.get("id")
@@ -208,65 +205,99 @@ class RescueMissionListPage:
                 status = str(m.get("status", ""))
 
                 # Use new columns instead of notes parsing
-                name = m.get("animal_name") or m.get("reporter_name") or ""
-                animal_type = m.get("animal_type") or ""
+                name = m.get("animal_name") or m.get("reporter_name") or "Unknown"
+                animal_type = m.get("animal_type") or "Unknown"
+                reporter_phone = m.get("reporter_phone") or "N/A"
                 details = notes  # Notes now contains only situation description
+                
+                # Truncate long text for table display
+                location_display = location[:30] + "..." if len(location) > 30 else location
+                details_display = details[:40] + "..." if len(details) > 40 else details
 
-                # Create row
-                row_controls = [
-                    ft.Text(name or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
-                    ft.Text(animal_type or "Unknown", size=13, color=ft.Colors.BLACK87, expand=2),
-                    ft.Text(location, size=13, color=ft.Colors.BLACK87, expand=3),
-                    ft.Text(details[:30] + "..." if len(details) > 30 else details, size=13, color=ft.Colors.BLACK87, expand=2),
-                    ft.Container(make_status_badge(status, mid), expand=2),
+                # Build row data
+                row_data = [
+                    ft.Text(f"#{mid}", size=11, color=ft.Colors.TEAL_700, weight="w600"),
+                    ft.Text(name, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                    ft.Text(animal_type, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                    ft.Text(reporter_phone, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                    ft.Container(
+                        ft.Text(location_display, size=11, color=ft.Colors.BLACK87, weight="w500", tooltip=location if len(location) > 30 else None),
+                        tooltip=location if len(location) > 30 else None,
+                    ),
+                    ft.Container(
+                        ft.Text(details_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                        tooltip=details if len(details) > 40 else None,
+                    ),
                 ]
+                
+                # Add Urgency column with color-coded badge
+                urgency = (m.get("urgency") or "medium").lower()
+                urgency_colors = {
+                    "low": (ft.Colors.GREEN_100, ft.Colors.GREEN_700),
+                    "medium": (ft.Colors.ORANGE_100, ft.Colors.ORANGE_700),
+                    "high": (ft.Colors.RED_100, ft.Colors.RED_700),
+                }
+                bg_color, text_color = urgency_colors.get(urgency, (ft.Colors.GREY_100, ft.Colors.GREY_700))
+                urgency_badge = ft.Container(
+                    ft.Text(urgency.capitalize(), size=11, color=text_color, weight="w500"),
+                    bgcolor=bg_color,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    border_radius=10,
+                )
+                row_data.append(urgency_badge)
+                
+                # Add Source column (Emergency or User based on user_id)
+                is_emergency = m.get('user_id') is None
+                if is_emergency:
+                    source_cell = ft.Row([
+                        ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=ft.Colors.RED_600, size=14),
+                        ft.Text("Emergency", size=11, color=ft.Colors.RED_600, weight="w500"),
+                    ], spacing=4, tight=True)
+                else:
+                    source_cell = ft.Row([
+                        ft.Icon(ft.Icons.ACCOUNT_CIRCLE, color=ft.Colors.BLUE_600, size=14),
+                        ft.Text("User", size=11, color=ft.Colors.BLUE_600, weight="w500"),
+                    ], spacing=4, tight=True)
+                row_data.append(source_cell)
+                
+                row_data.append(make_status_badge(status, mid))
                 
                 # Add admin actions column
                 if is_admin:
-                    row_controls.append(ft.Container(make_admin_actions(mid, name), expand=1))
+                    row_data.append(make_admin_actions(mid, name))
 
-                table_rows_content.append(
-                    ft.Column([
-                        ft.Row(row_controls, spacing=15),
-                        ft.Divider(height=1, color=ft.Colors.GREY_200),
-                        ft.Container(height=8),
-                    ], spacing=0)
-                )
+                table_rows.append(row_data)
         
-        # Table container
-        header_controls = [
-            ft.Text("Name", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-            ft.Text("Type", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-            ft.Text("Location", size=13, weight="w600", color=ft.Colors.BLACK87, expand=3),
-            ft.Text("Details", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
-            ft.Text("Status", size=13, weight="w600", color=ft.Colors.BLACK87, expand=2),
+        # Define table columns with expand values for proper sizing
+        table_columns = [
+            {"label": "#", "expand": 0},
+            {"label": "Reporter", "expand": 2},
+            {"label": "Animal", "expand": 1},
+            {"label": "Contact", "expand": 1},
+            {"label": "Location", "expand": 2},
+            {"label": "Details", "expand": 2},
+            {"label": "Urgency", "expand": 1},
+            {"label": "Source", "expand": 1},
+            {"label": "Status", "expand": 2},
         ]
         
-        # Add Actions header for admin
+        # Add Actions column for admin
         if is_admin:
-            header_controls.append(ft.Text("Actions", size=13, weight="w600", color=ft.Colors.BLACK87, expand=1))
+            table_columns.append({"label": "Actions", "expand": 1})
 
-        table_container = ft.Container(
-            ft.Column(
-                [
-                    ft.Row(header_controls, spacing=15),
-                    ft.Divider(height=1, color=ft.Colors.GREY_300),
-                    ft.Container(height=10),
-                ] + (table_rows_content if table_rows_content else [
-                    create_empty_state(
-                        message="No rescue missions found",
-                        padding=20
-                    )
-                ]),
-                spacing=0
-            ),
-            padding=20,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=8,
+        # Create scrollable DataTable
+        data_table = create_scrollable_data_table(
+            columns=table_columns,
+            rows=table_rows,
+            height=400,
+            empty_message="No rescue missions found",
+            column_spacing=13,
+            heading_row_height=45,
+            data_row_height=50,
         )
 
         # Map with rescue mission markers (already filtered to active only)
-        map_widget = self.map_service.create_map_with_markers(missions)
+        map_widget = self.map_service.create_map_with_markers(missions, is_admin=is_admin)
         
         if map_widget:
             map_container = ft.Container(
@@ -307,7 +338,7 @@ class RescueMissionListPage:
             # Rescue Mission List Section
             create_section_card(
                 title="Rescue Missions",
-                content=table_container,
+                content=data_table,
                 show_divider=True,
             ),
             ft.Container(height=20),

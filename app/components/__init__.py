@@ -39,6 +39,7 @@ from .containers import (
     create_page_title,
     create_empty_state,
     create_data_table,
+    create_scrollable_data_table,
     create_stat_card,
     create_map_container,
     create_animal_card,
@@ -58,6 +59,25 @@ from .dialogs import (
 
 # Utility functions
 from .utils import fig_to_base64, is_matplotlib_available
+
+# Animal form component
+from .animal_form import AnimalFormWidget, create_animal_form
+
+# Chart components (Flet native charts)
+from .charts import (
+    CHART_COLORS,
+    PIE_CHART_COLORS,
+    STATUS_COLORS,
+    create_empty_chart_message,
+    create_line_chart,
+    create_bar_chart,
+    create_pie_chart,
+    create_chart_legend,
+    create_clickable_stat_card,
+    show_chart_details_dialog,
+    create_insight_card,
+    create_chart_card,
+)
 
 __all__ = [
     # Headers
@@ -97,6 +117,7 @@ __all__ = [
     "create_page_title",
     "create_empty_state",
     "create_data_table",
+    "create_scrollable_data_table",
     "create_stat_card",
     "create_map_container",
     "create_animal_card",
@@ -112,4 +133,20 @@ __all__ = [
     # Utils
     "fig_to_base64",
     "is_matplotlib_available",
+    # Animal form
+    "AnimalFormWidget",
+    "create_animal_form",
+    # Charts (Flet native)
+    "CHART_COLORS",
+    "PIE_CHART_COLORS",
+    "STATUS_COLORS",
+    "create_empty_chart_message",
+    "create_line_chart",
+    "create_bar_chart",
+    "create_pie_chart",
+    "create_chart_legend",
+    "create_clickable_stat_card",
+    "show_chart_details_dialog",
+    "create_insight_card",
+    "create_chart_card",
 ]

@@ -64,6 +64,19 @@ def render_check_status(page, params: Dict[str, Any]) -> None:
     page.update()
 
 
+def render_user_analytics(page, params: Dict[str, Any]) -> None:
+    """Render the user analytics page."""
+    from views.user_analytics_page import UserAnalyticsPage
+    clear_page(page)
+    user_id = page.session.get("user_id")
+    if not user_id:
+        print("[WARNING] No user_id in session, redirecting to login")
+        page.go("/")
+        return
+    UserAnalyticsPage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
 # ============================================================================
 # USER ROUTES - Add new user routes here
 # ============================================================================
@@ -96,6 +109,12 @@ ROUTES: Dict[str, Dict[str, Any]] = {
     "/check_status": {
         "handler": render_check_status,
         "description": "Check status of user's requests",
+        "requires_auth": True,
+        "allowed_roles": ["user"],
+    },
+    "/user_analytics": {
+        "handler": render_user_analytics,
+        "description": "View personal analytics and statistics",
         "requires_auth": True,
         "allowed_roles": ["user"],
     },

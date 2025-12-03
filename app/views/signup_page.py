@@ -35,21 +35,33 @@ class SignupPage:
         page.title = "Sign Up"
 
         # Header with logo/title
-        header = create_header()        # Name field with label
-        name_label = create_form_label("Name")
-        self._name_field = create_form_text_field(hint_text="Full Name...")
+        header = create_header()
+        
+        # Form fields with icons
+        self._name_field = create_form_text_field(
+            hint_text="Enter your full name",
+            prefix_icon=ft.Icons.PERSON_OUTLINE,
+        )
+        self._email_field = create_form_text_field(
+            hint_text="Enter your email",
+            prefix_icon=ft.Icons.EMAIL_OUTLINED,
+        )
+        self._password_field = create_form_text_field(
+            hint_text="Enter your password",
+            password=True,
+            prefix_icon=ft.Icons.LOCK_OUTLINE,
+        )
+        self._confirm_field = create_form_text_field(
+            hint_text="Confirm your password",
+            password=True,
+            prefix_icon=ft.Icons.LOCK_OUTLINE,
+        )
 
-        # Email field with label
-        email_label = create_form_label("Email Address")
-        self._email_field = create_form_text_field(hint_text="Email...")
-
-        # Password field with label
-        password_label = create_form_label("Password")
-        self._password_field = create_form_text_field(hint_text="Password...", password=True)
-
-        # Confirm password field with label
-        confirm_label = create_form_label("Confirm Password")
-        self._confirm_field = create_form_text_field(hint_text="Confirm Password...", password=True)
+        # Simple text labels
+        name_label = ft.Text("Full Name", size=13, weight="w500", color=ft.Colors.BLACK87)
+        email_label = ft.Text("Email Address", size=13, weight="w500", color=ft.Colors.BLACK87)
+        password_label = ft.Text("Password", size=13, weight="w500", color=ft.Colors.BLACK87)
+        confirm_label = ft.Text("Confirm Password", size=13, weight="w500", color=ft.Colors.BLACK87)
 
         # Create Account button - teal
         submit_btn = create_action_button(
@@ -75,19 +87,19 @@ class SignupPage:
                     ft.Text("Create Your Account", size=24, weight="w600", color=ft.Colors.BLACK87),
                     ft.Container(height=25),  # spacing
                     ft.Container(name_label, width=280, alignment=ft.alignment.center_left),
-                    ft.Container(height=8),
+                    ft.Container(height=6),
                     self._name_field,
-                    ft.Container(height=10),
+                    ft.Container(height=12),
                     ft.Container(email_label, width=280, alignment=ft.alignment.center_left),
-                    ft.Container(height=8),
+                    ft.Container(height=6),
                     self._email_field,
-                    ft.Container(height=10),
+                    ft.Container(height=12),
                     ft.Container(password_label, width=280, alignment=ft.alignment.center_left),
-                    ft.Container(height=8),
+                    ft.Container(height=6),
                     self._password_field,
-                    ft.Container(height=10),
+                    ft.Container(height=12),
                     ft.Container(confirm_label, width=280, alignment=ft.alignment.center_left),
-                    ft.Container(height=8),
+                    ft.Container(height=6),
                     self._confirm_field,
                     ft.Container(height=20),
                     ft.Row([submit_btn, back_btn], alignment="center", spacing=15),
@@ -95,7 +107,7 @@ class SignupPage:
                 horizontal_alignment="center",
                 spacing=0,
             ),
-            padding=35,
+            padding=40,
             alignment=ft.alignment.center,
             width=400,
             bgcolor=ft.Colors.WHITE,

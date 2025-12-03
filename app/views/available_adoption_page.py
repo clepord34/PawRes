@@ -37,7 +37,7 @@ class AvailableAdoptionPage:
         user_name = page.session.get("user_name") or "User"
 
         # Create sidebar
-        sidebar = create_user_sidebar(page, user_name)
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         # Load adoptable animals through state manager
         self._app_state.animals.load_adoptable_animals()

@@ -12,15 +12,36 @@ def create_nav_button(
     text: str,
     on_click: Callable,
     width: int = 160,
-    icon: Optional[object] = None
+    icon: Optional[object] = None,
+    is_active: bool = False
 ) -> object:
-    """Create a navigation button for sidebars."""
+    """Create a navigation button for sidebars.
+    
+    Args:
+        text: Button label text
+        on_click: Click handler callback
+        width: Button width in pixels
+        icon: Optional icon to display
+        is_active: Whether this button represents the current page (for highlighting)
+    """
     if ft is None:
         raise RuntimeError("Flet must be installed to create buttons")
     
+    # Use different colors for active state
+    if is_active:
+        bg_color = ft.Colors.TEAL_600
+        text_color = ft.Colors.WHITE
+        border_color = ft.Colors.TEAL_700
+        overlay_color = ft.Colors.TEAL_700
+    else:
+        bg_color = ft.Colors.WHITE
+        text_color = ft.Colors.BLACK87
+        border_color = ft.Colors.TEAL_400
+        overlay_color = ft.Colors.TEAL_50
+    
     content = [
-        ft.Text(text, size=11 if width <= 160 else 13, weight="w500", 
-                color=ft.Colors.BLACK87, text_align=ft.TextAlign.CENTER),
+        ft.Text(text, size=11 if width <= 160 else 13, weight="w600" if is_active else "w500", 
+                color=text_color, text_align=ft.TextAlign.CENTER),
     ]
     
     return ft.Container(
@@ -28,14 +49,14 @@ def create_nav_button(
             content=ft.Row(content, spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             on_click=on_click,
             style=ft.ButtonStyle(
-                bgcolor=ft.Colors.WHITE,
-                overlay_color=ft.Colors.TEAL_50,
+                bgcolor=bg_color,
+                overlay_color=overlay_color,
                 shape=ft.RoundedRectangleBorder(radius=8),
                 padding=15,
             ),
         ),
         width=width,
-        border=ft.border.all(2, ft.Colors.TEAL_400),
+        border=ft.border.all(2, border_color),
         border_radius=8,
     )
 

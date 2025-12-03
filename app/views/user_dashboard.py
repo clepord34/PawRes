@@ -2,27 +2,23 @@
 from __future__ import annotations
 from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, timedelta
-from io import BytesIO
-import base64
 import threading
 import random
-
-# Set matplotlib backend to Agg before importing pyplot
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 
 import app_config
 from services.animal_service import AnimalService
 from services.rescue_service import RescueService
 from services.adoption_service import AdoptionService
-from storage.database import Database
+from services.analytics_service import AnalyticsService
 from services.map_service import MapService
 from services.photo_service import load_photo
 from state import get_app_state
 from components import (
     create_user_sidebar, create_gradient_background,
-    create_section_card, create_chart_container, fig_to_base64
+    create_section_card, create_chart_container,
+    create_bar_chart, create_pie_chart, create_chart_legend,
+    create_empty_chart_message, create_clickable_stat_card, show_chart_details_dialog,
+    CHART_COLORS, STATUS_COLORS
 )
 
 
@@ -32,6 +28,7 @@ class UserDashboard:
         self.animal_service = AnimalService(self.db_path)
         self.rescue_service = RescueService(self.db_path)
         self.adoption_service = AdoptionService(self.db_path)
+        self.analytics_service = AnalyticsService(self.db_path)
         self.map_service = MapService()
 
     def build(self, page) -> None:
@@ -53,137 +50,309 @@ class UserDashboard:
         all_rescues = self.rescue_service.get_all_missions() or []
         
         # Get ALL user rescues including closed cases for accurate count
-        db = Database(self.db_path)
-        all_user_rescues_query = db.fetch_all(
-            "SELECT * FROM rescue_missions WHERE user_id = ? ORDER BY mission_date DESC",
-            (user_id,)
-        ) if user_id else []
+        # Use rescue service to follow proper architecture - services handle DB access
+        if user_id:
+            user_rescues = self.rescue_service.get_user_missions(user_id)
+        else:
+            user_rescues = []
         
         # Get user-specific data if user_id exists
         if user_id:
             user_adoptions = [a for a in all_adoptions if a.get("user_id") == user_id]
-            user_rescues = all_user_rescues_query  # Use all rescues including closed
         else:
             user_adoptions = []
-            user_rescues = []
         
-        # Count totals and pending
-        # Total adoptions = approved adoptions OR was_approved (even if later deleted)
-        total_adoptions = len([a for a in user_adoptions 
-                              if (a.get("status") or "").lower() == "approved" 
-                              or a.get("was_approved") == 1])
-        rescue_reports_filed = len(user_rescues)
-        pending_adoption_requests = len([a for a in user_adoptions if (a.get("status") or "").lower() == "pending"])
-        ongoing_rescue_missions = len([r for r in user_rescues if (r.get("status") or "").lower() == "on-going"])
+        # Count totals
+        total_adoptions = len(user_adoptions)
+        total_rescues = len(user_rescues)
 
-        # Create chart data
-        # Bar chart for user activity
-        try:
-            fig, ax = plt.subplots(figsize=(4.5, 2.5))
-            categories = ['Total Adoptions', 'Rescue Reports']
-            values = [total_adoptions, rescue_reports_filed]
-            colors = ['#2196F3', '#FFA726']
-            ax.bar(categories, values, color=colors, width=0.6)
-            ax.set_ylabel('Count', fontsize=9)
-            ax.set_title('User Management', fontsize=10, pad=10)
-            ax.tick_params(axis='both', labelsize=8)
-            ax.set_ylim(0, max(values) + 2 if max(values) > 0 else 5)
-            plt.tight_layout()
-            chart_b64 = fig_to_base64(fig)
-        except Exception:
-            chart_b64 = None
+        # Get user-specific status distributions for pie charts
+        user_rescue_status_dist = self.analytics_service.get_user_rescue_status_distribution(user_id) if user_id else {}
+        user_adoption_status_dist = self.analytics_service.get_user_adoption_status_distribution(user_id) if user_id else {}
 
         # Get featured adoptable animals (randomized)
         adoptable_animals = self.animal_service.get_adoptable_animals() or []
         if adoptable_animals:
             random.shuffle(adoptable_animals)
-        featured_animal = adoptable_animals[0] if adoptable_animals else None
 
         # Sidebar with navigation
-        sidebar = create_user_sidebar(page, user_name)
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
-        # My Activity card with chart
-        activity_chart = None
-        if chart_b64:
-            activity_chart = ft.Image(src_base64=chart_b64, width=380, height=220, fit=ft.ImageFit.CONTAIN)
-        else:
-            activity_chart = ft.Container(
-                ft.Text("Chart unavailable", color=ft.Colors.BLACK54),
-                width=380,
-                height=220,
-                alignment=ft.alignment.center,
-            )
-
-        activity_card = ft.Container(
-            ft.Column([
-                ft.Text("My Activity", size=16, weight="w600", color=ft.Colors.BLACK87),
-                ft.Container(height=10),
-                activity_chart,
-                ft.Container(height=15),
+        # ===== YOUR IMPACT SECTION =====
+        # Get user activity stats for impact display
+        user_activity_stats = self.analytics_service.get_user_activity_stats(user_id) if user_id else {}
+        rescued_successfully = user_rescue_status_dist.get("rescued", 0) if user_rescue_status_dist else 0
+        
+        def create_impact_stat(icon, value, label, color):
+            return ft.Container(
                 ft.Column([
-                    ft.Row([
-                        ft.Container(
-                            width=12,
-                            height=12,
-                            bgcolor=ft.Colors.BLUE_500,
-                            border_radius=2,
-                        ),
-                        ft.Text(f"Total Adoptions ({total_adoptions})", size=12, color=ft.Colors.BLACK87),
-                    ], spacing=8),
-                    ft.Container(height=5),
-                    ft.Row([
-                        ft.Container(
-                            width=12,
-                            height=12,
-                            bgcolor=ft.Colors.ORANGE_600,
-                            border_radius=2,
-                        ),
-                        ft.Text(f"Rescue Reports Filed ({rescue_reports_filed})", size=12, color=ft.Colors.BLACK87),
-                    ], spacing=8),
-                ], spacing=2),
-                ft.Container(height=15),
-                ft.Text("Current Applications:", size=13, weight="w600", color=ft.Colors.BLACK87),
-                ft.Container(height=8),
-                ft.Row([
                     ft.Container(
-                        width=8,
-                        height=8,
-                        bgcolor=ft.Colors.BLUE_500,
-                        border_radius=4,
+                        ft.Icon(icon, size=24, color=ft.Colors.WHITE),
+                        width=48,
+                        height=48,
+                        bgcolor=color,
+                        border_radius=24,
+                        alignment=ft.alignment.center,
                     ),
-                    ft.Text(f"Adoption Requests (Pending: {pending_adoption_requests})", size=12, color=ft.Colors.BLACK87),
-                ], spacing=8),
-                ft.Container(height=5),
+                    ft.Container(height=8),
+                    ft.Text(str(value), size=24, weight="bold", color=ft.Colors.BLACK87),
+                    ft.Text(label, size=11, color=ft.Colors.BLACK54, text_align=ft.TextAlign.CENTER),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                width=120,
+                padding=ft.padding.symmetric(vertical=15),
+            )
+        
+        impact_section = ft.Container(
+            ft.Column([
                 ft.Row([
-                    ft.Container(
-                        width=8,
-                        height=8,
-                        bgcolor=ft.Colors.ORANGE_600,
-                        border_radius=4,
-                    ),
-                    ft.Text(f"Rescue Mission (On-going: {ongoing_rescue_missions})", size=12, color=ft.Colors.BLACK87),
+                    ft.Icon(ft.Icons.AUTO_AWESOME, size=22, color=ft.Colors.AMBER_600),
+                    ft.Text("Your Impact", size=16, weight="w600", color=ft.Colors.BLACK87),
                 ], spacing=8),
-            ], spacing=0, horizontal_alignment="start"),
-            width=450,
+                ft.Divider(height=10, color=ft.Colors.GREY_200, thickness=2),
+                ft.Row([
+                    create_impact_stat(ft.Icons.PETS, total_rescues, "Rescues\nReported", ft.Colors.ORANGE_600),
+                    create_impact_stat(ft.Icons.CHECK_CIRCLE, rescued_successfully, "Successfully\nRescued", ft.Colors.GREEN_600),
+                    create_impact_stat(ft.Icons.FAVORITE, user_activity_stats.get("total_adoptions", 0), "Animals\nAdopted", ft.Colors.TEAL_600),
+                    create_impact_stat(ft.Icons.PENDING, user_activity_stats.get("pending_adoption_requests", 0), "Pending\nRequests", ft.Colors.BLUE_600),
+                ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+                ft.Container(height=7),
+                ft.Container(
+                    ft.Text(
+                        "Thank you for making a difference in animals' lives! 🐾",
+                        size=12,
+                        color=ft.Colors.TEAL_700,
+                        weight="w500",
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                    bgcolor=ft.Colors.TEAL_50,
+                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    border_radius=20,
+                ),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+            margin=ft.margin.symmetric(horizontal=50),
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
         )
 
-        # Featured Adoptables carousel with auto-scroll
+        # ===== WELCOME SECTION =====
+        def create_quick_action_btn(icon, text, color, route):
+            return ft.ElevatedButton(
+                content=ft.Row([
+                    ft.Icon(icon, size=18, color=ft.Colors.WHITE),
+                    ft.Text(text, size=13, weight="w500", color=ft.Colors.WHITE),
+                ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                height=40,
+                style=ft.ButtonStyle(
+                    bgcolor=color,
+                    shape=ft.RoundedRectangleBorder(radius=20),
+                    padding=ft.padding.symmetric(horizontal=20),
+                ),
+                on_click=lambda e: page.go(route),
+            )
+        
+        welcome_section = ft.Container(
+            ft.Row([
+                ft.Row([
+                    ft.Icon(ft.Icons.WAVING_HAND, size=28, color=ft.Colors.ORANGE_400),
+                    ft.Column([
+                        ft.Text(f"Welcome back, {user_name}!", size=22, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Text("Here's your activity overview", size=13, color=ft.Colors.BLACK54),
+                    ], spacing=2),
+                ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ft.Row([
+                    create_quick_action_btn(ft.Icons.PETS, "Report Rescue", ft.Colors.ORANGE_600, "/rescue_form"),
+                    create_quick_action_btn(ft.Icons.FAVORITE, "Apply to Adopt", ft.Colors.TEAL_500, "/available_adoption"),
+                ], spacing=12),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=ft.padding.symmetric(horizontal=25, vertical=18),
+            bgcolor=ft.Colors.WHITE,
+            border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
+            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+        )
+
+        # ===== MY ADOPTIONS CARD =====
+        # Create adoption pie chart with legend sync
+        adoption_pie_refs = {}  # For legend-pie sync
+        if user_adoption_status_dist and sum(user_adoption_status_dist.values()) > 0:
+            adoption_sections = []
+            total = sum(user_adoption_status_dist.values())
+            status_order = ["pending", "approved", "denied"]
+            for status in status_order:
+                if status in user_adoption_status_dist:
+                    value = user_adoption_status_dist[status]
+                    pct = (value / total * 100) if total > 0 else 0
+                    adoption_sections.append({
+                        "value": value,
+                        "title": f"{pct:.0f}%",
+                        "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
+                    })
+            adoption_pie = create_pie_chart(adoption_sections, width=150, height=150, section_radius=68, legend_refs=adoption_pie_refs)
+            
+            # Build legend using create_chart_legend for proper sync
+            adoption_legend_items = [
+                {"label": status.capitalize(), "value": user_adoption_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])}
+                for status in status_order
+            ]
+            adoption_legend = create_chart_legend(adoption_legend_items, horizontal=False, pie_refs=adoption_pie_refs)
+            adoption_data_for_dialog = [{"label": status.capitalize(), "value": user_adoption_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])} for status in status_order if status in user_adoption_status_dist]
+        else:
+            adoption_pie = ft.Container(
+                ft.Column([
+                    ft.Icon(ft.Icons.PIE_CHART, size=48, color=ft.Colors.GREY_400),
+                    ft.Text("No data", size=12, color=ft.Colors.GREY_500),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                width=150, height=150, alignment=ft.alignment.center,
+            )
+            adoption_legend = ft.Text("No applications yet", size=13, color=ft.Colors.BLACK54)
+            adoption_data_for_dialog = []
+        
+        def show_adoption_details(e):
+            if adoption_data_for_dialog:
+                show_chart_details_dialog(page, "My Adoption Status Details", adoption_data_for_dialog, "pie")
+
+        adoptions_card = ft.Container(
+            ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.FAVORITE, size=22, color=ft.Colors.TEAL_600),
+                    ft.Text("My Adoptions", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ft.Container(expand=True),
+                    ft.Container(
+                        ft.Text(str(total_adoptions), size=22, weight="bold", color=ft.Colors.TEAL_600),
+                    ),
+                    ft.Container(
+                        ft.IconButton(
+                            icon=ft.Icons.OPEN_IN_NEW,
+                            icon_size=16,
+                            icon_color=ft.Colors.TEAL_600,
+                            tooltip="View detailed breakdown",
+                            on_click=show_adoption_details,
+                        ),
+                        bgcolor=ft.Colors.TEAL_50,
+                        border_radius=8,
+                        border=ft.border.all(1, ft.Colors.TEAL_200),
+                    ) if adoption_data_for_dialog else ft.Container(),
+                ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ft.Container(height=15),
+                # Content: Chart + Legend side by side
+                ft.Row([
+                    ft.Container(
+                        adoption_pie,
+                        width=150,
+                        height=150,
+                    ),
+                    ft.Container(width=20),
+                    adoption_legend,
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=0),
+            width=360,
+            height=230,
+            padding=20,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
+            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+        )
+
+        # ===== MY RESCUES CARD =====
+        # Create rescue pie chart with legend sync
+        rescue_pie_refs = {}  # For legend-pie sync
+        if user_rescue_status_dist and sum(user_rescue_status_dist.values()) > 0:
+            rescue_sections = []
+            total = sum(user_rescue_status_dist.values())
+            status_order = ["pending", "on-going", "rescued", "failed"]
+            for status in status_order:
+                if status in user_rescue_status_dist:
+                    value = user_rescue_status_dist[status]
+                    pct = (value / total * 100) if total > 0 else 0
+                    rescue_sections.append({
+                        "value": value,
+                        "title": f"{pct:.0f}%",
+                        "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
+                    })
+            rescue_pie = create_pie_chart(rescue_sections, width=150, height=150, section_radius=68, legend_refs=rescue_pie_refs)
+            
+            # Build legend using create_chart_legend for proper sync
+            rescue_legend_items = [
+                {"label": status.capitalize(), "value": user_rescue_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])}
+                for status in status_order
+            ]
+            rescue_legend = create_chart_legend(rescue_legend_items, horizontal=False, pie_refs=rescue_pie_refs)
+            rescue_data_for_dialog = [{"label": status.capitalize(), "value": user_rescue_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])} for status in status_order if status in user_rescue_status_dist]
+        else:
+            rescue_pie = ft.Container(
+                ft.Column([
+                    ft.Icon(ft.Icons.PIE_CHART, size=48, color=ft.Colors.GREY_400),
+                    ft.Text("No data", size=12, color=ft.Colors.GREY_500),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                width=150, height=150, alignment=ft.alignment.center,
+            )
+            rescue_legend = ft.Text("No reports yet", size=13, color=ft.Colors.BLACK54)
+            rescue_data_for_dialog = []
+        
+        def show_rescue_details(e):
+            if rescue_data_for_dialog:
+                show_chart_details_dialog(page, "My Rescue Status Details", rescue_data_for_dialog, "pie")
+
+        rescues_card = ft.Container(
+            ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.PETS, size=22, color=ft.Colors.ORANGE_600),
+                    ft.Text("My Rescues", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ft.Container(expand=True),
+                    ft.Container(
+                        ft.Text(str(total_rescues), size=22, weight="bold", color=ft.Colors.ORANGE_600),
+                    ),
+                    ft.Container(
+                        ft.IconButton(
+                            icon=ft.Icons.OPEN_IN_NEW,
+                            icon_size=16,
+                            icon_color=ft.Colors.TEAL_600,
+                            tooltip="View detailed breakdown",
+                            on_click=show_rescue_details,
+                        ),
+                        bgcolor=ft.Colors.TEAL_50,
+                        border_radius=8,
+                        border=ft.border.all(1, ft.Colors.TEAL_200),
+                    ) if rescue_data_for_dialog else ft.Container(),
+                ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ft.Container(height=15),
+                # Content: Chart + Legend side by side
+                ft.Row([
+                    ft.Container(
+                        rescue_pie,
+                        width=150,
+                        height=150,
+                    ),
+                    ft.Container(width=20),
+                    rescue_legend,
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=0),
+            width=360,
+            height=230,
+            padding=20,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
+            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+        )
+
+        # ===== FEATURED ADOPTABLES CAROUSEL =====
         if adoptable_animals:
-            # State for carousel
-            current_index = [0]  # Use list to allow mutation in closures
+            current_index = [0]
             is_hovered = [False]
             auto_scroll_timer = [None]
             
-            # Create animal cards for each adoptable animal (max 5 for carousel)
             carousel_animals = adoptable_animals[:5]
             num_animals = len(carousel_animals)
+            has_multiple_animals = num_animals > 1
             
             def create_animal_card(animal: dict, index: int) -> ft.Control:
-                """Create a card for an animal in the carousel."""
                 animal_id = animal.get("id")
                 animal_name = animal.get("name", "Unknown")
                 animal_age = animal.get("age", "N/A")
@@ -194,68 +363,66 @@ class UserDashboard:
                 if animal_photo:
                     animal_image = ft.Image(
                         src_base64=animal_photo,
-                        width=200,
-                        height=200,
+                        width=220,
+                        height=220,
                         fit=ft.ImageFit.COVER,
-                        border_radius=8,
+                        border_radius=12,
                     )
                 else:
                     animal_image = ft.Container(
                         ft.Icon(ft.Icons.PETS, size=80, color=ft.Colors.GREY_400),
-                        width=200,
-                        height=200,
+                        width=220,
+                        height=220,
                         bgcolor=ft.Colors.GREY_200,
-                        border_radius=8,
+                        border_radius=12,
                         alignment=ft.alignment.center,
                     )
 
                 return ft.Column([
                     animal_image,
-                    ft.Container(height=10),
-                    ft.Text(f"{animal_name}, {animal_age}yrs old", size=14, weight="bold", color=ft.Colors.BLACK87),
+                    ft.Container(height=15),
+                    ft.Text(f"{animal_name}, {animal_age}yrs old", size=17, weight="bold", color=ft.Colors.BLACK87),
+                    ft.Container(height=6),
                     ft.Row([
-                        ft.Text(animal_species, size=11, color=ft.Colors.ORANGE_600, weight="w500"),
-                        ft.Text(animal_health, size=11, color=ft.Colors.GREEN_600, weight="w500"),
-                    ], spacing=20, alignment="center"),
-                    ft.Container(height=10),
+                        ft.Text(animal_species, size=13, color=ft.Colors.ORANGE_600, weight="w500"),
+                        ft.Container(width=1, height=14, bgcolor=ft.Colors.GREY_300),
+                        ft.Text(animal_health.capitalize(), size=13, color=ft.Colors.GREEN_600, weight="w500"),
+                    ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Container(height=15),
                     ft.ElevatedButton(
                         "Adopt",
-                        width=120,
+                        width=160,
+                        height=42,
                         on_click=lambda e, aid=animal_id: page.go(f"/adoption_form?animal_id={aid}"),
                         style=ft.ButtonStyle(
-                            bgcolor=ft.Colors.TEAL_400,
+                            bgcolor=ft.Colors.TEAL_500,
                             color=ft.Colors.WHITE,
-                            shape=ft.RoundedRectangleBorder(radius=20),
+                            shape=ft.RoundedRectangleBorder(radius=22),
                         )
                     ),
-                ], horizontal_alignment="center", spacing=0)
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
 
-            # Create dot indicators
+            # Dot indicators
             dot_containers = []
-            for i in range(num_animals):
-                dot = ft.Container(
-                    width=10,
-                    height=10,
-                    bgcolor=ft.Colors.ORANGE_400 if i == 0 else ft.Colors.GREY_300,
-                    border_radius=5,
-                    animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
-                )
-                dot_containers.append(dot)
+            if has_multiple_animals:
+                for i in range(num_animals):
+                    dot = ft.Container(
+                        width=10,
+                        height=10,
+                        bgcolor=ft.Colors.TEAL_500 if i == 0 else ft.Colors.GREY_300,
+                        border_radius=5,
+                        animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+                    )
+                    dot_containers.append(dot)
 
-            dots_row = ft.Row(dot_containers, spacing=5, alignment="center")
-
-            # Create the carousel content container
             carousel_content = ft.Container(
                 create_animal_card(carousel_animals[0], 0),
                 alignment=ft.alignment.center,
-                animate_scale=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
                 animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
-                scale=1.0,
                 opacity=1.0,
             )
 
             def update_carousel(new_index: int):
-                """Update the carousel to show the animal at new_index."""
                 if new_index < 0:
                     new_index = num_animals - 1
                 elif new_index >= num_animals:
@@ -263,157 +430,197 @@ class UserDashboard:
                 
                 current_index[0] = new_index
                 
-                # Update dots
                 for i, dot in enumerate(dot_containers):
-                    dot.bgcolor = ft.Colors.ORANGE_400 if i == new_index else ft.Colors.GREY_300
+                    dot.bgcolor = ft.Colors.TEAL_500 if i == new_index else ft.Colors.GREY_300
                 
-                # Fade out, change content, fade in
                 carousel_content.opacity = 0.0
-                carousel_content.scale = 0.95
                 page.update()
                 
-                # Small delay for animation, then update content
                 def update_content():
                     carousel_content.content = create_animal_card(carousel_animals[new_index], new_index)
                     carousel_content.opacity = 1.0
-                    carousel_content.scale = 1.05 if is_hovered[0] else 1.0
                     page.update()
                 
-                # Use threading timer for the delay
                 threading.Timer(0.15, update_content).start()
 
+            def on_prev_click(e):
+                update_carousel(current_index[0] - 1)
+
+            def on_next_click(e):
+                update_carousel(current_index[0] + 1)
+
             def on_dot_click(index: int):
-                """Handle dot click to navigate to specific slide."""
                 def handler(e):
                     update_carousel(index)
                 return handler
 
-            # Make dots clickable
             for i, dot in enumerate(dot_containers):
                 dot.on_click = on_dot_click(i)
-                dot.ink = True
 
             def start_auto_scroll():
-                """Start auto-scrolling the carousel."""
+                if not has_multiple_animals:
+                    return
+                
                 def auto_scroll():
                     if not is_hovered[0]:
                         update_carousel(current_index[0] + 1)
-                    # Schedule next auto-scroll
                     if not is_hovered[0]:
-                        auto_scroll_timer[0] = threading.Timer(3.0, auto_scroll)
+                        auto_scroll_timer[0] = threading.Timer(4.0, auto_scroll)
                         auto_scroll_timer[0].start()
                 
-                # Start the first timer
-                auto_scroll_timer[0] = threading.Timer(3.0, auto_scroll)
+                auto_scroll_timer[0] = threading.Timer(4.0, auto_scroll)
                 auto_scroll_timer[0].start()
 
             def on_hover(e):
-                """Handle hover events on the carousel."""
                 is_hovered[0] = e.data == "true"
-                
                 if is_hovered[0]:
-                    # Stop auto-scroll and scale up
                     if auto_scroll_timer[0]:
                         auto_scroll_timer[0].cancel()
                 else:
-                    # Resume auto-scroll and scale down
-                    start_auto_scroll()
-                
-                page.update()
+                    if has_multiple_animals:
+                        start_auto_scroll()
 
-            # Start auto-scrolling
-            start_auto_scroll()
+            if has_multiple_animals:
+                start_auto_scroll()
+
+            # Navigation arrows
+            nav_row = ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.CHEVRON_LEFT,
+                    icon_color=ft.Colors.TEAL_600,
+                    icon_size=24,
+                    on_click=on_prev_click,
+                    tooltip="Previous",
+                ) if has_multiple_animals else ft.Container(width=40),
+                ft.Row(dot_containers, spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                ft.IconButton(
+                    icon=ft.Icons.CHEVRON_RIGHT,
+                    icon_color=ft.Colors.TEAL_600,
+                    icon_size=24,
+                    on_click=on_next_click,
+                    tooltip="Next",
+                ) if has_multiple_animals else ft.Container(width=40),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
 
             featured_card = ft.Container(
                 ft.Column([
-                    ft.Text("Featured Adoptables", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    carousel_content,
-                    ft.Container(height=20),
-                    dots_row,
-                ], horizontal_alignment="center", spacing=0),
-                width=280,
-                padding=20,
+                    ft.Row([
+                        ft.Icon(ft.Icons.STAR, size=22, color=ft.Colors.AMBER_600),
+                        ft.Text("Featured Adoptables", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Container(height=8),
+                    ft.Container(carousel_content, expand=True, alignment=ft.alignment.center),
+                    nav_row,
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                width=320,
+                height=475,
+                padding=ft.padding.only(left=20, right=20, top=15, bottom=10),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
                 on_hover=on_hover,
             )
         else:
             featured_card = ft.Container(
                 ft.Column([
-                    ft.Text("Featured Adoptables", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
+                    ft.Row([
+                        ft.Icon(ft.Icons.STAR, size=22, color=ft.Colors.AMBER_600),
+                        ft.Text("Featured Adoptables", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Container(height=8),
                     ft.Container(
-                        ft.Text("No animals available", size=12, color=ft.Colors.BLACK54),
-                        width=200,
-                        height=200,
+                        ft.Column([
+                            ft.Icon(ft.Icons.PETS, size=80, color=ft.Colors.GREY_400),
+                            ft.Text("No animals available", size=14, color=ft.Colors.BLACK54),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
+                        expand=True,
                         alignment=ft.alignment.center,
                     ),
-                ], horizontal_alignment="center"),
-                width=280,
-                padding=20,
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                width=320,
+                height=475,
+                padding=ft.padding.only(left=20, right=20, top=15, bottom=10),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
             )
 
-        # Realtime Rescue Mission map with markers
-        map_widget = self.map_service.create_map_with_markers(all_rescues, zoom=11)
+        # ===== REALTIME MAP =====
+        map_widget = self.map_service.create_map_with_markers(all_rescues, zoom=11, is_admin=False)
         
         if map_widget:
             map_card = ft.Container(
                 ft.Column([
-                    ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
+                    ft.Row([
+                        ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ], spacing=8),
+                    ft.Divider(height=15, color=ft.Colors.GREY_200),
                     ft.Container(
                         map_widget,
-                        width=750,
-                        height=300,
+                        height=500,
                         border_radius=8,
                         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                        border=ft.border.all(1, ft.Colors.GREY_300),
                     ),
-                ], spacing=0, horizontal_alignment="start"),
-                width=790,
+                ], spacing=0),
+                margin=ft.margin.symmetric(horizontal=80),
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
             )
         else:
-            # Fallback to placeholder
             map_card = ft.Container(
                 ft.Column([
-                    ft.Text("Realtime Rescue Mission", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
+                    ft.Row([
+                        ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ], spacing=8),
+                    ft.Divider(height=15, color=ft.Colors.GREY_200),
                     self.map_service.create_empty_map_placeholder(len(all_rescues)),
-                ], spacing=0, horizontal_alignment="start"),
-                width=790,
+                ], spacing=0),
                 padding=20,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=12,
-            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
-        )
+                bgcolor=ft.Colors.WHITE,
+                border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
+                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+            )
 
-        # Main content area
+        # ===== MAIN LAYOUT =====
+        # Activity section: Left side has activity cards stacked, right side has featured
+        activity_section = ft.Row([
+            # Left: My Adoptions and My Rescues stacked vertically
+            ft.Column([
+                adoptions_card,
+                rescues_card,
+            ], spacing=15),
+            # Right: Featured Adoptables
+            featured_card,
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20, vertical_alignment=ft.CrossAxisAlignment.START)
+        
         main_content = ft.Container(
             ft.Column([
-                ft.Text("User Dashboard Overview", size=28, weight="bold", color=ft.Colors.with_opacity(0.6, ft.Colors.BLACK), text_align=ft.TextAlign.CENTER),
+                # Welcome section
+                welcome_section,
                 ft.Container(height=20),
-                ft.Row([
-                    activity_card,
-                    ft.Container(width=20),
-                    featured_card,
-                ], alignment="center"),
+                # Your Impact section
+                impact_section,
                 ft.Container(height=20),
-                ft.Container(
-                    map_card,
-                    alignment=ft.alignment.center,
-                ),
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
+                # Activity section
+                activity_section,
+                ft.Container(height=20),
+                # Map
+                map_card,
+                ft.Container(height=30),
+            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=30,
             expand=True,
-        )        # Main layout
+        )
+
         main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
 
         page.controls.clear()

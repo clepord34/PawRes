@@ -146,7 +146,6 @@ class RescueService:
         """
         animal_type = mission.get('animal_type') or 'Other'
         animal_name = mission.get('animal_name') or f"Rescued {animal_type}"
-        location = mission.get('location') or ''
         
         # Map common animal types to species (capitalized for consistency)
         species = animal_type.lower()
@@ -160,18 +159,16 @@ class RescueService:
             species = animal_type.capitalize()
         
         # Create animal with 'processing' status - admin must set up details first
-        # Import here to avoid circular imports
         from app_config import AnimalStatus
         sql = """
-            INSERT INTO animals (name, species, status, description, rescue_mission_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO animals (name, species, status, rescue_mission_id)
+            VALUES (?, ?, ?, ?)
         """
         try:
             animal_id = self.db.execute(sql, (
                 animal_name,
                 species,
                 AnimalStatus.PROCESSING,
-                f"Rescued from: {location}. Awaiting admin setup.",
                 mission.get('id')
             ))
             return animal_id

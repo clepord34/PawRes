@@ -47,6 +47,8 @@ app/assets/icons/*
 !app/assets/icons/.gitkeep
 app/assets/images/*
 !app/assets/images/.gitkeep
+app/assets/templates/*
+!app/assets/templates/.gitkeep
 
 # Environment variables
 .env

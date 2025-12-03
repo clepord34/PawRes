@@ -134,6 +134,75 @@ class AnalyticsService:
 
         return (day_labels, rescued_counts, adopted_counts), type_dist, status_counts
 
+    def get_chart_data_14_days(self) -> Tuple[List[str], List[int], List[int]]:
+        """Return 14-day trend data for rescued vs adopted chart (admin dashboard).
+        
+        Returns:
+            Tuple containing (day_labels, rescued_counts, adopted_counts)
+        """
+        # Prepare day labels for last 14 days
+        now = datetime.utcnow()
+        days: List[datetime] = []
+        for i in range(13, -1, -1):
+            d = now - timedelta(days=i)
+            days.append(d)
+        day_labels = [d.strftime("%m-%d") for d in days]
+        day_dates = [d.strftime("%Y-%m-%d") for d in days]
+
+        # Initialize counts
+        rescued_counts = [0 for _ in day_labels]
+        adopted_counts = [0 for _ in day_labels]
+
+        # Count rescued missions by day
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        for ms in missions:
+            dt = ms.get("mission_date")
+            status = (ms.get("status") or "").lower()
+            base_status = RescueStatus.get_base_status(status)
+            is_rescued = base_status == RescueStatus.RESCUED
+            if not dt or not is_rescued:
+                continue
+            if isinstance(dt, datetime):
+                d = dt
+            else:
+                try:
+                    d = datetime.fromisoformat(str(dt))
+                except (ValueError, TypeError):
+                    try:
+                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        continue
+            date_str = d.strftime("%Y-%m-%d")
+            if date_str in day_dates:
+                idx = day_dates.index(date_str)
+                rescued_counts[idx] += 1
+
+        # Count adopted animals by day
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        for req in requests:
+            dt = req.get("request_date")
+            if not dt:
+                continue
+            if isinstance(dt, datetime):
+                d = dt
+            else:
+                try:
+                    d = datetime.fromisoformat(str(dt))
+                except (ValueError, TypeError):
+                    try:
+                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        continue
+            date_str = d.strftime("%Y-%m-%d")
+            if date_str in day_dates:
+                idx = day_dates.index(date_str)
+                status_lower = (req.get("status") or "").lower()
+                base_status = AdoptionStatus.get_base_status(status_lower)
+                if base_status in app_config.APPROVED_ADOPTION_STATUSES or req.get("was_approved") == 1:
+                    adopted_counts[idx] += 1
+
+        return (day_labels, rescued_counts, adopted_counts)
+
     def get_animal_statistics(self) -> Tuple[Dict[str, int], Dict[str, int]]:
         """Calculate animal type distribution and health status counts.
         
@@ -340,6 +409,561 @@ class AnalyticsService:
             "pending_adoption_requests": pending_adoption_requests,
             "ongoing_rescue_missions": ongoing_rescue_missions,
         }
+
+    def get_rescue_status_distribution(self) -> Dict[str, int]:
+        """Get rescue mission status distribution.
+        
+        Returns:
+            Dictionary with counts for each status: pending, on-going, rescued, failed
+        """
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        
+        status_counts = {
+            "pending": 0,
+            "on-going": 0,
+            "rescued": 0,
+            "failed": 0,
+        }
+        
+        for mission in missions:
+            status = RescueStatus.get_base_status((mission.get("status") or "").lower())
+            if status in status_counts:
+                status_counts[status] += 1
+        
+        return status_counts
+
+    def get_adoption_status_distribution(self) -> Dict[str, int]:
+        """Get adoption request status distribution.
+        
+        Returns:
+            Dictionary with counts for each status: pending, approved, denied
+        """
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        
+        status_counts = {
+            "pending": 0,
+            "approved": 0,
+            "denied": 0,
+        }
+        
+        for req in requests:
+            status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+            # Use current status - was_approved is only for historical tracking when archived
+            if status == "approved":
+                status_counts["approved"] += 1
+            elif status == "denied":
+                status_counts["denied"] += 1
+            elif status == "pending":
+                status_counts["pending"] += 1
+        
+        return status_counts
+
+    def get_urgency_distribution(self) -> Dict[str, int]:
+        """Get rescue mission urgency level distribution.
+        
+        Returns:
+            Dictionary with counts for each urgency: low, medium, high
+        """
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        
+        urgency_counts = {
+            "low": 0,
+            "medium": 0,
+            "high": 0,
+        }
+        
+        for mission in missions:
+            urgency = (mission.get("urgency") or "medium").lower()
+            if urgency in urgency_counts:
+                urgency_counts[urgency] += 1
+            else:
+                urgency_counts["medium"] += 1  # Default fallback
+        
+        return urgency_counts
+
+    def get_pending_rescue_missions(self) -> int:
+        """Get count of pending rescue missions.
+        
+        Returns:
+            Number of pending rescue missions
+        """
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        pending = [m for m in missions 
+                   if RescueStatus.get_base_status((m.get("status") or "").lower()) == "pending"]
+        return len(pending)
+
+    def get_species_adoption_ranking(self, limit: int = 5) -> List[Tuple[str, int]]:
+        """Get top adopted species ranking.
+        
+        Args:
+            limit: Maximum number of species to return
+            
+        Returns:
+            List of (species, count) tuples sorted by count descending
+        """
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        
+        species_counts: Dict[str, int] = {}
+        
+        for req in requests:
+            status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+            if status == "approved" or req.get("was_approved") == 1:
+                species = (req.get("animal_species") or "Unknown").strip().capitalize()
+                species_counts[species] = species_counts.get(species, 0) + 1
+        
+        # Sort by count descending
+        sorted_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_species[:limit]
+
+    def get_user_rescue_status_distribution(self, user_id: int) -> Dict[str, int]:
+        """Get rescue mission status distribution for a specific user.
+        
+        Args:
+            user_id: The user's ID
+            
+        Returns:
+            Dictionary with counts for each status
+        """
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        user_missions = [m for m in missions if m.get("user_id") == user_id]
+        
+        status_counts = {
+            "pending": 0,
+            "on-going": 0,
+            "rescued": 0,
+            "failed": 0,
+        }
+        
+        for mission in user_missions:
+            status = RescueStatus.get_base_status((mission.get("status") or "").lower())
+            if status in status_counts:
+                status_counts[status] += 1
+        
+        return status_counts
+
+    def get_user_adoption_status_distribution(self, user_id: int) -> Dict[str, int]:
+        """Get adoption request status distribution for a specific user.
+        
+        Args:
+            user_id: The user's ID
+            
+        Returns:
+            Dictionary with counts for each status
+        """
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        user_requests = [r for r in requests if r.get("user_id") == user_id]
+        
+        status_counts = {
+            "pending": 0,
+            "approved": 0,
+            "denied": 0,
+        }
+        
+        for req in user_requests:
+            status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+            # Use current status - was_approved is only for historical tracking when archived
+            if status == "approved":
+                status_counts["approved"] += 1
+            elif status == "denied":
+                status_counts["denied"] += 1
+            elif status == "pending":
+                status_counts["pending"] += 1
+        
+        return status_counts
+
+    def get_user_chart_data(self, user_id: int) -> Tuple[List[str], List[int], List[int]]:
+        """Get 30-day trend data for a specific user's rescues reported and adoptions approved.
+        
+        Args:
+            user_id: The user's ID
+            
+        Returns:
+            Tuple containing (day_labels, rescues_reported_counts, adoptions_approved_counts)
+        """
+        # Prepare day labels for last 30 days
+        now = datetime.utcnow()
+        days: List[datetime] = []
+        for i in range(29, -1, -1):
+            d = now - timedelta(days=i)
+            days.append(d)
+        day_labels = [d.strftime("%m-%d") for d in days]
+        day_dates = [d.strftime("%Y-%m-%d") for d in days]
+
+        # Initialize counts
+        rescues_reported = [0 for _ in day_labels]
+        adoptions_approved = [0 for _ in day_labels]
+
+        # Get user's rescue missions
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        user_missions = [m for m in missions if m.get("user_id") == user_id]
+        
+        for ms in missions:
+            # Only count this user's reported rescues
+            if ms.get("user_id") != user_id:
+                continue
+            dt = ms.get("mission_date")
+            if not dt:
+                continue
+            if isinstance(dt, datetime):
+                d = dt
+            else:
+                try:
+                    d = datetime.fromisoformat(str(dt))
+                except (ValueError, TypeError):
+                    try:
+                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        continue
+            date_str = d.strftime("%Y-%m-%d")
+            if date_str in day_dates:
+                idx = day_dates.index(date_str)
+                rescues_reported[idx] += 1
+
+        # Get user's adoption requests
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        user_requests = [r for r in requests if r.get("user_id") == user_id]
+        
+        for req in user_requests:
+            dt = req.get("request_date")
+            if not dt:
+                continue
+            if isinstance(dt, datetime):
+                d = dt
+            else:
+                try:
+                    d = datetime.fromisoformat(str(dt))
+                except (ValueError, TypeError):
+                    try:
+                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
+                    except (ValueError, TypeError):
+                        continue
+            date_str = d.strftime("%Y-%m-%d")
+            if date_str in day_dates:
+                idx = day_dates.index(date_str)
+                # Count approved adoptions
+                status_lower = (req.get("status") or "").lower()
+                base_status = AdoptionStatus.get_base_status(status_lower)
+                if base_status in app_config.APPROVED_ADOPTION_STATUSES or req.get("was_approved") == 1:
+                    adoptions_approved[idx] += 1
+
+        return (day_labels, rescues_reported, adoptions_approved)
+
+    def get_user_insights(self, user_id: int) -> Dict[str, Any]:
+        """Generate personalized insights for a specific user.
+        
+        Args:
+            user_id: The user's ID
+            
+        Returns:
+            Dictionary with user-specific insights and encouragement messages.
+        """
+        insights = {}
+        
+        # Get user activity stats
+        stats = self.get_user_activity_stats(user_id)
+        rescue_status_dist = self.get_user_rescue_status_distribution(user_id)
+        adoption_status_dist = self.get_user_adoption_status_distribution(user_id)
+        
+        total_rescues = stats.get("rescue_reports_filed", 0)
+        rescued_count = rescue_status_dist.get("rescued", 0)
+        failed_count = rescue_status_dist.get("failed", 0)
+        pending_rescues = rescue_status_dist.get("pending", 0)
+        ongoing_rescues = rescue_status_dist.get("on-going", 0)
+        
+        total_adoptions = stats.get("total_adoptions", 0)
+        pending_adoptions = stats.get("pending_adoption_requests", 0)
+        denied_adoptions = adoption_status_dist.get("denied", 0)
+        
+        # RESCUE INSIGHT - Personalized for user
+        if total_rescues > 0:
+            if rescued_count > 0:
+                success_rate = (rescued_count / total_rescues) * 100
+                rescue_headline = f"You've helped rescue {rescued_count} animal{'s' if rescued_count > 1 else ''}!"
+                rescue_detail = f"{rescued_count} of your {total_rescues} report{'s' if total_rescues > 1 else ''} led to successful rescues."
+            else:
+                rescue_headline = f"You've reported {total_rescues} rescue{'s' if total_rescues > 1 else ''}."
+                rescue_detail = "Your reports are being processed by our team."
+            
+            if pending_rescues > 0 or ongoing_rescues > 0:
+                active = pending_rescues + ongoing_rescues
+                rescue_action = f"🐾 {active} mission{'s' if active > 1 else ''} still in progress."
+            elif rescued_count > 0:
+                rescue_action = "✓ Thank you for making a difference!"
+            else:
+                rescue_action = "📋 Keep reporting animals in need!"
+            
+            insights["rescue_insight"] = {
+                "headline": rescue_headline,
+                "detail": rescue_detail,
+                "action": rescue_action,
+            }
+        else:
+            insights["rescue_insight"] = {
+                "headline": "No rescues reported yet",
+                "detail": "Spot an animal in need? Report it!",
+                "action": "🐾 Your reports help save lives.",
+            }
+        
+        # ADOPTION INSIGHT - Personalized for user
+        if total_adoptions > 0 or pending_adoptions > 0 or denied_adoptions > 0:
+            if total_adoptions > 0:
+                adoption_headline = f"You've adopted {total_adoptions} animal{'s' if total_adoptions > 1 else ''}!"
+                adoption_detail = f"Thank you for giving {'them' if total_adoptions > 1 else 'them'} a forever home."
+            elif pending_adoptions > 0:
+                adoption_headline = f"{pending_adoptions} adoption{'s' if pending_adoptions > 1 else ''} pending"
+                adoption_detail = "Your application is being reviewed."
+            else:
+                adoption_headline = "Keep trying!"
+                adoption_detail = "The right match is out there for you."
+            
+            if pending_adoptions > 0:
+                adoption_action = f"⏳ {pending_adoptions} application{'s' if pending_adoptions > 1 else ''} awaiting review."
+            elif total_adoptions > 0:
+                adoption_action = "❤️ You're an amazing adopter!"
+            else:
+                adoption_action = "💡 Browse our available animals."
+            
+            insights["adoption_insight"] = {
+                "headline": adoption_headline,
+                "detail": adoption_detail,
+                "action": adoption_action,
+            }
+        else:
+            insights["adoption_insight"] = {
+                "headline": "No adoptions yet",
+                "detail": "Ready to give an animal a forever home?",
+                "action": "❤️ Browse animals available for adoption.",
+            }
+        
+        # ACTIVITY INSIGHT - Overall encouragement
+        total_activity = total_rescues + total_adoptions + pending_adoptions
+        if total_activity >= 5:
+            activity_headline = "You're a PawRes hero!"
+            activity_detail = f"With {total_activity} total contributions, you're making a huge impact."
+            activity_action = "🌟 Keep up the amazing work!"
+        elif total_activity >= 2:
+            activity_headline = "Great contribution!"
+            activity_detail = f"You've made {total_activity} contributions so far."
+            activity_action = "📈 Every action counts!"
+        elif total_activity == 1:
+            activity_headline = "You've started helping!"
+            activity_detail = "Your first contribution makes a difference."
+            activity_action = "🚀 Keep going!"
+        else:
+            activity_headline = "Welcome to PawRes!"
+            activity_detail = "Start your journey by adopting or reporting a rescue."
+            activity_action = "🐕 Every animal deserves love."
+        
+        insights["activity_insight"] = {
+            "headline": activity_headline,
+            "detail": activity_detail,
+            "action": activity_action,
+        }
+        
+        # Store raw stats for display
+        insights["rescued_count"] = rescued_count
+        insights["total_rescues"] = total_rescues
+        insights["total_adoptions"] = total_adoptions
+        insights["pending_adoptions"] = pending_adoptions
+        
+        return insights
+
+    def get_chart_insights(self) -> Dict[str, Any]:
+        """Generate insights from chart data.
+        
+        Returns:
+            Dictionary with key insights and actionable recommendations.
+        """
+        insights = {}
+        
+        # Get chart data for trend analysis
+        (day_labels, rescued_counts, adopted_counts), type_dist, status_counts = self.get_chart_data()
+        
+        # Busiest rescue day (last 30 days)
+        if rescued_counts and any(c > 0 for c in rescued_counts):
+            max_idx = rescued_counts.index(max(rescued_counts))
+            if rescued_counts[max_idx] > 0:
+                insights["busiest_rescue_day"] = day_labels[max_idx]
+                insights["busiest_rescue_count"] = rescued_counts[max_idx]
+        
+        # Most common animal type
+        if type_dist:
+            most_common = max(type_dist.items(), key=lambda x: x[1])
+            insights["most_common_species"] = most_common[0]
+            insights["most_common_count"] = most_common[1]
+            insights["total_species"] = len(type_dist)
+        
+        # Rescue success rate
+        rescue_status = self.get_rescue_status_distribution()
+        total_missions = sum(rescue_status.values())
+        rescued_count = rescue_status.get("rescued", 0)
+        failed_count = rescue_status.get("failed", 0)
+        active_count = rescue_status.get("pending", 0) + rescue_status.get("on-going", 0)
+        
+        if total_missions > 0:
+            success_rate = (rescued_count / total_missions) * 100
+            insights["rescue_success_rate"] = success_rate
+            insights["total_rescues"] = rescued_count
+            insights["active_missions"] = active_count
+            insights["failed_missions"] = failed_count
+        
+        # Adoption approval rate
+        adoption_status = self.get_adoption_status_distribution()
+        total_requests = sum(adoption_status.values())
+        approved_count = adoption_status.get("approved", 0)
+        pending_count = adoption_status.get("pending", 0)
+        denied_count = adoption_status.get("denied", 0)
+        
+        if total_requests > 0:
+            approval_rate = (approved_count / total_requests) * 100
+            insights["adoption_approval_rate"] = approval_rate
+            insights["total_adoptions"] = approved_count
+            insights["pending_adoptions"] = pending_count
+            insights["denied_adoptions"] = denied_count
+        
+        # Top adopted species
+        top_species = self.get_species_adoption_ranking(limit=3)
+        if top_species:
+            insights["top_adopted_species"] = top_species[0][0]
+            insights["top_adopted_count"] = top_species[0][1]
+            insights["species_ranking"] = top_species
+        
+        # Health status summary
+        total_animals = sum(status_counts.values())
+        healthy_count = status_counts.get("healthy", 0)
+        recovering_count = status_counts.get("recovering", 0)
+        injured_count = status_counts.get("injured", 0)
+        
+        if total_animals > 0:
+            healthy_pct = (healthy_count / total_animals) * 100
+            insights["healthy_percentage"] = healthy_pct
+            insights["healthy_count"] = healthy_count
+            insights["recovering_count"] = recovering_count
+            insights["injured_count"] = injured_count
+            insights["total_animals"] = total_animals
+        
+        # Urgency distribution
+        urgency_dist = self.get_urgency_distribution()
+        high_urgency = urgency_dist.get("high", 0)
+        insights["high_urgency_count"] = high_urgency
+        
+        # 30-day trends
+        total_rescued_30d = sum(rescued_counts)
+        total_adopted_30d = sum(adopted_counts)
+        insights["rescued_30d"] = total_rescued_30d
+        insights["adopted_30d"] = total_adopted_30d
+        
+        # =====================================================
+        # Generate intelligent, contextual insight messages
+        # =====================================================
+        
+        # RESCUE INSIGHT - Contextual analysis
+        if total_missions > 0:
+            success_rate = insights.get("rescue_success_rate", 0)
+            
+            if success_rate >= 80:
+                rescue_headline = f"Excellent performance! {success_rate:.0f}% rescue success rate."
+                rescue_detail = f"Your team has successfully rescued {rescued_count} animals."
+            elif success_rate >= 50:
+                rescue_headline = f"Good progress with {success_rate:.0f}% success rate."
+                rescue_detail = f"{rescued_count} rescued, {active_count} missions still active."
+            else:
+                rescue_headline = f"Needs attention: {success_rate:.0f}% success rate."
+                rescue_detail = f"Consider reviewing protocols. {failed_count} missions unsuccessful."
+            
+            if active_count > 0:
+                rescue_action = f"📋 {active_count} active mission{'s' if active_count > 1 else ''} require attention."
+            elif high_urgency > 0:
+                rescue_action = f"⚠️ {high_urgency} high-urgency case{'s' if high_urgency > 1 else ''} pending."
+            else:
+                rescue_action = "✓ All missions up to date."
+            
+            insights["rescue_insight"] = {
+                "headline": rescue_headline,
+                "detail": rescue_detail,
+                "action": rescue_action,
+            }
+        else:
+            insights["rescue_insight"] = {
+                "headline": "No rescue missions yet",
+                "detail": "Start by adding rescue reports from the community.",
+                "action": "📋 Ready to receive rescue requests.",
+            }
+        
+        # ADOPTION INSIGHT - Contextual analysis
+        if total_requests > 0:
+            approval_rate = insights.get("adoption_approval_rate", 0)
+            
+            if approval_rate >= 70:
+                adoption_headline = f"Strong adoption rate: {approval_rate:.0f}% approved!"
+            elif approval_rate >= 40:
+                adoption_headline = f"Moderate adoption: {approval_rate:.0f}% approval rate."
+            else:
+                adoption_headline = f"Low approval rate: {approval_rate:.0f}%. Review criteria?"
+            
+            if approved_count > 0 and top_species:
+                adoption_detail = f"{approved_count} animals found homes. {top_species[0][0]}s are most popular!"
+            else:
+                adoption_detail = f"{approved_count} adoption{'s' if approved_count != 1 else ''} completed so far."
+            
+            if pending_count > 0:
+                adoption_action = f"📬 {pending_count} application{'s' if pending_count > 1 else ''} awaiting review."
+            else:
+                adoption_action = "✓ No pending applications."
+            
+            insights["adoption_insight"] = {
+                "headline": adoption_headline,
+                "detail": adoption_detail,
+                "action": adoption_action,
+            }
+        else:
+            insights["adoption_insight"] = {
+                "headline": "No adoption requests yet",
+                "detail": "Promote your available animals to attract adopters.",
+                "action": "💡 Consider social media outreach.",
+            }
+        
+        # HEALTH INSIGHT - Contextual analysis
+        if total_animals > 0:
+            healthy_pct = insights.get("healthy_percentage", 0)
+            
+            if healthy_pct >= 80:
+                health_headline = f"Great health status: {healthy_pct:.0f}% of animals are healthy!"
+            elif healthy_pct >= 50:
+                health_headline = f"Moderate health: {healthy_pct:.0f}% healthy, {recovering_count} recovering."
+            else:
+                health_headline = f"Health concern: Only {healthy_pct:.0f}% are fully healthy."
+            
+            if recovering_count > 0 or injured_count > 0:
+                health_detail = f"{recovering_count} animal{'s' if recovering_count != 1 else ''} recovering, {injured_count} need{'s' if injured_count == 1 else ''} medical care."
+            else:
+                health_detail = f"All {healthy_count} animals in your care are healthy!"
+            
+            if injured_count > 0:
+                health_action = f"🏥 Prioritize care for {injured_count} injured animal{'s' if injured_count > 1 else ''}."
+            elif recovering_count > 0:
+                health_action = f"💊 Monitor {recovering_count} recovering animal{'s' if recovering_count > 1 else ''}."
+            else:
+                health_action = "✓ No immediate health concerns."
+            
+            # Add species info
+            if type_dist:
+                species_info = f"🐾 Population: {', '.join(f'{v} {k}s' for k, v in sorted(type_dist.items(), key=lambda x: -x[1])[:3])}"
+                health_detail = species_info
+            
+            insights["health_insight"] = {
+                "headline": health_headline,
+                "detail": health_detail,
+                "action": health_action,
+            }
+        else:
+            insights["health_insight"] = {
+                "headline": "No animals registered",
+                "detail": "Add animals to start tracking their health.",
+                "action": "📝 Add your first animal to get started.",
+            }
+        
+        return insights
 
     def invalidate_cache(self) -> None:
         """Invalidate all cached analytics data.

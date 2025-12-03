@@ -192,7 +192,7 @@ def create_data_table(
     empty_message: str = "No data found",
     padding: int = 20,
 ) -> object:
-    """Create a styled data table.
+    """Create a styled data table (legacy container-based).
     
     Args:
         columns: List of column header texts
@@ -245,6 +245,137 @@ def create_data_table(
         padding=padding,
         bgcolor=ft.Colors.WHITE,
         border_radius=8,
+    )
+
+
+def create_scrollable_data_table(
+    columns: List[Dict[str, Any]],
+    rows: List[List[object]],
+    height: int = 400,
+    empty_message: str = "No data found",
+    column_spacing: int = 15,
+    heading_row_height: int = 45,
+    data_row_height: int = 50,
+    horizontal_lines: bool = True,
+    show_checkbox_column: bool = False,
+) -> object:
+    """Create a scrollable data table with fixed height.
+    
+    Uses a clean row-based layout for better control and consistent styling.
+    
+    Args:
+        columns: List of dicts with 'label' (str), optional 'expand' (int, default 1)
+        rows: List of rows, each row is a list of cell contents (widgets or strings)
+        height: Fixed height of the scrollable container
+        empty_message: Message when no rows
+        column_spacing: Spacing between columns
+        heading_row_height: Height of the header row
+        data_row_height: Height of each data row
+        horizontal_lines: Whether to show horizontal divider lines
+        show_checkbox_column: Whether to show checkbox column (unused, for API compat)
+        
+    Example:
+        columns = [
+            {"label": "Name", "expand": 2},
+            {"label": "Status", "expand": 1},
+            {"label": "Actions", "expand": 1},
+        ]
+        rows = [
+            ["John Doe", status_badge, action_buttons],
+            ["Jane Doe", status_badge, action_buttons],
+        ]
+        table = create_scrollable_data_table(columns, rows, height=300)
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed to create containers")
+    
+    # Build header row with improved styling
+    header_cells = []
+    for col in columns:
+        label_text = col.get("label", "")
+        expand = col.get("expand", 1)
+        header_cells.append(
+            ft.Container(
+                ft.Text(label_text, size=12, weight="w600", color=ft.Colors.TEAL_800),
+                expand=expand,
+            )
+        )
+    
+    header_row = ft.Container(
+        ft.Row(header_cells, spacing=column_spacing, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        height=heading_row_height,
+        bgcolor=ft.Colors.TEAL_50,
+        padding=ft.padding.symmetric(horizontal=15, vertical=0),
+        border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.TEAL_200)),
+    )
+    
+    # Build data rows with alternating background colors
+    data_row_widgets = []
+    if rows:
+        for row_idx, row_data in enumerate(rows):
+            row_cells = []
+            for i, cell in enumerate(row_data):
+                expand = columns[i].get("expand", 1) if i < len(columns) else 1
+                
+                if isinstance(cell, str):
+                    cell_widget = ft.Text(cell, size=12, color=ft.Colors.BLACK87)
+                else:
+                    cell_widget = cell
+                
+                row_cells.append(
+                    ft.Container(
+                        cell_widget,
+                        expand=expand,
+                        alignment=ft.alignment.center_left,
+                    )
+                )
+            
+            # Alternating row background for better readability
+            row_bg = ft.Colors.with_opacity(0.02, ft.Colors.TEAL) if row_idx % 2 == 0 else ft.Colors.WHITE
+            
+            row_widget = ft.Container(
+                ft.Row(row_cells, spacing=column_spacing, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                height=data_row_height,
+                padding=ft.padding.symmetric(horizontal=15, vertical=0),
+                bgcolor=row_bg,
+                border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_200)) if horizontal_lines else None,
+            )
+            data_row_widgets.append(row_widget)
+    
+    # Build the table content
+    if data_row_widgets:
+        # Scrollable body for data rows
+        scrollable_body = ft.Column(
+            data_row_widgets,
+            spacing=0,
+            scroll=ft.ScrollMode.AUTO,
+            height=height - heading_row_height,  # Subtract header height
+        )
+        
+        table_content = ft.Column(
+            [header_row, scrollable_body],
+            spacing=0,
+        )
+    else:
+        # Empty state
+        table_content = ft.Column(
+            [
+                header_row,
+                ft.Container(
+                    create_empty_state(empty_message),
+                    height=height - heading_row_height,
+                    alignment=ft.alignment.center,
+                ),
+            ],
+            spacing=0,
+        )
+    
+    return ft.Container(
+        table_content,
+        bgcolor=ft.Colors.WHITE,
+        border_radius=8,
+        border=ft.border.all(1, ft.Colors.GREY_200),
+        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
     )
 
 
@@ -557,16 +688,22 @@ def create_animal_card(
             
             location = rescue_info.get("location", "Unknown location")
             reporter = rescue_info.get("reporter", "Unknown")
+            contact = rescue_info.get("contact", "")
             urgency = rescue_info.get("urgency", "Unknown").capitalize()
             description = rescue_info.get("description", "")
+            source = rescue_info.get("source", "Unknown")
             
             # Store info for the dialog callback
+            mission_id = rescue_info.get("mission_id", None)
             info_data = {
+                "mission_id": mission_id,
                 "location": location,
                 "date": rescue_date,
                 "reporter": reporter,
+                "contact": contact,
                 "urgency": urgency,
                 "description": description,
+                "source": source,
                 "name": name,
             }
             
@@ -589,6 +726,14 @@ def create_animal_card(
                            ft.Text("Reported By:", weight="w600", size=13)], spacing=8),
                     ft.Text(data["reporter"] or "Anonymous", size=12, color=ft.Colors.BLACK87),
                     ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                    ft.Row([ft.Icon(ft.Icons.PHONE, size=18, color=ft.Colors.TEAL_600),
+                           ft.Text("Contact:", weight="w600", size=13)], spacing=8),
+                    ft.Text(data["contact"] or "Not provided", size=12, color=ft.Colors.BLACK87),
+                    ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                    ft.Row([ft.Icon(ft.Icons.SOURCE, size=18, color=ft.Colors.BLUE_600 if data["source"] == "User" else ft.Colors.RED_600),
+                           ft.Text("Source:", weight="w600", size=13)], spacing=8),
+                    ft.Text(data["source"], size=12, color=ft.Colors.BLUE_600 if data["source"] == "User" else ft.Colors.RED_600),
+                    ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
                     ft.Row([ft.Icon(ft.Icons.WARNING_AMBER, size=18, color=ft.Colors.ORANGE_600),
                            ft.Text("Urgency Level:", weight="w600", size=13)], spacing=8),
                     ft.Text(data["urgency"], size=12, color=ft.Colors.BLACK87),
@@ -603,12 +748,13 @@ def create_animal_card(
                         ft.Text(data["description"], size=12, color=ft.Colors.BLACK87),
                     ])
                 
+                mission_label = f" (Mission #{data['mission_id']})" if data.get('mission_id') else ""
                 dlg = ft.AlertDialog(
-                    title=ft.Text(f"Rescue Details: {data['name']}", size=16, weight="bold"),
+                    title=ft.Text(f"Rescue Details: {data['name']}{mission_label}", size=16, weight="bold"),
                     content=ft.Container(
                         ft.Column(content_items, spacing=2, tight=True, scroll=ft.ScrollMode.AUTO),
-                        width=300,
-                        height=280,
+                        width=320,
+                        height=380,
                         padding=10,
                     ),
                     actions=[
@@ -618,10 +764,11 @@ def create_animal_card(
                 )
                 page.open(dlg)
             
-            # Badge with info icon inside
+            # Badge with info icon inside - show mission # if available
+            badge_text = f"Rescued #{mission_id}" if mission_id else "Rescued"
             badge_content = ft.Container(
                 ft.Row([
-                    ft.Text("Rescued", size=9, color=ft.Colors.WHITE, weight="w600"),
+                    ft.Text(badge_text, size=9, color=ft.Colors.WHITE, weight="w600"),
                     ft.Icon(ft.Icons.INFO_OUTLINE, size=12, color=ft.Colors.WHITE),
                 ], spacing=4, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 bgcolor=ft.Colors.ORANGE_600,
@@ -679,6 +826,7 @@ __all__ = [
     "create_page_title",
     "create_empty_state",
     "create_data_table",
+    "create_scrollable_data_table",
     "create_stat_card",
     "create_map_container",
     "create_animal_card",

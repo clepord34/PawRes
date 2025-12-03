@@ -116,7 +116,17 @@ class MapService:
             logger.error(f"Unexpected error reverse geocoding ({latitude}, {longitude}): {e}")
             return None
     
-    def create_map_with_markers(self, missions: List[dict], center: Optional[Tuple[float, float]] = None, zoom: Optional[float] = None):
+    def _get_animal_emoji(self, animal_type: str) -> str:
+        """Get emoji based on animal type."""
+        animal_type_lower = (animal_type or "").lower()
+        if "dog" in animal_type_lower:
+            return "🐕"
+        elif "cat" in animal_type_lower:
+            return "🐈"
+        else:  # Other
+            return "🐾"
+    
+    def create_map_with_markers(self, missions: List[dict], center: Optional[Tuple[float, float]] = None, zoom: Optional[float] = None, is_admin: bool = False):
         """
         Create a Flet Map control with markers for rescue missions.
         
@@ -124,23 +134,25 @@ class MapService:
             missions: List of mission dicts with id, location, latitude, longitude, status, notes
             center: Optional center coordinates (lat, lng)
             zoom: Optional zoom level
+            is_admin: If True, show sensitive info (reporter, contact, source) in tooltip
             
         Returns:
             ft.Map control with marker layers
         """
         try:
             import flet as ft
-            from flet_map import Map, MarkerLayer, Marker, MapLatitudeLongitude, TileLayer
+            from flet_map import Map, MarkerLayer, Marker, MapLatitudeLongitude, TileLayer, MapInteractionConfiguration, MapInteractiveFlag
         except ImportError:
             logger.error("flet or flet-map not installed")
             return None
         
-        # Filter missions that have coordinates AND are not hidden (archived/removed) or cancelled
+        # Filter missions that have coordinates AND are not removed (spam/invalid) or cancelled
+        # Note: Archived missions SHOULD appear on map (they're closed but legitimate cases)
         missions_with_coords = [
             m for m in missions 
             if m.get('latitude') is not None 
             and m.get('longitude') is not None
-            and not RescueStatus.is_hidden(m.get('status') or '')
+            and not RescueStatus.is_removed(m.get('status') or '')
             and not RescueStatus.is_cancelled(m.get('status') or '')
         ]
         
@@ -167,10 +179,13 @@ class MapService:
             
             # Use new structured columns (fallback to parsing notes for legacy data)
             reporter_name = mission.get('reporter_name') or "Anonymous"
-            animal_name = mission.get('animal_name') or ""
+            reporter_phone = mission.get('reporter_phone') or ""
             animal_type = mission.get('animal_type') or "Animal"
             urgency = (mission.get('urgency') or 'medium').capitalize()
             description = notes[:50] + "..." if len(notes) > 50 else notes
+            
+            # Determine if this is an emergency submission (user_id is None)
+            is_emergency = mission.get('user_id') is None
             
             # For legacy data, try to parse from notes if columns are empty
             if not mission.get('urgency'):
@@ -187,62 +202,64 @@ class MapService:
                             urgency = 'Medium'
                         break
             
-            # Determine marker color and icon based on status and urgency
-            if status.lower() == 'rescued':
-                # Rescued - Green with checkmark
-                color = ft.Colors.GREEN_600
+            # Determine marker color based on URGENCY (Red=High, Orange=Medium, Yellow=Low)
+            urgency_lower = urgency.lower()
+            if urgency_lower == 'high':
+                color = ft.Colors.RED_500
+                border_color = ft.Colors.RED_700
+            elif urgency_lower == 'low':
+                color = ft.Colors.YELLOW_700
+                border_color = ft.Colors.YELLOW_900
+            else:  # Medium (default)
+                color = ft.Colors.DEEP_ORANGE_300
+                border_color = ft.Colors.DEEP_ORANGE_500
+            
+            # Determine marker icon based on STATUS
+            status_lower = status.lower()
+            if status_lower == 'rescued':
+                # Rescued - Check icon (unchanged)
                 icon = ft.Icons.CHECK_CIRCLE
+                # Override color to green for rescued
+                color = ft.Colors.GREEN_600
                 border_color = ft.Colors.GREEN_800
-            elif status.lower() == 'pending':
-                # Pending - Color based on urgency
-                if urgency == 'High':
-                    color = ft.Colors.RED_600
-                    icon = ft.Icons.PRIORITY_HIGH
-                    border_color = ft.Colors.RED_800
-                elif urgency == 'Low':
-                    color = ft.Colors.BLUE_500
-                    icon = ft.Icons.PETS
-                    border_color = ft.Colors.BLUE_700
-                else:  # Medium
-                    color = ft.Colors.ORANGE_600
-                    icon = ft.Icons.PETS
-                    border_color = ft.Colors.ORANGE_800
+            elif status_lower == 'pending':
+                # Pending - Exclamation Point icon
+                icon = ft.Icons.PRIORITY_HIGH
+            elif status_lower == 'failed':
+                # Failed - Failed/Cancel icon
+                icon = ft.Icons.CANCEL
             else:  # On-going or other
-                if urgency == 'High':
-                    color = ft.Colors.RED_500
-                    icon = ft.Icons.WARNING
-                    border_color = ft.Colors.RED_700
-                elif urgency == 'Low':
-                    color = ft.Colors.TEAL_500
-                    icon = ft.Icons.PETS
-                    border_color = ft.Colors.TEAL_700
-                else:  # Medium
-                    color = ft.Colors.ORANGE_500
-                    icon = ft.Icons.PETS
-                    border_color = ft.Colors.ORANGE_700
+                # On-going - Paw icon
+                icon = ft.Icons.PETS
             
             # Format status for display
             status_display = status.replace('_', ' ').title()
             
-            # Build tooltip with all relevant info
-            # Show animal name if available, otherwise just the type
-            if animal_name:
-                tooltip_lines = [
-                    f"🐾 {animal_name} ({animal_type})",
-                ]
-            else:
-                tooltip_lines = [
-                    f"🐾 {animal_type}",
-                ]
+            # Get animal emoji based on type
+            animal_emoji = self._get_animal_emoji(animal_type)
             
-            tooltip_lines.extend([
+            # Build tooltip with all relevant info
+            tooltip_lines = [
+                f"{animal_emoji} {animal_type}",
                 f"📍 {location[:40]}..." if len(location) > 40 else f"📍 {location}",
                 f"⚡ Urgency: {urgency}",
                 f"📋 Status: {status_display}",
-                f"👤 Reporter: {reporter_name}",
-            ])
+            ]
             if description:
                 tooltip_lines.append(f"📝 {description}")
+            
+            # Admin-only section with separator
+            if is_admin:
+                tooltip_lines.append("───────────────────")
+                # Source line
+                if is_emergency:
+                    tooltip_lines.append("🚨 Source: Emergency")
+                else:
+                    tooltip_lines.append("👨 Source: User")
+                # Reporter and contact
+                tooltip_lines.append(f"👤 Reporter: {reporter_name}")
+                if reporter_phone:
+                    tooltip_lines.append(f"📞 Contact: {reporter_phone}")
             
             tooltip_text = "\n".join(tooltip_lines)
             
@@ -281,10 +298,27 @@ class MapService:
             max_zoom=19,
         )
         
+        # Create a reference to update the map's interaction configuration on click
+        map_ref = ft.Ref[Map]()
+        
+        def on_map_tap(e):
+            """Enable map interactions when user clicks on the map."""
+            if map_ref.current:
+                map_ref.current.interaction_configuration = MapInteractionConfiguration(
+                    flags=MapInteractiveFlag.ALL
+                )
+                map_ref.current.update()
+        
         # Create the map with both tile layer and marker layer
+        # Initially disable interactions - user must click to enable drag/zoom
         map_control = Map(
+            ref=map_ref,
             initial_center=MapLatitudeLongitude(center[0], center[1]),
             initial_zoom=zoom or self.DEFAULT_ZOOM,
+            interaction_configuration=MapInteractionConfiguration(
+                flags=MapInteractiveFlag.NONE  # Disabled until user clicks
+            ),
+            on_tap=on_map_tap,  # Enable interactions on click
             layers=[tile_layer, marker_layer],
             expand=True,
         )

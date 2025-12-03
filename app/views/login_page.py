@@ -53,17 +53,19 @@ class LoginPage:
         # Header with logo/title - matching the image design
         header = create_header()
 
-        # Email field with icon
+        # Email field with icon - Enter key moves to password field
         self._email_field = create_form_text_field(
             hint_text="Enter your email",
             prefix_icon=ft.Icons.EMAIL_OUTLINED,
+            on_submit=lambda e: self._password_field.focus(),
         )
         
-        # Password field with icon
+        # Password field with icon - Enter key triggers login
         self._password_field = create_form_text_field(
             hint_text="Enter your password",
             password=True,
             prefix_icon=ft.Icons.LOCK_OUTLINE,
+            on_submit=lambda e: self._on_login(page, e),
         )
 
         # Login button - full width teal
@@ -133,11 +135,9 @@ class LoginPage:
             padding=ft.padding.only(top=15),
         )
 
-        # Label above email field
-        email_label = create_form_label("Email Address", icon=ft.Icons.EMAIL)
-        
-        # Label above password field
-        password_label = create_form_label("Password", icon=ft.Icons.LOCK)
+        # Simple text labels (no icons since they're in the text fields)
+        email_label = ft.Text("Email Address", size=13, weight="w500", color=ft.Colors.BLACK87)
+        password_label = ft.Text("Password", size=13, weight="w500", color=ft.Colors.BLACK87)
 
         # create a centered card/container for the form
         card = ft.Container(
@@ -146,26 +146,31 @@ class LoginPage:
                     ft.Text("Login Your Account", size=24, weight="w600", color=ft.Colors.BLACK87),
                     ft.Container(height=25),  # spacing
                     ft.Container(email_label, width=280, alignment=ft.alignment.center_left),
-                    ft.Container(height=8),
+                    ft.Container(height=6),
                     self._email_field,
-                    ft.Container(height=10),
+                    ft.Container(height=15),
                     ft.Container(password_label, width=280, alignment=ft.alignment.center_left),
-                    ft.Container(height=8),
+                    ft.Container(height=6),
                     self._password_field,
+                    ft.Container(height=8),
                     login_btn,
-                    ft.Text("Or continue with:", size=12, color=ft.Colors.BLACK54, text_align="center"),
+                    ft.Container(
+                        ft.Row([
+                            ft.Container(ft.Divider(color=ft.Colors.GREY_300), expand=True),
+                            ft.Text("  or  ", size=12, color=ft.Colors.BLACK45),
+                            ft.Container(ft.Divider(color=ft.Colors.GREY_300), expand=True),
+                        ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        width=280,
+                        padding=ft.padding.symmetric(vertical=5),
+                    ),
                     self._google_btn,
                     signup_link,
                     emergency_btn,
-                    ft.Container(
-                        ft.Text("Login Page", size=13, color=ft.Colors.BLACK45, text_align="center"),
-                        padding=ft.padding.only(top=10),
-                    ),
                 ],
                 horizontal_alignment="center",
                 spacing=0,
             ),
-            padding=35,
+            padding=40,
             alignment=ft.alignment.center,
             width=400,
             bgcolor=ft.Colors.WHITE,

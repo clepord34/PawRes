@@ -118,6 +118,7 @@ class PhotoUploadWidget:
             
             if not file_path:
                 self.page.open(ft.SnackBar(ft.Text("Unable to access file. Please try again.")))
+                self.page.update()
                 return
             
             try:
@@ -134,7 +135,7 @@ class PhotoUploadWidget:
                 # Clear any previously saved filename (new image selected)
                 self._photo_filename = None
                 
-                # Update display
+                # Update display with new image
                 self.photo_display.content = ft.Image(
                     src_base64=self._photo_base64,
                     width=self.width,
@@ -142,17 +143,22 @@ class PhotoUploadWidget:
                     fit=ft.ImageFit.COVER,
                     border_radius=8,
                 )
+                self.photo_display.update()
                 
                 self.page.open(ft.SnackBar(ft.Text(f"Photo selected: {self._original_filename}")))
+                self.page.update()
                 
             except FileStoreError as ex:
                 self.page.open(ft.SnackBar(ft.Text(f"Upload error: {str(ex)}")))
+                self.page.update()
             except Exception as ex:
                 import traceback
                 traceback.print_exc()
                 self.page.open(ft.SnackBar(ft.Text(f"Error loading photo: {str(ex)}")))
+                self.page.update()
         else:
             self.page.open(ft.SnackBar(ft.Text("No file selected.")))
+            self.page.update()
     
     def save_with_name(self, animal_name: str) -> Optional[str]:
         """Save the pending image to FileStore with the animal's name.
@@ -221,8 +227,8 @@ class PhotoUploadWidget:
 def create_photo_upload_widget(
     page: object,
     initial_photo: Optional[str] = None,
-    width: int = 100,
-    height: int = 100
+    width: int = 140,
+    height: int = 140
 ) -> PhotoUploadWidget:
     """Factory function to create a photo upload widget."""
     return PhotoUploadWidget(page, initial_photo, width, height)
@@ -232,8 +238,8 @@ def create_photo_upload_widget(
 def create_photo_upload_widget_legacy(
     page: object,
     initial_photo_base64: Optional[str] = None,
-    width: int = 100,
-    height: int = 100
+    width: int = 140,
+    height: int = 140
 ) -> PhotoUploadWidget:
     """Legacy factory function (backward compatible parameter name)."""
     return PhotoUploadWidget(page, initial_photo_base64, width, height)

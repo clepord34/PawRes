@@ -29,23 +29,39 @@ def _handle_logout(page: object) -> None:
     page.go("/")
 
 
-def create_admin_sidebar(page: object) -> object:
-    """Create an admin sidebar with navigation and profile."""
+def create_admin_sidebar(page: object, current_route: str = "") -> object:
+    """Create an admin sidebar with navigation and profile.
+    
+    Args:
+        page: The Flet page object
+        current_route: The current page route for highlighting the active nav button
+    """
     if ft is None:
         raise RuntimeError("Flet must be installed to create sidebars")
     
     sidebar_header = create_sidebar_header()
     
-    # Create navigation buttons
-    nav_buttons = [
-        create_nav_button("Admin Dashboard", lambda e: page.go("/admin")),
-        create_nav_button("Add Animal", lambda e: page.go("/add_animal")),
-        create_nav_button("View Animal List", lambda e: page.go("/animals_list?admin=1")),
-        create_nav_button("View Rescue Missions", lambda e: page.go("/rescue_missions?admin=1")),
-        create_nav_button("Adoption Requests", lambda e: page.go("/adoption_requests")),
-        create_nav_button("View Data Charts", lambda e: page.go("/charts")),
-        create_nav_button("Hidden Items", lambda e: page.go("/hidden_items")),
+    # Normalize current route (remove query params for comparison)
+    route_path = current_route.split("?")[0] if current_route else ""
+    
+    # Define nav items with their routes for matching
+    nav_items = [
+        ("Admin Dashboard", "/admin", ["/admin"]),
+        ("Add Animal", "/add_animal", ["/add_animal"]),
+        ("View Animal List", "/animals_list?admin=1", ["/animals_list", "/edit_animal"]),
+        ("View Rescue Missions", "/rescue_missions?admin=1", ["/rescue_missions"]),
+        ("Adoption Requests", "/adoption_requests", ["/adoption_requests"]),
+        ("View Data Charts", "/charts", ["/charts"]),
+        ("Hidden Items", "/hidden_items", ["/hidden_items"]),
     ]
+    
+    # Create navigation buttons with active state
+    nav_buttons = []
+    for label, nav_route, match_routes in nav_items:
+        is_active = route_path in match_routes
+        nav_buttons.append(
+            create_nav_button(label, lambda e, r=nav_route: page.go(r), is_active=is_active)
+        )
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))
     profile = create_profile_section("Admin", is_admin=True)
@@ -68,21 +84,39 @@ def create_admin_sidebar(page: object) -> object:
     )
 
 
-def create_user_sidebar(page: object, user_name: str = "User") -> object:
-    """Create a user sidebar with navigation and profile."""
+def create_user_sidebar(page: object, user_name: str = "User", current_route: str = "") -> object:
+    """Create a user sidebar with navigation and profile.
+    
+    Args:
+        page: The Flet page object
+        user_name: Display name for the user profile section
+        current_route: The current page route for highlighting the active nav button
+    """
     if ft is None:
         raise RuntimeError("Flet must be installed to create sidebars")
     
     sidebar_header = create_sidebar_header()
     
-    # Create navigation buttons
-    nav_buttons = [
-        create_nav_button("User Dashboard", lambda e: page.go("/user")),
-        create_nav_button("Apply for Adoption", lambda e: page.go("/available_adoption")),
-        create_nav_button("Report Rescue Mission", lambda e: page.go("/rescue_form")),
-        create_nav_button("Check Application Status", lambda e: page.go("/check_status")),
-        create_nav_button("View Animal List", lambda e: page.go("/animals_list")),
+    # Normalize current route (remove query params for comparison)
+    route_path = current_route.split("?")[0] if current_route else ""
+    
+    # Define nav items with their routes for matching
+    nav_items = [
+        ("User Dashboard", "/user", ["/user"]),
+        ("Apply for Adoption", "/available_adoption", ["/available_adoption", "/adoption_form"]),
+        ("Report Rescue Mission", "/rescue_form", ["/rescue_form"]),
+        ("Check Application Status", "/check_status", ["/check_status"]),
+        ("View Animal List", "/animals_list", ["/animals_list"]),
+        ("Your Analytics", "/user_analytics", ["/user_analytics"]),
     ]
+    
+    # Create navigation buttons with active state
+    nav_buttons = []
+    for label, nav_route, match_routes in nav_items:
+        is_active = route_path in match_routes
+        nav_buttons.append(
+            create_nav_button(label, lambda e, r=nav_route: page.go(r), is_active=is_active)
+        )
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))
     profile = create_profile_section(user_name, is_admin=False)
