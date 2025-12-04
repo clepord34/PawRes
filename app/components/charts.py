@@ -430,7 +430,7 @@ def create_pie_chart(
         """Handle pie chart hover events for expand effect."""
         for idx, section in enumerate(flet_sections):
             if idx == e.section_index:
-                section.radius = base_radius + 10  # Expand on hover
+                section.radius = base_radius * 1.1  # Expand radius on hover
             else:
                 section.radius = base_radius
         e.control.update()
@@ -522,7 +522,7 @@ def create_chart_legend(
                         base_radius = pie_refs.get("base_radius", 80)
                         for i, section in enumerate(sections):
                             if i == actual_section_idx:
-                                section.radius = base_radius + 10
+                                section.radius = base_radius * 1.1  # Expand radius on hover
                             else:
                                 section.radius = base_radius
                         pie_refs["chart"].update()
@@ -618,6 +618,83 @@ def create_insight_card(
         padding=ft.padding.all(14),
         border_radius=10,
         bgcolor=bgcolor or ft.Colors.GREY_100,
+        border=ft.border.all(1, border_color),
+        expand=True,
+    )
+
+
+def create_insight_box(
+    title: str,
+    insight_data: Dict[str, str],
+    icon: Any,
+    icon_color: str,
+    bg_color: str,
+    border_color: str,
+) -> Any:
+    """Create a styled insight box with headline, detail, and action.
+    
+    Used in analytics dashboards to display key insights with a consistent
+    structure: icon + title header, headline text, optional detail, optional action.
+    
+    Args:
+        title: Section title (e.g., "Rescue Insights")
+        insight_data: Dict with 'headline', optional 'detail', optional 'action'
+        icon: Flet icon to display
+        icon_color: Color for icon background and accents
+        bg_color: Background color for the box
+        border_color: Border color for the box
+        
+    Returns:
+        A Flet container with the styled insight box
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed")
+    
+    if isinstance(insight_data, dict):
+        headline = insight_data.get("headline", "No data")
+        detail = insight_data.get("detail", "")
+        action = insight_data.get("action", "")
+    else:
+        headline = str(insight_data)
+        detail = ""
+        action = ""
+    
+    content_items = [
+        ft.Row([
+            ft.Container(
+                ft.Icon(icon, size=20, color=ft.Colors.WHITE),
+                width=36,
+                height=36,
+                bgcolor=icon_color,
+                border_radius=18,
+                alignment=ft.alignment.center,
+            ),
+            ft.Text(title, size=14, weight="bold", color=icon_color),
+        ], spacing=10),
+        ft.Container(height=12),
+        ft.Text(headline, size=15, weight="w600", color=ft.Colors.BLACK87),
+    ]
+    
+    if detail:
+        content_items.append(ft.Container(height=6))
+        content_items.append(ft.Text(detail, size=12, color=ft.Colors.BLACK54))
+    
+    if action:
+        content_items.append(ft.Container(height=10))
+        content_items.append(
+            ft.Container(
+                ft.Text(action, size=11, color=icon_color, weight="w500"),
+                bgcolor=ft.Colors.with_opacity(0.1, icon_color),
+                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                border_radius=6,
+            )
+        )
+    
+    return ft.Container(
+        ft.Column(content_items, spacing=0),
+        padding=20,
+        bgcolor=bg_color,
+        border_radius=12,
         border=ft.border.all(1, border_color),
         expand=True,
     )
@@ -848,5 +925,6 @@ __all__ = [
     "create_clickable_stat_card",
     "show_chart_details_dialog",
     "create_insight_card",
+    "create_insight_box",
     "create_chart_card",
 ]

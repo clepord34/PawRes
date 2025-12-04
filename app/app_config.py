@@ -43,12 +43,31 @@ DB_PATH = os.getenv("PAWRES_DB_PATH", str(STORAGE_DIR / "data/app.db"))
 
 # Default admin credentials
 DEFAULT_ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@gmail.com")
-DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "123")
+DEFAULT_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "Admin@123")  # Stronger default
 DEFAULT_ADMIN_NAME = os.getenv("ADMIN_NAME", "Admin User")
 
 # Password hashing
 PBKDF2_ITERATIONS = 100000
 SALT_LENGTH = 16
+
+# =============================================================================
+# SECURITY SETTINGS
+# =============================================================================
+
+# Login lockout settings
+MAX_FAILED_LOGIN_ATTEMPTS = int(os.getenv("MAX_FAILED_LOGIN_ATTEMPTS", "5"))
+LOCKOUT_DURATION_MINUTES = int(os.getenv("LOCKOUT_DURATION_MINUTES", "15"))
+
+# Session timeout settings
+SESSION_TIMEOUT_MINUTES = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
+
+# Password policy settings
+PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "8"))
+PASSWORD_REQUIRE_UPPERCASE = os.getenv("PASSWORD_REQUIRE_UPPERCASE", "true").lower() == "true"
+PASSWORD_REQUIRE_LOWERCASE = os.getenv("PASSWORD_REQUIRE_LOWERCASE", "true").lower() == "true"
+PASSWORD_REQUIRE_DIGIT = os.getenv("PASSWORD_REQUIRE_DIGIT", "true").lower() == "true"
+PASSWORD_REQUIRE_SPECIAL = os.getenv("PASSWORD_REQUIRE_SPECIAL", "true").lower() == "true"
+PASSWORD_HISTORY_COUNT = int(os.getenv("PASSWORD_HISTORY_COUNT", "5"))
 
 # Map defaults
 DEFAULT_MAP_CENTER = (13.5250, 123.3486)  # Camarines Sur, Philippines

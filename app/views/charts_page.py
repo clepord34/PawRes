@@ -14,8 +14,8 @@ from components import (
     create_page_title, create_chart_container, create_stat_card,
     create_line_chart, create_bar_chart, create_pie_chart,
     create_chart_legend, create_empty_chart_message, create_insight_card,
-    create_chart_card, create_clickable_stat_card, show_chart_details_dialog,
-    CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS
+    create_insight_box, create_chart_card, create_clickable_stat_card, 
+    show_chart_details_dialog, CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS
 )
 
 
@@ -401,59 +401,6 @@ class ChartsPage:
             create_bar_chart_card("Top Species for Adoption", species_bar_chart, species_legend, ft.Icons.TRENDING_UP, species_data),
         ], spacing=15, expand=True)
 
-        # Insights row with improved styling
-        def create_insight_box(title: str, insight_data: dict, icon: Any, icon_color: str, bg_color: str, border_color: str) -> Any:
-            """Create a styled insight box with headline, detail, and action."""
-            if isinstance(insight_data, dict):
-                headline = insight_data.get("headline", "No data")
-                detail = insight_data.get("detail", "")
-                action = insight_data.get("action", "")
-            else:
-                # Fallback for string format
-                headline = str(insight_data)
-                detail = ""
-                action = ""
-            
-            content_items = [
-                ft.Row([
-                    ft.Container(
-                        ft.Icon(icon, size=20, color=ft.Colors.WHITE),
-                        width=36,
-                        height=36,
-                        bgcolor=icon_color,
-                        border_radius=18,
-                        alignment=ft.alignment.center,
-                    ),
-                    ft.Text(title, size=14, weight="bold", color=icon_color),
-                ], spacing=10),
-                ft.Container(height=12),
-                ft.Text(headline, size=15, weight="w600", color=ft.Colors.BLACK87),
-            ]
-            
-            if detail:
-                content_items.append(ft.Container(height=6))
-                content_items.append(ft.Text(detail, size=12, color=ft.Colors.BLACK54))
-            
-            if action:
-                content_items.append(ft.Container(height=10))
-                content_items.append(
-                    ft.Container(
-                        ft.Text(action, size=11, color=icon_color, weight="w500"),
-                        bgcolor=ft.Colors.with_opacity(0.1, icon_color),
-                        padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                        border_radius=6,
-                    )
-                )
-            
-            return ft.Container(
-                ft.Column(content_items, spacing=0),
-                padding=20,
-                bgcolor=bg_color,
-                border_radius=12,
-                border=ft.border.all(1, border_color),
-                expand=True,
-            )
-        
         # Get structured insight data
         rescue_insight_data = insights.get("rescue_insight", {"headline": "No data", "detail": "", "action": ""})
         adoption_insight_data = insights.get("adoption_insight", {"headline": "No data", "detail": "", "action": ""})

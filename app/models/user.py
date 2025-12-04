@@ -8,10 +8,7 @@ from datetime import datetime
 
 @dataclass
 class User:
-    """User model representing a user in the system.
-    
-    Matches the `users` table schema exactly.
-    """
+    """User model matching the `users` table schema."""
     id: Optional[int] = None
     name: str = ""
     email: str = ""
@@ -25,15 +22,7 @@ class User:
     updated_at: Optional[datetime] = None
 
     def to_dict(self, include_sensitive: bool = False) -> Dict[str, Any]:
-        """Return a dict representation.
-        
-        Args:
-            include_sensitive: If True, include password_hash and password_salt.
-                             Default False for security.
-        
-        Returns:
-            Dictionary representation of the user.
-        """
+        """Return dict representation (excludes password fields by default)."""
         data = asdict(self)
         if not include_sensitive:
             data.pop("password_hash", None)

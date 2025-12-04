@@ -19,7 +19,7 @@ def show_snackbar(page, message: str, error: bool = False) -> None:
     if ft is None:
         raise RuntimeError("Flet must be installed to show snackbars")
     
-    bgcolor = ft.Colors.RED_400 if error else None
+    bgcolor = ft.Colors.RED_700 if error else None
     snackbar = ft.SnackBar(
         ft.Text(message, color=ft.Colors.WHITE if error else None),
         bgcolor=bgcolor,

@@ -25,6 +25,14 @@ def render_rescue_missions(page, params: Dict[str, Any]) -> None:
     page.update()
 
 
+def render_profile(page, params: Dict[str, Any]) -> None:
+    """Render the profile page."""
+    from views.profile_page import ProfilePage
+    clear_page(page)
+    ProfilePage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
 # ============================================================================
 # SHARED ROUTES - Add routes accessible by both admin and user here
 # ============================================================================
@@ -45,6 +53,12 @@ ROUTES: Dict[str, Dict[str, Any]] = {
     "/rescue_missions_list": {
         "handler": render_rescue_missions,
         "description": "Alias for rescue missions list",
+        "requires_auth": True,
+        "allowed_roles": ["admin", "user"],
+    },
+    "/profile": {
+        "handler": render_profile,
+        "description": "User profile management",
         "requires_auth": True,
         "allowed_roles": ["admin", "user"],
     },

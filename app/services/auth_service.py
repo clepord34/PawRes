@@ -1,17 +1,12 @@
-"""Authentication service for user registration and login.
-
-Provides secure authentication with:
-- PBKDF2-HMAC-SHA256 password hashing
-- Configurable iterations and salt length
-- Automatic admin user creation
-- Secure password verification using constant-time comparison
-"""
+"""Authentication service with PBKDF2-HMAC-SHA256 hashing and login lockout."""
 from __future__ import annotations
 
 import hashlib
 import hmac
 import secrets
-from typing import Any, Dict, Optional
+import urllib.request
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional, Tuple
 from enum import Enum
 
 from storage.database import Database
@@ -26,6 +21,8 @@ class AuthResult(Enum):
     EMAIL_EXISTS = "email_exists"
     INVALID_INPUT = "invalid_input"
     DATABASE_ERROR = "database_error"
+    ACCOUNT_LOCKED = "account_locked"
+    ACCOUNT_DISABLED = "account_disabled"
 
 
 class AuthServiceError(Exception):
@@ -36,20 +33,64 @@ class AuthServiceError(Exception):
         self.result = result
 
 
-class AuthService:
-    """Authentication service backed by SQLite database.
+def _download_and_save_profile_picture(picture_url: str, user_email: str) -> Optional[str]:
+    """Download a profile picture from URL and save it using FileStore.
     
-    Provides user registration, login, and role management with
-    secure password hashing using PBKDF2-HMAC-SHA256.
-    
-    Attributes:
-        db: Database instance for persistence
-    
-    Example:
-        auth = AuthService("app.db")
-        user_id = auth.register_user("Alice", "alice@example.com", "secret123")
-        user = auth.login("alice@example.com", "secret123")
+    Args:
+        picture_url: URL of the profile picture (e.g., Google profile pic)
+        user_email: User's email (used for generating filename)
+        
+    Returns:
+        The saved filename, or None if download failed
     """
+    if not picture_url:
+        return None
+    
+    try:
+        import urllib.request
+        from storage.file_store import FileStore
+        
+        # Download the image
+        req = urllib.request.Request(
+            picture_url,
+            headers={"User-Agent": "PawRes/1.0"}
+        )
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            image_data = response.read()
+            
+            # Determine content type and extension
+            content_type = response.headers.get("Content-Type", "image/jpeg")
+            if "png" in content_type:
+                ext = "png"
+            elif "gif" in content_type:
+                ext = "gif"
+            elif "webp" in content_type:
+                ext = "webp"
+            else:
+                ext = "jpg"
+        
+        # Save using FileStore with user identifier
+        file_store = FileStore()
+        # Use email prefix as custom name for the profile picture
+        username = user_email.split("@")[0] if user_email else "user"
+        filename = file_store.save_bytes(
+            data=image_data,
+            original_name=f"profile.{ext}",
+            validate=False,  # Skip validation for external images
+            custom_name=f"profile_{username}"
+        )
+        
+        print(f"[DEBUG] Saved Google profile picture: {filename}")
+        return filename
+        
+    except Exception as e:
+        print(f"[WARN] Could not download profile picture: {e}")
+        return None
+
+
+class AuthService:
+    """Authentication service backed by SQLite database."""
 
     def __init__(self, db: Optional[Database | str] = None, *, ensure_tables: bool = True) -> None:
         """Create service with a Database instance or path.
@@ -66,7 +107,43 @@ class AuthService:
 
         if ensure_tables:
             self.db.create_tables()
+            self._ensure_security_columns()
             self.ensure_admin_exists()
+        
+        # Lazy-load loggers to avoid circular imports
+        self._auth_logger = None
+        self._security_logger = None
+    
+    @property
+    def auth_logger(self):
+        """Lazy load auth logger."""
+        if self._auth_logger is None:
+            try:
+                from services.logging_service import get_auth_logger
+                self._auth_logger = get_auth_logger()
+            except ImportError:
+                self._auth_logger = None
+        return self._auth_logger
+    
+    @property
+    def security_logger(self):
+        """Lazy load security logger."""
+        if self._security_logger is None:
+            try:
+                from services.logging_service import get_security_logger
+                self._security_logger = get_security_logger()
+            except ImportError:
+                self._security_logger = None
+        return self._security_logger
+    
+    def _ensure_security_columns(self) -> None:
+        """Ensure security-related columns exist in users table."""
+        self.db.ensure_columns_exist("users", {
+            "is_disabled": "INTEGER DEFAULT 0",
+            "last_login": "TIMESTAMP",
+            "failed_login_attempts": "INTEGER DEFAULT 0",
+            "locked_until": "TIMESTAMP",
+        })
 
     # ----- password helpers -----
     def _generate_salt(self) -> bytes:
@@ -84,16 +161,20 @@ class AuthService:
         email: str, 
         password: str, 
         phone: Optional[str] = None, 
-        role: str = "user"
+        role: str = "user",
+        skip_policy: bool = False,
+        profile_picture: Optional[str] = None
     ) -> int:
         """Create a new user with hashed password.
         
         Args:
             name: User's display name (max 100 chars)
             email: Unique email address (max 255 chars)
-            password: Plain-text password (min 6 chars)
+            password: Plain-text password meeting policy requirements
             phone: Optional phone number (max 20 chars)
             role: User role ('user' or 'admin')
+            skip_policy: Skip password policy validation (for testing only)
+            profile_picture: Optional filename of uploaded profile picture
             
         Returns:
             The new user's ID
@@ -107,8 +188,18 @@ class AuthService:
             raise ValueError(f"Name must be 1-{app_config.MAX_NAME_LENGTH} characters")
         if not email or len(email) > app_config.MAX_EMAIL_LENGTH:
             raise ValueError(f"Email must be 1-{app_config.MAX_EMAIL_LENGTH} characters")
-        if not password or len(password) < app_config.MIN_PASSWORD_LENGTH:
-            raise ValueError(f"Password must be at least {app_config.MIN_PASSWORD_LENGTH} characters")
+        
+        # Validate password against policy (unless explicitly skipped for testing)
+        if not skip_policy:
+            from services.password_policy import validate_password
+            is_valid, errors = validate_password(password)
+            if not is_valid:
+                raise ValueError(errors[0])  # Return first error
+        else:
+            # Basic length check for testing
+            if not password or len(password) < app_config.MIN_PASSWORD_LENGTH:
+                raise ValueError(f"Password must be at least {app_config.MIN_PASSWORD_LENGTH} characters")
+        
         if len(password) > app_config.MAX_PASSWORD_LENGTH:
             raise ValueError(f"Password must be at most {app_config.MAX_PASSWORD_LENGTH} characters")
         
@@ -122,18 +213,100 @@ class AuthService:
             password_hash = self._hash_password(password, salt)
             salt_hex = salt.hex()
 
-            sql = """INSERT INTO users (name, email, phone, password_hash, password_salt, role) VALUES (?, ?, ?, ?, ?, ?)"""
-            user_id = self.db.execute(sql, (name, email, phone, password_hash, salt_hex, role))
+            sql = """INSERT INTO users (name, email, phone, password_hash, password_salt, role, profile_picture) VALUES (?, ?, ?, ?, ?, ?, ?)"""
+            user_id = self.db.execute(sql, (name, email, phone, password_hash, salt_hex, role, profile_picture))
             return user_id
         except ValueError:
             raise  # Re-raise validation errors
         except Exception as e:
             raise AuthServiceError(f"Failed to register user: {e}", AuthResult.DATABASE_ERROR)
 
-    def login(self, email: str, password: str) -> Optional[Dict[str, Any]]:
-        """Verify credentials and return user data.
+    def login(self, email: str, password: str) -> Tuple[Optional[Dict[str, Any]], AuthResult]:
+        """Verify credentials and return user data with result status.
         
         Uses constant-time comparison to prevent timing attacks.
+        Implements lockout after failed attempts.
+        
+        Args:
+            email: User's email address
+            password: Plain-text password to verify
+            
+        Returns:
+            Tuple of (user_dict or None, AuthResult enum)
+        """
+        if not email or not password:
+            return None, AuthResult.INVALID_INPUT
+        
+        row = self.db.fetch_one("SELECT * FROM users WHERE email = ?", (email,))
+        if not row:
+            # Log failed attempt for unknown email
+            if self.auth_logger:
+                self.auth_logger.log_login_failure(email, "user_not_found")
+            return None, AuthResult.USER_NOT_FOUND
+        
+        # Check if account is disabled
+        if row.get("is_disabled"):
+            if self.auth_logger:
+                self.auth_logger.log_login_failure(email, "account_disabled")
+            return None, AuthResult.ACCOUNT_DISABLED
+        
+        # Check if account is locked
+        locked_until = row.get("locked_until")
+        if locked_until:
+            try:
+                if isinstance(locked_until, str):
+                    locked_until = datetime.fromisoformat(locked_until)
+                
+                if datetime.utcnow() < locked_until:
+                    # Still locked
+                    remaining = (locked_until - datetime.utcnow()).seconds // 60 + 1
+                    if self.auth_logger:
+                        self.auth_logger.log_login_failure(
+                            email, "account_locked", 
+                            row.get("failed_login_attempts")
+                        )
+                    return None, AuthResult.ACCOUNT_LOCKED
+                else:
+                    # Lock expired, clear it
+                    self._clear_lockout(row["id"])
+                    if self.auth_logger:
+                        self.auth_logger.log_lockout_expired(email)
+            except (ValueError, TypeError):
+                pass
+
+        stored_hash = row.get("password_hash")
+        stored_salt = row.get("password_salt")
+        if not stored_hash or not stored_salt:
+            return None, AuthResult.INVALID_CREDENTIALS
+
+        try:
+            salt = bytes.fromhex(stored_salt)
+        except (ValueError, TypeError) as e:
+            print(f"[ERROR] Invalid salt format for user {email}: {e}")
+            return None, AuthResult.DATABASE_ERROR
+
+        attempted = self._hash_password(password, salt)
+        if hmac.compare_digest(attempted, stored_hash):
+            # Successful login - clear failed attempts and update last_login
+            self._record_successful_login(row["id"])
+            
+            if self.auth_logger:
+                self.auth_logger.log_login_success(email, row["id"])
+            
+            # remove sensitive fields before returning
+            safe = dict(row)
+            safe.pop("password_hash", None)
+            safe.pop("password_salt", None)
+            return safe, AuthResult.SUCCESS
+        
+        # Failed login - increment attempts
+        result = self._record_failed_login(row["id"], email)
+        return None, result
+    
+    def login_simple(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Simplified login that returns user dict or None.
+        
+        This is for backward compatibility with existing code.
         
         Args:
             email: User's email address
@@ -142,33 +315,126 @@ class AuthService:
         Returns:
             User dict (without password fields) if valid, None otherwise
         """
-        if not email or not password:
-            return None
+        user, result = self.login(email, password)
+        return user
+    
+    def _record_successful_login(self, user_id: int) -> None:
+        """Record a successful login.
+        
+        Args:
+            user_id: User's ID
+        """
+        self.db.execute(
+            """
+            UPDATE users SET 
+                failed_login_attempts = 0,
+                locked_until = NULL,
+                last_login = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (user_id,)
+        )
+    
+    def _record_failed_login(self, user_id: int, email: str) -> AuthResult:
+        """Record a failed login attempt.
+        
+        Args:
+            user_id: User's ID
+            email: User's email for logging
             
-        row = self.db.fetch_one("SELECT * FROM users WHERE email = ?", (email,))
-        if not row:
-            return None
-
-        stored_hash = row.get("password_hash")
-        stored_salt = row.get("password_salt")
-        if not stored_hash or not stored_salt:
-            return None
-
+        Returns:
+            AuthResult indicating the outcome
+        """
+        # Get current attempt count
+        user = self.db.fetch_one(
+            "SELECT failed_login_attempts FROM users WHERE id = ?",
+            (user_id,)
+        )
+        
+        current_attempts = (user.get("failed_login_attempts") or 0) + 1
+        max_attempts = getattr(app_config, 'MAX_FAILED_LOGIN_ATTEMPTS', 5)
+        lockout_minutes = getattr(app_config, 'LOCKOUT_DURATION_MINUTES', 15)
+        
+        if current_attempts >= max_attempts:
+            # Lock the account
+            locked_until = datetime.utcnow() + timedelta(minutes=lockout_minutes)
+            self.db.execute(
+                """
+                UPDATE users SET 
+                    failed_login_attempts = ?,
+                    locked_until = ?
+                WHERE id = ?
+                """,
+                (current_attempts, locked_until.isoformat(), user_id)
+            )
+            
+            if self.auth_logger:
+                self.auth_logger.log_lockout(email, lockout_minutes)
+            if self.security_logger:
+                self.security_logger.log_brute_force_attempt(email, current_attempts)
+            
+            return AuthResult.ACCOUNT_LOCKED
+        else:
+            # Just increment the counter
+            self.db.execute(
+                "UPDATE users SET failed_login_attempts = ? WHERE id = ?",
+                (current_attempts, user_id)
+            )
+            
+            if self.auth_logger:
+                self.auth_logger.log_login_failure(
+                    email, "invalid_credentials", current_attempts
+                )
+            
+            return AuthResult.INVALID_CREDENTIALS
+    
+    def _clear_lockout(self, user_id: int) -> None:
+        """Clear lockout status for a user.
+        
+        Args:
+            user_id: User's ID
+        """
+        self.db.execute(
+            """
+            UPDATE users SET 
+                failed_login_attempts = 0,
+                locked_until = NULL
+            WHERE id = ?
+            """,
+            (user_id,)
+        )
+    
+    def get_lockout_status(self, email: str) -> Tuple[bool, Optional[int]]:
+        """Check if an account is locked and get remaining time.
+        
+        Args:
+            email: User's email
+            
+        Returns:
+            Tuple of (is_locked, remaining_minutes)
+        """
+        row = self.db.fetch_one(
+            "SELECT locked_until, failed_login_attempts FROM users WHERE email = ?",
+            (email,)
+        )
+        
+        if not row or not row.get("locked_until"):
+            return False, None
+        
         try:
-            salt = bytes.fromhex(stored_salt)
+            locked_until_str = row["locked_until"]
+            if locked_until_str:
+                # Parse ISO format timestamp
+                locked_until = datetime.fromisoformat(locked_until_str)
+                
+                now = datetime.utcnow()
+                if now < locked_until:
+                    remaining = int((locked_until - now).total_seconds() / 60) + 1
+                    return True, remaining
         except (ValueError, TypeError) as e:
-            # Invalid salt format in database
-            print(f"[ERROR] Invalid salt format for user {email}: {e}")
-            return None
-
-        attempted = self._hash_password(password, salt)
-        if hmac.compare_digest(attempted, stored_hash):
-            # remove sensitive fields before returning
-            safe = dict(row)
-            safe.pop("password_hash", None)
-            safe.pop("password_salt", None)
-            return safe
-        return None
+            print(f"[WARN] Could not parse lockout time: {e}")
+        
+        return False, None
 
     def login_oauth(self, email: str, name: str, oauth_provider: str = "google", 
                     profile_picture: Optional[str] = None) -> Dict[str, Any]:
@@ -182,7 +448,7 @@ class AuthService:
             email: User's email from OAuth provider
             name: User's display name from OAuth provider
             oauth_provider: The OAuth provider name (e.g., 'google')
-            profile_picture: Optional URL to user's profile picture
+            profile_picture: Optional URL to user's profile picture (will be downloaded and saved)
             
         Returns:
             User dict with account information
@@ -194,34 +460,43 @@ class AuthService:
             raise AuthServiceError("Email is required for OAuth login", AuthResult.INVALID_INPUT)
         
         try:
+            # Download and save the profile picture if provided as URL
+            saved_picture = None
+            if profile_picture and profile_picture.startswith(("http://", "https://")):
+                saved_picture = _download_and_save_profile_picture(profile_picture, email)
+            elif profile_picture:
+                # Already a filename, keep it
+                saved_picture = profile_picture
+            
             # Check if user already exists
             existing = self.db.fetch_one("SELECT * FROM users WHERE email = ?", (email,))
             
             if existing:
-                # User exists - update OAuth info and return
+                # User exists - update OAuth info and profile picture if we have a new one
+                update_picture = saved_picture or existing.get("profile_picture")
                 self.db.execute(
                     """UPDATE users SET oauth_provider = ?, profile_picture = ? 
                        WHERE id = ?""",
-                    (oauth_provider, profile_picture, existing["id"])
+                    (oauth_provider, update_picture, existing["id"])
                 )
                 safe = dict(existing)
                 safe.pop("password_hash", None)
                 safe.pop("password_salt", None)
                 safe["oauth_provider"] = oauth_provider
-                safe["profile_picture"] = profile_picture
+                safe["profile_picture"] = update_picture
                 return safe
             
             # Create new OAuth user (no password)
             sql = """INSERT INTO users (name, email, oauth_provider, profile_picture, role) 
                      VALUES (?, ?, ?, ?, ?)"""
-            user_id = self.db.execute(sql, (name, email, oauth_provider, profile_picture, "user"))
+            user_id = self.db.execute(sql, (name, email, oauth_provider, saved_picture, "user"))
             
             return {
                 "id": user_id,
                 "name": name,
                 "email": email,
                 "oauth_provider": oauth_provider,
-                "profile_picture": profile_picture,
+                "profile_picture": saved_picture,
                 "role": "user",
             }
             

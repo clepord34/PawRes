@@ -14,7 +14,9 @@ class Database:
 
 	def _get_connection(self) -> sqlite3.Connection:
 		"""Create a fresh connection for this operation."""
-		conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+		# Note: We don't use PARSE_DECLTYPES because we store ISO format timestamps
+		# (with 'T' separator) which aren't compatible with SQLite's built-in converter
+		conn = sqlite3.connect(self.db_path)
 		conn.row_factory = sqlite3.Row
 		conn.execute("PRAGMA foreign_keys = ON;")
 		return conn
@@ -56,6 +58,64 @@ class Database:
 		finally:
 			conn.close()
 
+	def ensure_column_exists(self, table: str, column: str, column_def: str) -> bool:
+		"""Ensure a column exists in a table, adding it if not present.
+		
+		This is a shared utility to avoid duplicating ALTER TABLE logic
+		across services.
+		
+		Args:
+			table: Name of the table to check/modify
+			column: Name of the column to ensure exists
+			column_def: Column definition (e.g., "INTEGER DEFAULT 0", "TEXT")
+			
+		Returns:
+			True if column was added, False if it already existed
+		"""
+		conn = self._get_connection()
+		try:
+			cur = conn.cursor()
+			cur.execute(f"PRAGMA table_info({table})")
+			columns = [row[1] for row in cur.fetchall()]
+			
+			if column not in columns:
+				cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+				conn.commit()
+				print(f"[INFO] Added {column} column to {table} table")
+				return True
+			return False
+		finally:
+			conn.close()
+
+	def ensure_columns_exist(self, table: str, columns: Dict[str, str]) -> List[str]:
+		"""Ensure multiple columns exist in a table.
+		
+		Args:
+			table: Name of the table to check/modify
+			columns: Dict mapping column names to their definitions
+			
+		Returns:
+			List of column names that were added
+		"""
+		added = []
+		conn = self._get_connection()
+		try:
+			cur = conn.cursor()
+			cur.execute(f"PRAGMA table_info({table})")
+			existing = [row[1] for row in cur.fetchall()]
+			
+			for column, column_def in columns.items():
+				if column not in existing:
+					cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+					added.append(column)
+					print(f"[INFO] Added {column} column to {table} table")
+			
+			if added:
+				conn.commit()
+		finally:
+			conn.close()
+		return added
+
 	def create_tables(self) -> None:
 		"""Create required tables if they don't exist."""
 		users_sql = """
@@ -69,6 +129,11 @@ class Database:
 			oauth_provider TEXT,
 			profile_picture TEXT,
 			role TEXT DEFAULT 'user',
+			is_disabled INTEGER DEFAULT 0,
+			failed_login_attempts INTEGER DEFAULT 0,
+			locked_until TEXT,
+			last_login TEXT,
+			last_password_change TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		);
@@ -153,6 +218,27 @@ class Database:
 			if 'profile_picture' not in user_columns:
 				cur.execute("ALTER TABLE users ADD COLUMN profile_picture TEXT")
 				conn.commit()
+			# Add lockout/security columns to users table
+			if 'is_disabled' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN is_disabled INTEGER DEFAULT 0")
+				conn.commit()
+				print("[INFO] Added is_disabled column to users table")
+			if 'failed_login_attempts' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
+				conn.commit()
+				print("[INFO] Added failed_login_attempts column to users table")
+			if 'locked_until' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN locked_until TEXT")
+				conn.commit()
+				print("[INFO] Added locked_until column to users table")
+			if 'last_login' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
+				conn.commit()
+				print("[INFO] Added last_login column to users table")
+			if 'last_password_change' not in user_columns:
+				cur.execute("ALTER TABLE users ADD COLUMN last_password_change TEXT")
+				conn.commit()
+				print("[INFO] Added last_password_change column to users table")
 			
 			# Check if photo column exists in animals table (for legacy databases)
 			cur.execute("PRAGMA table_info(animals)")

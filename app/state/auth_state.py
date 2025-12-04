@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 from dataclasses import dataclass, asdict
+from datetime import datetime
 
 from .base import StateManager
 
@@ -15,6 +16,7 @@ class UserSession:
     name: str = ""
     role: str = "user"
     is_authenticated: bool = False
+    last_activity: Optional[str] = None  # ISO format timestamp
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -28,7 +30,8 @@ class UserSession:
             email=data.get("email", ""),
             name=data.get("name", ""),
             role=data.get("role", "user"),
-            is_authenticated=data.get("is_authenticated", False)
+            is_authenticated=data.get("is_authenticated", False),
+            last_activity=data.get("last_activity")
         )
 
 
@@ -138,7 +141,8 @@ class AuthState(StateManager[Dict[str, Any]]):
             email=user_data.get("email", ""),
             name=user_data.get("name", ""),
             role=user_data.get("role", "user"),
-            is_authenticated=True
+            is_authenticated=True,
+            last_activity=datetime.utcnow().isoformat()
         )
         
         self.update_state(session.to_dict())
@@ -150,9 +154,27 @@ class AuthState(StateManager[Dict[str, Any]]):
         This clears the auth state and syncs to page session.
         Note: Call AppState.reset() for full logout including all domain states.
         """
+        # Log the logout if we have user info
+        try:
+            from services.logging_service import get_auth_logger
+            if self.is_authenticated and self.user_email:
+                get_auth_logger().log_logout(self.user_email, self.user_id)
+        except Exception:
+            pass
+        
         self.clear_observers()  # Clear any lingering subscriptions
         self.reset(UserSession().to_dict())
         self._sync_to_page_session()
+    
+    def update_last_activity(self) -> None:
+        """Update the last activity timestamp.
+        
+        Call this on each route change to track session activity.
+        """
+        if self.is_authenticated:
+            self.patch_state({
+                "last_activity": datetime.utcnow().isoformat()
+            }, notify=False)  # Don't notify observers for activity updates
     
     def update_user_info(self, **kwargs) -> None:
         """Update specific user info fields.

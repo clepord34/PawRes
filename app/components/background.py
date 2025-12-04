@@ -33,34 +33,3 @@ def create_gradient_background(
             colors=[start_color, end_color]
         )
     )
-
-
-def create_centered_layout(
-    content: object,
-    with_gradient: bool = True,
-    scrollable: bool = False
-) -> object:
-    """Create a centered layout with optional gradient background."""
-    if ft is None:
-        raise RuntimeError("Flet must be installed to create layouts")
-    
-    scroll_mode = ft.ScrollMode.AUTO if scrollable else None
-    
-    layout = ft.Column(
-        [content],
-        alignment=ft.MainAxisAlignment.CENTER,
-        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-        expand=True,
-        scroll=scroll_mode,
-        spacing=10
-    )
-    
-    if with_gradient:
-        return create_gradient_background(layout)
-    else:
-        return ft.Container(
-            layout,
-            expand=True,
-            width=float('inf'),
-            height=float('inf'),
-        )

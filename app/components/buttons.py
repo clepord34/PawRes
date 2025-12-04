@@ -69,9 +69,22 @@ def create_action_button(
     bgcolor: object = None,
     color: object = None,
     outlined: bool = False,
-    border_color: object = None
+    border_color: object = None,
+    icon: object = None
 ) -> object:
-    """Create an action button (submit, cancel, etc.)."""
+    """Create an action button (submit, cancel, etc.).
+    
+    Args:
+        text: Button text
+        on_click: Click handler
+        width: Button width
+        height: Button height
+        bgcolor: Background color
+        color: Text color
+        outlined: If True, creates outlined button
+        border_color: Border color for outlined buttons
+        icon: Optional icon to display
+    """
     if ft is None:
         raise RuntimeError("Flet must be installed to create buttons")
     
@@ -85,6 +98,7 @@ def create_action_button(
             border_color = bgcolor
         return ft.ElevatedButton(
             text,
+            icon=icon,
             width=width,
             height=height,
             on_click=on_click,
@@ -99,6 +113,7 @@ def create_action_button(
     else:
         return ft.ElevatedButton(
             text,
+            icon=icon,
             width=width,
             height=height,
             on_click=on_click,
@@ -120,7 +135,7 @@ def create_logout_button(on_click: Callable, width: int = 160) -> object:
         ft.ElevatedButton(
             "Logout",
             width=width,
-            height=45,
+            height=42,
             on_click=on_click,
             style=ft.ButtonStyle(
                 bgcolor=ft.Colors.RED_400,
@@ -128,7 +143,7 @@ def create_logout_button(on_click: Callable, width: int = 160) -> object:
                 shape=ft.RoundedRectangleBorder(radius=8),
             )
         ),
-        padding=ft.padding.only(bottom=20),
+        padding=ft.padding.only(bottom=10),
     )
 
 

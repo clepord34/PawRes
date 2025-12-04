@@ -16,10 +16,8 @@ RouteHandler = Callable[["ft.Page", Dict[str, Any]], None]
 # These MUST be defined before importing the sub-modules to avoid circular imports
 # ===========================================================================
 
-def _clear(page) -> None:
-    """Clear all controls from the page."""
-    page.controls.clear()
-    page.update()
+# Import the canonical clear_page function from utils to avoid duplication
+from .utils import clear_page
 
 
 def _extract_query_params(route: str) -> Dict[str, str]:
@@ -46,6 +44,7 @@ from .auth_routes import ROUTES as AUTH_ROUTES
 from .admin_routes import ROUTES as ADMIN_ROUTES
 from .user_routes import ROUTES as USER_ROUTES
 from .shared_routes import ROUTES as SHARED_ROUTES
+from .middleware import check_route_access
 
 
 # Combine all route registries
@@ -94,11 +93,39 @@ def list_routes_by_role(role: str) -> list[str]:
     return routes
 
 
+def handle_route_with_auth(page, route_path: str, params: Dict[str, Any]) -> bool:
+    """Handle a route with authorization checks.
+    
+    Args:
+        page: Flet page object
+        route_path: The route path
+        params: Query parameters
+        
+    Returns:
+        True if the route was handled, False if access denied
+    """
+    route_config = get_route_handler(route_path)
+    
+    if not route_config:
+        return False
+    
+    # Check authorization
+    if not check_route_access(page, route_config, route_path):
+        return True  # Access denied, middleware handled redirect
+    
+    # Call the route handler
+    handler = route_config["handler"]
+    handler(page, params)
+    return True
+
+
 __all__ = [
-    "_clear",
+    "clear_page",
     "_extract_query_params",
     "get_route_handler",
     "get_all_routes",
     "list_routes_by_role",
+    "handle_route_with_auth",
+    "check_route_access",
     "ROUTE_REGISTRY",
 ]

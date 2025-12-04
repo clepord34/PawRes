@@ -1,7 +1,7 @@
 """Analytics service for data aggregation and reporting."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from datetime import datetime, timedelta
 
 from storage.database import Database
@@ -9,6 +9,7 @@ from storage.cache import get_query_cache, QueryCache
 from .animal_service import AnimalService
 from .rescue_service import RescueService
 from .adoption_service import AdoptionService
+from components.utils import parse_datetime
 import app_config
 from app_config import RescueStatus, AdoptionStatus, AnimalStatus
 
@@ -83,18 +84,10 @@ class AnalyticsService:
             is_rescued = base_status == RescueStatus.RESCUED
             if not dt or not is_rescued:
                 continue
-            # Handle both datetime objects and strings
-            if isinstance(dt, datetime):
-                d = dt
-            else:
-                try:
-                    d = datetime.fromisoformat(str(dt))
-                except (ValueError, TypeError):
-                    try:
-                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        # Unable to parse date, skip this mission
-                        continue
+            # Parse date using shared helper
+            d = parse_datetime(dt)
+            if d is None:
+                continue
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
@@ -107,18 +100,10 @@ class AnalyticsService:
             dt = req.get("request_date")
             if not dt:
                 continue
-            # Handle both datetime objects and strings
-            if isinstance(dt, datetime):
-                d = dt
-            else:
-                try:
-                    d = datetime.fromisoformat(str(dt))
-                except (ValueError, TypeError):
-                    try:
-                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        # Unable to parse date, skip this adoption request
-                        continue
+            # Parse date using shared helper
+            d = parse_datetime(dt)
+            if d is None:
+                continue
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
@@ -162,16 +147,9 @@ class AnalyticsService:
             is_rescued = base_status == RescueStatus.RESCUED
             if not dt or not is_rescued:
                 continue
-            if isinstance(dt, datetime):
-                d = dt
-            else:
-                try:
-                    d = datetime.fromisoformat(str(dt))
-                except (ValueError, TypeError):
-                    try:
-                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        continue
+            d = parse_datetime(dt)
+            if d is None:
+                continue
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
@@ -183,16 +161,9 @@ class AnalyticsService:
             dt = req.get("request_date")
             if not dt:
                 continue
-            if isinstance(dt, datetime):
-                d = dt
-            else:
-                try:
-                    d = datetime.fromisoformat(str(dt))
-                except (ValueError, TypeError):
-                    try:
-                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        continue
+            d = parse_datetime(dt)
+            if d is None:
+                continue
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
@@ -294,23 +265,9 @@ class AnalyticsService:
         last_month_end = this_month_start - timedelta(days=1)
         last_month_start = last_month_end.replace(day=1)
         
-        def parse_date(dt) -> Optional[datetime]:
-            """Parse date from various formats."""
-            if dt is None:
-                return None
-            if isinstance(dt, datetime):
-                return dt
-            try:
-                return datetime.fromisoformat(str(dt))
-            except (ValueError, TypeError):
-                try:
-                    return datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                except (ValueError, TypeError):
-                    return None
-        
         def is_in_range(dt, start: datetime, end: datetime) -> bool:
             """Check if datetime is within range."""
-            parsed = parse_date(dt)
+            parsed = parse_datetime(dt)
             if parsed is None:
                 return False
             return start <= parsed <= end
@@ -604,16 +561,9 @@ class AnalyticsService:
             dt = ms.get("mission_date")
             if not dt:
                 continue
-            if isinstance(dt, datetime):
-                d = dt
-            else:
-                try:
-                    d = datetime.fromisoformat(str(dt))
-                except (ValueError, TypeError):
-                    try:
-                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        continue
+            d = parse_datetime(dt)
+            if d is None:
+                continue
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
@@ -627,16 +577,9 @@ class AnalyticsService:
             dt = req.get("request_date")
             if not dt:
                 continue
-            if isinstance(dt, datetime):
-                d = dt
-            else:
-                try:
-                    d = datetime.fromisoformat(str(dt))
-                except (ValueError, TypeError):
-                    try:
-                        d = datetime.strptime(str(dt), "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        continue
+            d = parse_datetime(dt)
+            if d is None:
+                continue
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)

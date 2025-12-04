@@ -5,6 +5,8 @@ with the application's state management pattern.
 """
 from __future__ import annotations
 
+import csv
+from datetime import datetime
 from typing import Any, Callable, List, Optional
 
 import app_config
@@ -15,7 +17,7 @@ from services.rescue_service import RescueService
 from components import (
     create_admin_sidebar, create_user_sidebar, create_gradient_background,
     create_page_title, create_animal_card, create_empty_state, show_snackbar,
-    create_archive_dialog, create_remove_dialog
+    create_archive_dialog, create_remove_dialog, create_action_button
 )
 
 
@@ -111,17 +113,73 @@ class AnimalsListPage:
             filter_options.append(ft.dropdown.Option("processing", text="⏳ Needs Setup"))
         
         filter_dropdown = ft.Dropdown(
-            label="Filter by Status",
-            width=200,
+            hint_text="Filter by Status",
+            width=180,
             value=filter_status,
             options=filter_options,
             on_change=on_filter_change,
             bgcolor=ft.Colors.WHITE,
             border_color=ft.Colors.GREY_300,
             focused_border_color=ft.Colors.TEAL_400,
+            border_radius=8,
             color=ft.Colors.BLACK87,
             text_size=14,
         )
+        
+        # Species filter dropdown
+        species_list = list(set(a.get("species", "Unknown") for a in all_animals if a.get("species")))
+        species_list.sort()
+        species_options = [ft.dropdown.Option("all", text="All Species")] + [
+            ft.dropdown.Option(s, text=s) for s in species_list
+        ]
+        
+        species_filter = ft.Dropdown(
+            hint_text="Filter by Species",
+            width=160,
+            value="all",
+            options=species_options,
+            on_change=lambda e: self._on_species_filter(page, user_role, filter_status, e.control.value),
+            bgcolor=ft.Colors.WHITE,
+            border_color=ft.Colors.GREY_300,
+            focused_border_color=ft.Colors.TEAL_400,
+            border_radius=8,
+            color=ft.Colors.BLACK87,
+            text_size=14,
+        )
+        
+        # Store species filter value for export
+        self._species_filter = getattr(self, '_species_filter_value', 'all')
+        
+        # Refresh button
+        refresh_btn = ft.IconButton(
+            ft.Icons.REFRESH,
+            tooltip="Refresh list",
+            icon_color=ft.Colors.TEAL_600,
+            on_click=lambda e: self.build(page, user_role=user_role, filter_status=filter_status),
+        )
+        
+        # Export button (admin only)
+        export_btn = create_action_button(
+            "Export",
+            on_click=lambda e: self._export_csv(animals),
+            icon=ft.Icons.DOWNLOAD,
+            width=110,
+        ) if is_admin else ft.Container()
+        
+        # Add Animal button (admin only) - improved styling
+        add_animal_btn = ft.Container(
+            ft.Row([
+                ft.Icon(ft.Icons.ADD, size=18, color=ft.Colors.WHITE),
+                ft.Text("Add Animal", size=14, weight="w600", color=ft.Colors.WHITE),
+            ], spacing=6),
+            padding=ft.padding.symmetric(horizontal=16, vertical=10),
+            bgcolor=ft.Colors.TEAL_600,
+            border_radius=8,
+            on_click=lambda e: page.go("/add_animal"),
+            on_hover=lambda e: self._on_btn_hover(e),
+            ink=True,
+            tooltip="Add a new animal",
+        ) if is_admin else ft.Container()
 
         # Create animal cards using component
         def create_card_for_animal(animal):
@@ -223,17 +281,26 @@ class AnimalsListPage:
         # Main content area
         main_content = ft.Container(
             ft.Column([
-                # Page title
-                create_page_title("Animal List"),
-                # Filter row
+                # Page title row with Add Animal button
+                ft.Row([
+                    create_page_title("Animal List"),
+                    ft.Container(expand=True),
+                    add_animal_btn,
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                
+                # Filter and action row
                 ft.Container(
                     ft.Row([
                         filter_dropdown,
-                        ft.Container(width=20),
-                        ft.Text(f"Showing {len(animals)} animal(s)", size=14, color=ft.Colors.BLACK54),
-                    ], alignment=ft.MainAxisAlignment.START),
-                    padding=ft.padding.only(bottom=15),
+                        species_filter,
+                        ft.Container(expand=True),
+                        ft.Text(f"Showing {len(animals)} animal(s)", size=13, color=ft.Colors.BLACK54),
+                        refresh_btn,
+                        export_btn,
+                    ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
+                    padding=ft.padding.only(bottom=15, top=5),
                 ),
+                
                 # Animal cards grid
                 ft.Container(
                     ft.Row(
@@ -270,6 +337,57 @@ class AnimalsListPage:
     def _on_edit(self, page, animal_id: int) -> None:
         # navigate to edit page with query param
         page.go(f"/edit_animal?id={animal_id}")
+    
+    def _on_species_filter(self, page, user_role: str, status_filter: str, species: str) -> None:
+        """Handle species filter change - rebuild with species filter applied."""
+        self._species_filter_value = species
+        self.build(page, user_role=user_role, filter_status=status_filter)
+    
+    def _on_btn_hover(self, e) -> None:
+        """Handle button hover effect."""
+        import flet as ft
+        if e.data == "true":
+            e.control.bgcolor = ft.Colors.TEAL_700
+        else:
+            e.control.bgcolor = ft.Colors.TEAL_600
+        e.control.update()
+    
+    def _export_csv(self, animals: list) -> None:
+        """Export current animal list to CSV."""
+        if not animals:
+            show_snackbar(self.page, "No animals to export", error=True)
+            return
+        
+        try:
+            # Generate filename
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"animals_export_{timestamp}.csv"
+            filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
+            
+            # Ensure exports directory exists
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Write CSV
+            fieldnames = ["id", "name", "species", "breed", "age", "status", "description", "created_at"]
+            with open(filepath, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                for animal in animals:
+                    writer.writerow({
+                        "id": animal.get("id", ""),
+                        "name": animal.get("name", ""),
+                        "species": animal.get("species", ""),
+                        "breed": animal.get("breed", ""),
+                        "age": animal.get("age", ""),
+                        "status": animal.get("status", ""),
+                        "description": animal.get("description", ""),
+                        "created_at": animal.get("created_at", ""),
+                    })
+            
+            show_snackbar(self.page, f"Exported {len(animals)} animals to {filename}")
+            
+        except Exception as e:
+            show_snackbar(self.page, f"Export failed: {e}", error=True)
 
 
 __all__ = ["AnimalsListPage"]

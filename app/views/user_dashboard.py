@@ -190,7 +190,7 @@ class UserDashboard:
                         "title": f"{pct:.0f}%",
                         "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
                     })
-            adoption_pie = create_pie_chart(adoption_sections, width=150, height=150, section_radius=68, legend_refs=adoption_pie_refs)
+            adoption_pie = create_pie_chart(adoption_sections, width=120, height=120, section_radius=68, legend_refs=adoption_pie_refs)
             
             # Build legend using create_chart_legend for proper sync
             adoption_legend_items = [
@@ -237,7 +237,7 @@ class UserDashboard:
                         border=ft.border.all(1, ft.Colors.TEAL_200),
                     ) if adoption_data_for_dialog else ft.Container(),
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                ft.Container(height=15),
+                ft.Divider(height=5),
                 # Content: Chart + Legend side by side
                 ft.Row([
                     ft.Container(
@@ -245,9 +245,12 @@ class UserDashboard:
                         width=150,
                         height=150,
                     ),
-                    ft.Container(width=20),
+                    ft.Container(width=10),
                     adoption_legend,
-                ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                expand=True
+                ),
+                
             ], spacing=0),
             width=360,
             height=230,
@@ -274,7 +277,7 @@ class UserDashboard:
                         "title": f"{pct:.0f}%",
                         "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
                     })
-            rescue_pie = create_pie_chart(rescue_sections, width=150, height=150, section_radius=68, legend_refs=rescue_pie_refs)
+            rescue_pie = create_pie_chart(rescue_sections, width=120, height=120, section_radius=68, legend_refs=rescue_pie_refs)
             
             # Build legend using create_chart_legend for proper sync
             rescue_legend_items = [
@@ -321,7 +324,7 @@ class UserDashboard:
                         border=ft.border.all(1, ft.Colors.TEAL_200),
                     ) if rescue_data_for_dialog else ft.Container(),
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                ft.Container(height=15),
+                ft.Divider(height=5),
                 # Content: Chart + Legend side by side
                 ft.Row([
                     ft.Container(
@@ -329,9 +332,11 @@ class UserDashboard:
                         width=150,
                         height=150,
                     ),
-                    ft.Container(width=20),
+                    ft.Container(width=10),
                     rescue_legend,
-                ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                expand=True,
+                ),
             ], spacing=0),
             width=360,
             height=230,

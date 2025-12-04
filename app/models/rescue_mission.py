@@ -10,10 +10,7 @@ import app_config
 
 @dataclass
 class RescueMission:
-    """Rescue mission model representing a rescue request.
-    
-    Matches the `rescue_missions` table schema exactly.
-    """
+    """Rescue mission model matching the `rescue_missions` table schema."""
     id: Optional[int] = None
     user_id: Optional[int] = None  # Can be None for anonymous emergency reports
     animal_id: Optional[int] = None

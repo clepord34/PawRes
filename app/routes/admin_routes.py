@@ -55,6 +55,30 @@ def render_hidden_items(page, params: Dict[str, Any]) -> None:
     page.update()
 
 
+def render_manage_records(page, params: Dict[str, Any]) -> None:
+    """Render the combined manage records page (rescue missions, adoptions, hidden items)."""
+    from views.manage_records_page import ManageRecordsPage
+    clear_page(page)
+    ManageRecordsPage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
+def render_user_management(page, params: Dict[str, Any]) -> None:
+    """Render the user management page."""
+    from views.user_management_page import UserManagementPage
+    clear_page(page)
+    UserManagementPage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
+def render_audit_logs(page, params: Dict[str, Any]) -> None:
+    """Render the audit log viewer page."""
+    from views.audit_log_page import AuditLogPage
+    clear_page(page)
+    AuditLogPage(db_path=app_config.DB_PATH).build(page)
+    page.update()
+
+
 # ============================================================================
 # ADMIN ROUTES - Add new admin routes here
 # ============================================================================
@@ -93,6 +117,24 @@ ROUTES: Dict[str, Dict[str, Any]] = {
     "/hidden_items": {
         "handler": render_hidden_items,
         "description": "View and manage archived/removed items",
+        "requires_auth": True,
+        "allowed_roles": ["admin"],
+    },
+    "/manage_records": {
+        "handler": render_manage_records,
+        "description": "Manage rescue missions, adoption requests, and hidden items",
+        "requires_auth": True,
+        "allowed_roles": ["admin"],
+    },
+    "/user_management": {
+        "handler": render_user_management,
+        "description": "Manage user accounts",
+        "requires_auth": True,
+        "allowed_roles": ["admin"],
+    },
+    "/audit_logs": {
+        "handler": render_audit_logs,
+        "description": "View security audit logs",
         "requires_auth": True,
         "allowed_roles": ["admin"],
     },

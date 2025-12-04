@@ -15,19 +15,7 @@ from components import (
 
 
 class LoginPage:
-    """Responsive login page for mobile/tablet/desktop.
-
-    Example usage in a Flet app:
-
-        import flet as ft
-        from pages.login_page import LoginPage
-
-        def main(page: ft.Page):
-            login = LoginPage(db_path="app.db")
-            login.build(page)
-
-        ft.app(target=main)
-    """
+    """Login page with email/password and Google OAuth support."""
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         # allow injecting a DB path or Database instance via AuthService
@@ -209,9 +197,65 @@ class LoginPage:
             show_snackbar(page, "Please enter email and password")
             return
 
-        user = self.auth.login(email, password)
+        # Use the new login method that returns result status
+        from services.auth_service import AuthResult
+        
+        user, result = self.auth.login(email, password)
+        
+        if result == AuthResult.ACCOUNT_LOCKED:
+            # Check lockout status to show remaining time
+            is_locked, remaining = self.auth.get_lockout_status(email)
+            print(f"[DEBUG] Lockout status: is_locked={is_locked}, remaining={remaining}")
+            if remaining:
+                show_snackbar(
+                    page, 
+                    f"Account locked. Please try again in {remaining} minute(s).",
+                    error=True
+                )
+            else:
+                show_snackbar(page, "Account is locked. Please try again later.", error=True)
+            return
+        
+        if result == AuthResult.ACCOUNT_DISABLED:
+            show_snackbar(page, "This account has been disabled. Contact an administrator.", error=True)
+            return
+        
         if not user:
-            show_snackbar(page, "Invalid email or password")
+            # Get current attempt count to show warning
+            max_attempts = getattr(app_config, 'MAX_FAILED_LOGIN_ATTEMPTS', 5)
+            
+            user_check = self.auth.db.fetch_one(
+                "SELECT failed_login_attempts FROM users WHERE email = ?", (email,)
+            )
+            print(f"[DEBUG] User check result: {user_check}")
+            
+            if user_check:
+                attempts = user_check.get("failed_login_attempts", 0) or 0
+                remaining_attempts = max_attempts - attempts
+                print(f"[DEBUG] Attempts: {attempts}, Remaining: {remaining_attempts}, Max: {max_attempts}")
+                
+                if remaining_attempts <= 0:
+                    # Account just got locked
+                    is_locked, remaining_time = self.auth.get_lockout_status(email)
+                    if remaining_time:
+                        show_snackbar(
+                            page, 
+                            f"Account locked. Please try again in {remaining_time} minute(s).",
+                            error=True
+                        )
+                    else:
+                        show_snackbar(page, "Account is locked. Please try again later.", error=True)
+                    return
+                elif remaining_attempts <= 3:
+                    # Show warning when 3 or fewer attempts remaining
+                    show_snackbar(
+                        page, 
+                        f"Invalid email or password. {remaining_attempts} attempt(s) remaining before lockout.",
+                        error=True
+                    )
+                    return
+            
+            show_snackbar(page, "Invalid email or password", error=True)
             return
 
         role = user.get("role") or "user"

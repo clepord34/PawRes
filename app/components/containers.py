@@ -157,6 +157,45 @@ def create_page_title(
     )
 
 
+def create_section_header(
+    title: str,
+    count: int,
+    color: object,
+    padding_top: int = 8,
+    padding_bottom: int = 4,
+) -> object:
+    """Create a section header with count badge.
+    
+    Commonly used in list pages to separate groups of items
+    (e.g., "Archived Missions (5)", "Removed Animals (3)").
+    
+    Args:
+        title: Section title text
+        count: Number to display in badge
+        color: Color for title text and badge background
+        padding_top: Top padding
+        padding_bottom: Bottom padding
+        
+    Returns:
+        Container with title and count badge
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed to create containers")
+    
+    return ft.Container(
+        content=ft.Row([
+            ft.Text(title, size=18, weight=ft.FontWeight.BOLD, color=color),
+            ft.Container(
+                content=ft.Text(str(count), size=14, color=ft.Colors.WHITE),
+                bgcolor=color,
+                border_radius=12,
+                padding=ft.padding.symmetric(horizontal=10, vertical=2),
+            ),
+        ], spacing=12),
+        padding=ft.padding.only(top=padding_top, bottom=padding_bottom),
+    )
+
+
 def create_empty_state(
     message: str = "No data found",
     icon: Optional[object] = None,

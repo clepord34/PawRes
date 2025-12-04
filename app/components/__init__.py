@@ -13,7 +13,7 @@ from .buttons import create_nav_button, create_action_button, create_logout_butt
 from .status_badge import create_status_badge, create_mission_status_badge, create_adoption_status_dropdown
 
 # Card components (legacy)
-from .card import create_form_card, create_content_card, create_dashboard_card
+from .card import create_form_card, create_content_card
 
 # Background components
 from .background import create_gradient_background
@@ -37,6 +37,7 @@ from .containers import (
     create_section_card,
     create_chart_container,
     create_page_title,
+    create_section_header,
     create_empty_state,
     create_data_table,
     create_scrollable_data_table,
@@ -58,7 +59,7 @@ from .dialogs import (
 )
 
 # Utility functions
-from .utils import fig_to_base64, is_matplotlib_available
+from .utils import fig_to_base64, is_matplotlib_available, parse_date, parse_datetime
 
 # Animal form component
 from .animal_form import AnimalFormWidget, create_animal_form
@@ -76,6 +77,7 @@ from .charts import (
     create_clickable_stat_card,
     show_chart_details_dialog,
     create_insight_card,
+    create_insight_box,
     create_chart_card,
 )
 
@@ -98,7 +100,6 @@ __all__ = [
     # Cards (legacy)
     "create_form_card",
     "create_content_card",
-    "create_dashboard_card",
     # Background
     "create_gradient_background",
     # Photo upload
@@ -115,6 +116,7 @@ __all__ = [
     "create_section_card",
     "create_chart_container",
     "create_page_title",
+    "create_section_header",
     "create_empty_state",
     "create_data_table",
     "create_scrollable_data_table",
@@ -133,6 +135,8 @@ __all__ = [
     # Utils
     "fig_to_base64",
     "is_matplotlib_available",
+    "parse_date",
+    "parse_datetime",
     # Animal form
     "AnimalFormWidget",
     "create_animal_form",
@@ -148,5 +152,6 @@ __all__ = [
     "create_clickable_stat_card",
     "show_chart_details_dialog",
     "create_insight_card",
+    "create_insight_box",
     "create_chart_card",
 ]

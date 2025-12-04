@@ -1,6 +1,6 @@
 """Sidebar components for the application."""
 from __future__ import annotations
-from typing import Callable
+from typing import Callable, Optional
 
 try:
     import flet as ft
@@ -10,6 +10,37 @@ except ImportError:
 from .header import create_sidebar_header
 from .buttons import create_nav_button, create_logout_button
 from .profile import create_profile_section
+
+
+def _get_user_profile_photo(user_id: Optional[int]) -> Optional[str]:
+    """Fetch user's profile photo from database.
+    
+    Args:
+        user_id: The user's ID
+        
+    Returns:
+        Base64 encoded photo string or None
+    """
+    if not user_id:
+        return None
+    
+    try:
+        import app_config
+        from storage.database import Database
+        from services.photo_service import load_photo
+        
+        db = Database(app_config.DB_PATH)
+        user = db.fetch_one(
+            "SELECT profile_picture FROM users WHERE id = ?",
+            (user_id,)
+        )
+        
+        if user and user.get("profile_picture"):
+            return load_photo(user["profile_picture"])
+    except Exception as e:
+        print(f"[WARN] Could not load profile photo: {e}")
+    
+    return None
 
 
 def _handle_logout(page: object) -> None:
@@ -44,15 +75,27 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
     # Normalize current route (remove query params for comparison)
     route_path = current_route.split("?")[0] if current_route else ""
     
-    # Define nav items with their routes for matching
+    # Get user info from app state
+    try:
+        from state import get_app_state
+        app_state = get_app_state()
+        user_name = app_state.auth.user_name or "Admin"
+        user_id = app_state.auth.user_id
+    except Exception:
+        user_name = "Admin"
+        user_id = None
+    
+    # Fetch profile photo
+    profile_photo = _get_user_profile_photo(user_id)
+    
+    # Define nav items with their routes for matching (removed My Profile - now clickable in profile section)
     nav_items = [
         ("Admin Dashboard", "/admin", ["/admin"]),
-        ("Add Animal", "/add_animal", ["/add_animal"]),
-        ("View Animal List", "/animals_list?admin=1", ["/animals_list", "/edit_animal"]),
-        ("View Rescue Missions", "/rescue_missions?admin=1", ["/rescue_missions"]),
-        ("Adoption Requests", "/adoption_requests", ["/adoption_requests"]),
+        ("View Animal List", "/animals_list?admin=1", ["/animals_list", "/edit_animal", "/add_animal"]),
+        ("Manage Records", "/manage_records", ["/manage_records", "/rescue_missions", "/adoption_requests", "/hidden_items"]),
         ("View Data Charts", "/charts", ["/charts"]),
-        ("Hidden Items", "/hidden_items", ["/hidden_items"]),
+        ("User Management", "/user_management", ["/user_management"]),
+        ("Audit Logs", "/audit_logs", ["/audit_logs"]),
     ]
     
     # Create navigation buttons with active state
@@ -64,14 +107,21 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
         )
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))
-    profile = create_profile_section("Admin", is_admin=True)
+    
+    # Create clickable profile section
+    profile = create_profile_section(
+        user_name, 
+        is_admin=True,
+        profile_photo=profile_photo,
+        on_click=lambda e: page.go("/profile")
+    )
     
     return ft.Container(
         ft.Column(
             [sidebar_header] + nav_buttons + [
                 ft.Container(expand=True),  # Spacer
-                logout_btn,
                 profile,
+                logout_btn,
             ],
             horizontal_alignment="center",
             spacing=12
@@ -100,7 +150,21 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
     # Normalize current route (remove query params for comparison)
     route_path = current_route.split("?")[0] if current_route else ""
     
-    # Define nav items with their routes for matching
+    # Get user ID from app state for fetching profile photo
+    try:
+        from state import get_app_state
+        app_state = get_app_state()
+        user_id = app_state.auth.user_id
+        # Use state name if not provided
+        if user_name == "User":
+            user_name = app_state.auth.user_name or "User"
+    except Exception:
+        user_id = None
+    
+    # Fetch profile photo
+    profile_photo = _get_user_profile_photo(user_id)
+    
+    # Define nav items with their routes for matching (removed My Profile - now clickable in profile section)
     nav_items = [
         ("User Dashboard", "/user", ["/user"]),
         ("Apply for Adoption", "/available_adoption", ["/available_adoption", "/adoption_form"]),
@@ -119,14 +183,21 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
         )
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))
-    profile = create_profile_section(user_name, is_admin=False)
+    
+    # Create clickable profile section
+    profile = create_profile_section(
+        user_name, 
+        is_admin=False,
+        profile_photo=profile_photo,
+        on_click=lambda e: page.go("/profile")
+    )
     
     return ft.Container(
         ft.Column(
             [sidebar_header] + nav_buttons + [
                 ft.Container(expand=True),  # Spacer
-                logout_btn,
                 profile,
+                logout_btn,
             ],
             horizontal_alignment="center",
             spacing=12

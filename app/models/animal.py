@@ -10,10 +10,7 @@ import app_config
 
 @dataclass
 class Animal:
-    """Animal model representing an animal in the shelter.
-    
-    Matches the `animals` table schema exactly.
-    """
+    """Animal model matching the `animals` table schema."""
     id: Optional[int] = None
     name: str = ""
     species: str = ""  # e.g., "Dog", "Cat", "Other"

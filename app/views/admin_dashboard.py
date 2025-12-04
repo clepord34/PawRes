@@ -11,7 +11,7 @@ from services.map_service import MapService
 from state import get_app_state
 import app_config
 from components import (
-    create_admin_sidebar, create_dashboard_card, create_gradient_background,
+    create_admin_sidebar, create_gradient_background,
     create_line_chart, create_bar_chart, create_pie_chart,
     create_chart_legend, create_clickable_stat_card, show_chart_details_dialog,
     STATUS_COLORS, PIE_CHART_COLORS,

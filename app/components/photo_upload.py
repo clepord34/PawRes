@@ -14,6 +14,7 @@ except ImportError:
 
 # Import FileStore for file-based storage
 from storage.file_store import get_file_store, FileStoreError
+from services.photo_service import get_photo_service
 
 
 class PhotoUploadWidget:
@@ -34,6 +35,7 @@ class PhotoUploadWidget:
         self.width = width
         self.height = height
         self.file_store = get_file_store()
+        self._photo_service = get_photo_service()
         
         # Track the current photo - can be filename or base64
         self._photo_filename: Optional[str] = None
@@ -48,29 +50,13 @@ class PhotoUploadWidget:
         self.file_picker = ft.FilePicker(on_result=self._on_file_picked)
         page.overlay.append(self.file_picker)
     
-    def _is_base64(self, data: str) -> bool:
-        """Check if a string looks like base64 data (not a filename)."""
-        if not data:
-            return False
-        # Filenames are typically short and have extensions
-        # Base64 is long and doesn't have path separators
-        # Fixed operator precedence with proper parentheses
-        if len(data) > 200 or ('/' not in data and '\\' not in data and '.' not in data[-5:]):
-            try:
-                # Try to decode a small portion to verify it's base64
-                base64.b64decode(data[:100] + '==', validate=True)
-                return len(data) > 50  # Base64 images are usually long
-            except Exception:
-                pass
-        return False
-    
     def _load_photo_base64(self, photo: str) -> Optional[str]:
         """Load photo as base64, whether from filename or already base64."""
         if not photo:
             return None
         
         # Check if it's already base64 (legacy data)
-        if self._is_base64(photo):
+        if self._photo_service.is_base64(photo):
             self._photo_base64 = photo
             return photo
         
@@ -232,14 +218,3 @@ def create_photo_upload_widget(
 ) -> PhotoUploadWidget:
     """Factory function to create a photo upload widget."""
     return PhotoUploadWidget(page, initial_photo, width, height)
-
-
-# Keep backward compatibility alias
-def create_photo_upload_widget_legacy(
-    page: object,
-    initial_photo_base64: Optional[str] = None,
-    width: int = 140,
-    height: int = 140
-) -> PhotoUploadWidget:
-    """Legacy factory function (backward compatible parameter name)."""
-    return PhotoUploadWidget(page, initial_photo_base64, width, height)

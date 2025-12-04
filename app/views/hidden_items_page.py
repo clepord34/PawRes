@@ -179,14 +179,16 @@ class HiddenItemsPage:
         sections = []
         
         if archived:
-            sections.append(self._build_section_header("Archived Missions", len(archived), ft.Colors.AMBER_700))
+            from components import create_section_header
+            sections.append(create_section_header("Archived Missions", len(archived), ft.Colors.AMBER_700))
             for mission in archived:
                 sections.append(self._build_rescue_mission_card(mission, is_removed=False))
         
         if removed:
             if archived:
                 sections.append(ft.Container(height=24))
-            sections.append(self._build_section_header("Removed Missions", len(removed), ft.Colors.RED_700))
+            from components import create_section_header
+            sections.append(create_section_header("Removed Missions", len(removed), ft.Colors.RED_700))
             for mission in removed:
                 sections.append(self._build_rescue_mission_card(mission, is_removed=True))
         
@@ -212,14 +214,16 @@ class HiddenItemsPage:
         sections = []
         
         if archived:
-            sections.append(self._build_section_header("Archived Requests", len(archived), ft.Colors.AMBER_700))
+            from components import create_section_header
+            sections.append(create_section_header("Archived Requests", len(archived), ft.Colors.AMBER_700))
             for request in archived:
                 sections.append(self._build_adoption_request_card(request, is_removed=False))
         
         if removed:
             if archived:
                 sections.append(ft.Container(height=24))
-            sections.append(self._build_section_header("Removed Requests", len(removed), ft.Colors.RED_700))
+            from components import create_section_header
+            sections.append(create_section_header("Removed Requests", len(removed), ft.Colors.RED_700))
             for request in removed:
                 sections.append(self._build_adoption_request_card(request, is_removed=True))
         
@@ -245,35 +249,20 @@ class HiddenItemsPage:
         sections = []
         
         if archived:
-            sections.append(self._build_section_header("Archived Animals", len(archived), ft.Colors.AMBER_700))
+            from components import create_section_header
+            sections.append(create_section_header("Archived Animals", len(archived), ft.Colors.AMBER_700))
             for animal in archived:
                 sections.append(self._build_animal_card(animal, is_removed=False))
         
         if removed:
             if archived:
                 sections.append(ft.Container(height=24))
-            sections.append(self._build_section_header("Removed Animals", len(removed), ft.Colors.RED_700))
+            from components import create_section_header
+            sections.append(create_section_header("Removed Animals", len(removed), ft.Colors.RED_700))
             for animal in removed:
                 sections.append(self._build_animal_card(animal, is_removed=True))
         
         return ft.Column(sections, spacing=12)
-    
-    def _build_section_header(self, title: str, count: int, color):
-        """Build a section header with count."""
-        import flet as ft
-        
-        return ft.Container(
-            content=ft.Row([
-                ft.Text(title, size=18, weight=ft.FontWeight.BOLD, color=color),
-                ft.Container(
-                    content=ft.Text(str(count), size=14, color=ft.Colors.WHITE),
-                    bgcolor=color,
-                    border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=10, vertical=2),
-                ),
-            ], spacing=12),
-            padding=ft.padding.only(top=8, bottom=4),
-        )
     
     def _build_rescue_mission_card(self, mission: Dict[str, Any], is_removed: bool):
         """Build a card for a hidden rescue mission."""

@@ -10,7 +10,7 @@ except Exception:  # pragma: no cover - flet not installed in test env
 
 from services.auth_service import AuthService
 from state import get_app_state
-from routes import get_route_handler, _extract_query_params, _clear
+from routes import get_route_handler, _extract_query_params, clear_page, check_route_access
 import app_config
 
 
@@ -35,14 +35,10 @@ def main(page) -> None:
 	page.spacing = 0
 	page.bgcolor = ft.Colors.TRANSPARENT
 	page.theme_mode = ft.ThemeMode.LIGHT
-	
-	# Delay maximizing to avoid black screen rendering glitch on Windows
-	page.update()
-	page.window.maximized = True
 
 	def _render_error_page(message: str, details: str = "") -> None:
 		"""Render an error page with a home button."""
-		_clear(page)
+		clear_page(page)
 		content = ft.Column([
 			ft.Text(message, size=20, weight="bold", color=ft.Colors.RED),
 			ft.Divider(height=10),
@@ -61,7 +57,7 @@ def main(page) -> None:
 		page.update()
 
 	def route_change(route) -> None:
-		"""Handle route changes using the route registry."""
+		"""Handle route changes using the route registry with authorization."""
 		r = page.route
 		route_path = r.split("?")[0] if "?" in r else r
 		
@@ -73,6 +69,12 @@ def main(page) -> None:
 			
 			if route_config:
 				params = _extract_query_params(r)
+				
+				# Check authorization before handling route
+				if not check_route_access(page, route_config, route_path):
+					# Access denied - middleware handles redirect
+					return
+				
 				handler = route_config["handler"]
 				handler(page, params)
 			else:

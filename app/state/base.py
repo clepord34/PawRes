@@ -17,25 +17,11 @@ class Observable:
     """Base class implementing the observer pattern."""
     
     def __init__(self):
-        """Initialize the observable with an empty set of observers."""
         self._observers: List[weakref.ref] = []
         self._lock = threading.RLock()
     
     def subscribe(self, callback: Callable[[Dict[str, Any]], None]) -> Callable[[], None]:
-        """Subscribe to state changes.
-        
-        Args:
-            callback: Function to call when state changes.
-                      Receives a dict with changed data.
-        
-        Returns:
-            Unsubscribe function. Call it to stop receiving updates.
-        
-        Example:
-            unsubscribe = state.subscribe(my_handler)
-            # ... later ...
-            unsubscribe()  # Stop receiving updates
-        """
+        """Subscribe to state changes. Returns an unsubscribe function."""
         with self._lock:
             # Store weak reference to allow garbage collection
             ref = weakref.ref(callback)
