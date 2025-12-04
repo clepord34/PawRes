@@ -8,6 +8,9 @@ from typing import Generator
 
 import pytest
 
+# Set testing environment variable before importing modules
+os.environ["PAWRES_TESTING"] = "1"
+
 # Add the parent directory to path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -71,7 +74,8 @@ def sample_user(auth_service: AuthService) -> dict:
         email="testuser@example.com",
         password="testpass123",
         phone="123-456-7890",
-        role="user"
+        role="user",
+        skip_policy=True  # Skip password policy for test fixtures
     )
     return {
         "id": user_id,

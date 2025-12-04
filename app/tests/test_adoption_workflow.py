@@ -23,12 +23,13 @@ class TestCompleteAdoptionWorkflow:
             name="John Adopter",
             email="john@example.com",
             password="adopt123",
-            phone="555-ADOPT"
+            phone="555-ADOPT",
+            skip_policy=True
         )
         assert user_id is not None
         
         # Step 2: User logs in
-        user = auth_service.login("john@example.com", "adopt123")
+        user, result = auth_service.login("john@example.com", "adopt123")
         assert user is not None
         assert user["name"] == "John Adopter"
         
@@ -77,10 +78,10 @@ class TestCompleteAdoptionWorkflow:
         """Test workflow with multiple users requesting different animals."""
         # Create two users
         user1_id = auth_service.register_user(
-            name="User One", email="user1@test.com", password="password1"
+            name="User One", email="user1@test.com", password="password1", skip_policy=True
         )
         user2_id = auth_service.register_user(
-            name="User Two", email="user2@test.com", password="password2"
+            name="User Two", email="user2@test.com", password="password2", skip_policy=True
         )
         
         # Create multiple animals
@@ -133,7 +134,7 @@ class TestAdoptionRequestManagement:
         """Test that admin can approve some requests and reject others."""
         # Setup: Create user and multiple animals
         user_id = auth_service.register_user(
-            name="Multi Adopter", email="multi@test.com", password="password123"
+            name="Multi Adopter", email="multi@test.com", password="password123", skip_policy=True
         )
         
         animal1_id = animal_service.add_animal(
@@ -179,7 +180,8 @@ class TestAdoptionRequestManagement:
         user_id = auth_service.register_user(
             name="Persistence Test",
             email="persist@test.com",
-            password="password123"
+            password="password123",
+            skip_policy=True
         )
         animal_id = animal_service.add_animal(
             name="TestAnimal",

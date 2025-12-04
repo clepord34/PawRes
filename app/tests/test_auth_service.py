@@ -16,7 +16,8 @@ class TestUserRegistration:
             email="alice@example.com",
             password="securepass123",
             phone="555-1234",
-            role="user"
+            role="user",
+            skip_policy=True
         )
         
         # Should return a valid user ID
@@ -30,7 +31,8 @@ class TestUserRegistration:
         auth_service.register_user(
             name="First User",
             email="duplicate@example.com",
-            password="pass123"
+            password="pass123",
+            skip_policy=True
         )
         
         # Attempt to register with same email should raise
@@ -38,7 +40,8 @@ class TestUserRegistration:
             auth_service.register_user(
                 name="Second User",
                 email="duplicate@example.com",
-                password="differentpass"
+                password="differentpass",
+                skip_policy=True
             )
 
     def test_register_user_with_admin_role(self, auth_service: AuthService):
@@ -47,7 +50,8 @@ class TestUserRegistration:
             name="Admin User",
             email="admin@example.com",
             password="adminpass",
-            role="admin"
+            role="admin",
+            skip_policy=True
         )
         
         role = auth_service.get_user_role(user_id)
@@ -59,16 +63,20 @@ class TestUserLogin:
 
     def test_login_with_valid_credentials(self, auth_service: AuthService):
         """Test that login succeeds with correct email and password."""
+        from services.auth_service import AuthResult
+        
         # Register a user first
         auth_service.register_user(
             name="Login Test",
             email="login@example.com",
-            password="mypassword"
+            password="mypassword",
+            skip_policy=True
         )
         
         # Login should succeed
-        user = auth_service.login("login@example.com", "mypassword")
+        user, result = auth_service.login("login@example.com", "mypassword")
         
+        assert result == AuthResult.SUCCESS
         assert user is not None
         assert user["email"] == "login@example.com"
         assert user["name"] == "Login Test"
@@ -78,20 +86,27 @@ class TestUserLogin:
 
     def test_login_with_wrong_password(self, auth_service: AuthService):
         """Test that login fails with incorrect password."""
+        from services.auth_service import AuthResult
+        
         auth_service.register_user(
             name="Wrong Pass Test",
             email="wrongpass@example.com",
-            password="correctpassword"
+            password="correctpassword",
+            skip_policy=True
         )
         
         # Login with wrong password should fail
-        user = auth_service.login("wrongpass@example.com", "wrongpassword")
+        user, result = auth_service.login("wrongpass@example.com", "wrongpassword")
         assert user is None
+        assert result == AuthResult.INVALID_CREDENTIALS
 
     def test_login_with_nonexistent_email(self, auth_service: AuthService):
         """Test that login fails for non-existent user."""
-        user = auth_service.login("nonexistent@example.com", "anypassword")
+        from services.auth_service import AuthResult
+        
+        user, result = auth_service.login("nonexistent@example.com", "anypassword")
         assert user is None
+        assert result == AuthResult.USER_NOT_FOUND
 
 
 class TestPasswordSecurity:
@@ -102,7 +117,8 @@ class TestPasswordSecurity:
         auth_service.register_user(
             name="Hash Test",
             email="hash@example.com",
-            password="plaintextpassword"
+            password="plaintextpassword",
+            skip_policy=True
         )
         
         # Query database directly to check stored password
@@ -121,12 +137,14 @@ class TestPasswordSecurity:
         auth_service.register_user(
             name="User One",
             email="user1@example.com",
-            password="samepassword"
+            password="samepassword",
+            skip_policy=True
         )
         auth_service.register_user(
             name="User Two",
             email="user2@example.com",
-            password="samepassword"
+            password="samepassword",
+            skip_policy=True
         )
         
         row1 = temp_db.fetch_one("SELECT password_hash FROM users WHERE email = ?", 
@@ -147,7 +165,8 @@ class TestGetUserRole:
             name="Role Test",
             email="role@example.com",
             password="pass123",
-            role="user"
+            role="user",
+            skip_policy=True
         )
         
         role = auth_service.get_user_role(user_id)
@@ -168,6 +187,7 @@ class TestOAuthLogin:
             email="oauth@example.com",
             name="OAuth User",
             oauth_provider="google",
+            # Note: URL will fail to download in tests, so profile_picture will be None
             profile_picture="https://example.com/photo.jpg"
         )
         
@@ -175,7 +195,9 @@ class TestOAuthLogin:
         assert user["email"] == "oauth@example.com"
         assert user["name"] == "OAuth User"
         assert user["oauth_provider"] == "google"
-        assert user["profile_picture"] == "https://example.com/photo.jpg"
+        # Profile picture is None because the fake URL can't be downloaded
+        # In production, real Google URLs are downloaded and saved
+        assert user["profile_picture"] is None
         assert user["role"] == "user"
 
     def test_login_oauth_returns_existing_user(self, auth_service: AuthService):
@@ -192,11 +214,34 @@ class TestOAuthLogin:
             email="returning@example.com",
             name="Updated Name",
             oauth_provider="google",
+            # Note: URL will fail to download in tests
             profile_picture="https://new-photo.jpg"
         )
         
         assert user1["id"] == user2["id"]
-        assert user2["profile_picture"] == "https://new-photo.jpg"
+        # Profile picture remains None because fake URL can't be downloaded
+        assert user2["profile_picture"] is None
+    
+    def test_login_oauth_with_existing_filename(self, auth_service: AuthService):
+        """Test that OAuth login preserves existing filename-based profile pictures."""
+        # First create user with a fake filename (not URL)
+        user1 = auth_service.login_oauth(
+            email="filename@example.com",
+            name="Filename User",
+            oauth_provider="google",
+            profile_picture="existing_photo.jpg"  # Already a filename, not URL
+        )
+        
+        assert user1["profile_picture"] == "existing_photo.jpg"
+        
+        # Second login without picture should keep existing
+        user2 = auth_service.login_oauth(
+            email="filename@example.com",
+            name="Filename User",
+            oauth_provider="google"
+        )
+        
+        assert user2["profile_picture"] == "existing_photo.jpg"
 
     def test_login_oauth_links_to_password_user(self, auth_service: AuthService):
         """Test that OAuth login links to existing password-based user."""
@@ -204,7 +249,8 @@ class TestOAuthLogin:
         user_id = auth_service.register_user(
             name="Password User",
             email="hybrid@example.com",
-            password="password123"
+            password="password123",
+            skip_policy=True
         )
         
         # OAuth login with same email should link to existing account
@@ -218,7 +264,7 @@ class TestOAuthLogin:
         assert oauth_user["oauth_provider"] == "google"
         
         # User should still be able to login with password
-        password_user = auth_service.login("hybrid@example.com", "password123")
+        password_user, result = auth_service.login("hybrid@example.com", "password123")
         assert password_user is not None
         assert password_user["id"] == user_id
 
