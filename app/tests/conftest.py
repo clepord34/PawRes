@@ -90,16 +90,12 @@ def sample_animal(animal_service: AnimalService) -> dict:
         name="Buddy",
         type="Dog",
         age=3,
-        health_status="healthy",
-        breed="Golden Retriever",
-        description="Friendly and playful"
+        health_status="healthy"
     )
     return {
         "id": animal_id,
         "name": "Buddy",
         "type": "Dog",
         "age": 3,
-        "health_status": "healthy",
-        "breed": "Golden Retriever",
-        "description": "Friendly and playful"
+        "health_status": "healthy"
     }

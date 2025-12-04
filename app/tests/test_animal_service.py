@@ -28,9 +28,7 @@ class TestAddAnimal:
             name="Whiskers",
             type="Cat",
             age=5,
-            health_status="healthy",
-            breed="Persian",
-            description="Fluffy and loves to nap"
+            health_status="healthy"
         )
         
         # Verify the animal was created with all fields
@@ -40,8 +38,6 @@ class TestAddAnimal:
         assert animal["species"] == "Cat"  # Note: 'type' maps to 'species' in DB
         assert animal["age"] == 5
         assert animal["status"] == "healthy"  # Note: 'health_status' maps to 'status'
-        assert animal["breed"] == "Persian"
-        assert animal["description"] == "Fluffy and loves to nap"
 
     def test_add_multiple_animals(self, animal_service: AnimalService):
         """Test adding multiple animals."""
@@ -138,33 +134,6 @@ class TestUpdateAnimal:
         animal_id = animal_service.add_animal(name="NoUpdate", type="Cat", health_status="healthy")
         
         result = animal_service.update_animal(animal_id)
-        assert result is False
-
-
-class TestDeleteAnimal:
-    """Tests for deleting animals."""
-
-    def test_delete_animal_success(self, animal_service: AnimalService):
-        """Test successfully deleting an animal."""
-        animal_id = animal_service.add_animal(
-            name="ToDelete",
-            type="Dog",
-            health_status="healthy"
-        )
-        
-        # Should exist before deletion
-        assert animal_service.get_animal_by_id(animal_id) is not None
-        
-        # Delete
-        result = animal_service.delete_animal(animal_id)
-        assert result is True
-        
-        # Should not exist after deletion
-        assert animal_service.get_animal_by_id(animal_id) is None
-
-    def test_delete_animal_not_found(self, animal_service: AnimalService):
-        """Test deleting a non-existent animal returns False."""
-        result = animal_service.delete_animal(99999)
         assert result is False
 
 

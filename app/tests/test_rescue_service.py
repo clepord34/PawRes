@@ -178,7 +178,7 @@ class TestMissionNotes:
     """Tests for mission notes field composition."""
 
     def test_notes_contain_animal_info(self, rescue_service: RescueService, test_user: int):
-        """Test that animal type and name are stored in notes."""
+        """Test that animal type and name are stored in dedicated columns."""
         rescue_service.submit_rescue_request(
             user_id=test_user,
             location="Test",
@@ -188,8 +188,9 @@ class TestMissionNotes:
         )
         
         missions = rescue_service.get_all_missions()
-        notes = missions[0]["notes"]
+        mission = missions[0]
         
-        assert "name: Orange tabby" in notes
-        assert "type: Cat" in notes
-        assert "Found near dumpster" in notes
+        # Animal info is now stored in dedicated columns, not notes
+        assert mission["animal_name"] == "Orange tabby"
+        assert mission["animal_type"] == "Cat"
+        assert mission["notes"] == "Found near dumpster"

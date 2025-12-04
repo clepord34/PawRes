@@ -37,9 +37,7 @@ class TestCompleteAdoptionWorkflow:
             name="Fluffy",
             type="Cat",
             age=2,
-            health_status="healthy",
-            breed="Siamese",
-            description="Gentle and loves cuddles"
+            health_status="healthy"
         )
         assert animal_id is not None
         
