@@ -23,7 +23,7 @@ class TestCompleteAdoptionWorkflow:
             name="John Adopter",
             email="john@example.com",
             password="adopt123",
-            phone="555-ADOPT",
+            phone="+639171234567",  # Valid E.164 format
             skip_policy=True
         )
         assert user_id is not None

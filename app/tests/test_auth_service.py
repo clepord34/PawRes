@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from services.auth_service import AuthService
+from services.auth_service import AuthService, AuthResult
 
 
 class TestUserRegistration:
@@ -15,7 +15,7 @@ class TestUserRegistration:
             name="Alice Smith",
             email="alice@example.com",
             password="securepass123",
-            phone="555-1234",
+            phone="+639171234567",  # Valid E.164 format phone
             role="user",
             skip_policy=True
         )
@@ -36,11 +36,32 @@ class TestUserRegistration:
         )
         
         # Attempt to register with same email should raise
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(ValueError, match="already registered"):
             auth_service.register_user(
                 name="Second User",
                 email="duplicate@example.com",
                 password="differentpass",
+                skip_policy=True
+            )
+
+    def test_register_user_duplicate_phone_raises_error(self, auth_service: AuthService):
+        """Test that registering with an existing phone raises ValueError."""
+        # Register first user with phone
+        auth_service.register_user(
+            name="First User",
+            email="first@example.com",
+            password="pass123",
+            phone="+639181234567",
+            skip_policy=True
+        )
+        
+        # Attempt to register with same phone (different format) should raise
+        with pytest.raises(ValueError, match="already registered"):
+            auth_service.register_user(
+                name="Second User",
+                email="second@example.com",
+                password="differentpass",
+                phone="09181234567",  # Same number in local format
                 skip_policy=True
             )
 
@@ -183,7 +204,7 @@ class TestOAuthLogin:
 
     def test_login_oauth_creates_new_user(self, auth_service: AuthService):
         """Test that OAuth login creates a new user if they don't exist."""
-        user = auth_service.login_oauth(
+        user, result = auth_service.login_oauth(
             email="oauth@example.com",
             name="OAuth User",
             oauth_provider="google",
@@ -191,6 +212,7 @@ class TestOAuthLogin:
             profile_picture="https://example.com/photo.jpg"
         )
         
+        assert result == AuthResult.SUCCESS
         assert user is not None
         assert user["email"] == "oauth@example.com"
         assert user["name"] == "OAuth User"
@@ -203,14 +225,15 @@ class TestOAuthLogin:
     def test_login_oauth_returns_existing_user(self, auth_service: AuthService):
         """Test that OAuth login returns existing user and updates OAuth info."""
         # First OAuth login creates user
-        user1 = auth_service.login_oauth(
+        user1, result1 = auth_service.login_oauth(
             email="returning@example.com",
             name="First Name",
             oauth_provider="google"
         )
+        assert result1 == AuthResult.SUCCESS
         
         # Second OAuth login should return same user
-        user2 = auth_service.login_oauth(
+        user2, result2 = auth_service.login_oauth(
             email="returning@example.com",
             name="Updated Name",
             oauth_provider="google",
@@ -218,6 +241,7 @@ class TestOAuthLogin:
             profile_picture="https://new-photo.jpg"
         )
         
+        assert result2 == AuthResult.SUCCESS
         assert user1["id"] == user2["id"]
         # Profile picture remains None because fake URL can't be downloaded
         assert user2["profile_picture"] is None
@@ -225,26 +249,28 @@ class TestOAuthLogin:
     def test_login_oauth_with_existing_filename(self, auth_service: AuthService):
         """Test that OAuth login preserves existing filename-based profile pictures."""
         # First create user with a fake filename (not URL)
-        user1 = auth_service.login_oauth(
+        user1, result1 = auth_service.login_oauth(
             email="filename@example.com",
             name="Filename User",
             oauth_provider="google",
             profile_picture="existing_photo.jpg"  # Already a filename, not URL
         )
         
+        assert result1 == AuthResult.SUCCESS
         assert user1["profile_picture"] == "existing_photo.jpg"
         
         # Second login without picture should keep existing
-        user2 = auth_service.login_oauth(
+        user2, result2 = auth_service.login_oauth(
             email="filename@example.com",
             name="Filename User",
             oauth_provider="google"
         )
         
+        assert result2 == AuthResult.SUCCESS
         assert user2["profile_picture"] == "existing_photo.jpg"
 
-    def test_login_oauth_links_to_password_user(self, auth_service: AuthService):
-        """Test that OAuth login links to existing password-based user."""
+    def test_login_oauth_conflict_with_password_user(self, auth_service: AuthService):
+        """Test that OAuth login returns OAUTH_CONFLICT for password-based user."""
         # Register user with password first
         user_id = auth_service.register_user(
             name="Password User",
@@ -253,18 +279,49 @@ class TestOAuthLogin:
             skip_policy=True
         )
         
-        # OAuth login with same email should link to existing account
-        oauth_user = auth_service.login_oauth(
+        # OAuth login with same email should return conflict
+        oauth_user, result = auth_service.login_oauth(
             email="hybrid@example.com",
             name="OAuth Name",
             oauth_provider="google"
         )
         
+        assert result == AuthResult.OAUTH_CONFLICT
         assert oauth_user["id"] == user_id
-        assert oauth_user["oauth_provider"] == "google"
         
         # User should still be able to login with password
-        password_user, result = auth_service.login("hybrid@example.com", "password123")
+        password_user, login_result = auth_service.login("hybrid@example.com", "password123")
+        assert login_result == AuthResult.SUCCESS
         assert password_user is not None
         assert password_user["id"] == user_id
+    
+    def test_link_and_unlink_google_account(self, auth_service: AuthService):
+        """Test linking and unlinking Google account."""
+        # Register user with password
+        user_id = auth_service.register_user(
+            name="Link Test User",
+            email="linktest@example.com",
+            password="password123",
+            skip_policy=True
+        )
+        
+        # Link Google account
+        success, msg = auth_service.link_google_account(user_id, "google")
+        assert success, f"Link failed: {msg}"
+        
+        # Now OAuth login should work without conflict
+        user, result = auth_service.login_oauth(
+            email="linktest@example.com",
+            name="Link Test User",
+            oauth_provider="google"
+        )
+        assert result == AuthResult.SUCCESS
+        
+        # Unlink Google account
+        success, msg = auth_service.unlink_google_account(user_id)
+        assert success, f"Unlink failed: {msg}"
+        
+        # Password login should still work
+        user, result = auth_service.login("linktest@example.com", "password123")
+        assert result == AuthResult.SUCCESS
 
