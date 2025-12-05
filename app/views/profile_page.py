@@ -1,20 +1,18 @@
 """Profile page for user self-service profile management."""
 from __future__ import annotations
 
-import hashlib
-import hmac
-import secrets
-from typing import Any, Dict, Optional
+from typing import Optional
 
-from storage.database import Database
 from storage.file_store import get_file_store, FileStoreError
-from services.password_policy import get_password_policy, PasswordHistoryManager
-from services.logging_service import get_auth_logger
+from services.user_service import UserService
+from services.auth_service import AuthService
+from services.password_policy import get_password_policy
 from services.photo_service import load_photo
+from services.google_auth_service import GoogleAuthService
 from state import get_app_state
 import app_config
 from components import (
-    create_form_text_field, create_action_button,
+    create_action_button,
     show_snackbar, create_gradient_background
 )
 from components.sidebar import create_admin_sidebar, create_user_sidebar
@@ -36,11 +34,11 @@ class ProfilePage:
             db_path: Path to the database file
         """
         self.db_path = db_path or app_config.DB_PATH
-        self.db = Database(self.db_path)
+        self.user_service = UserService(self.db_path)
+        self.auth_service = AuthService(self.db_path)
+        self.google_auth = GoogleAuthService()
         self.file_store = get_file_store()
         self.password_policy = get_password_policy()
-        self.password_history = PasswordHistoryManager(self.db_path)
-        self.auth_logger = get_auth_logger()
         
         # UI fields
         self._name_field = None
@@ -73,11 +71,8 @@ class ProfilePage:
             page.go("/")
             return
         
-        # Load user data
-        self._user = self.db.fetch_one(
-            "SELECT id, name, email, phone, role, created_at, last_login, oauth_provider, profile_picture FROM users WHERE id = ?",
-            (user_id,)
-        )
+        # Load user data through service
+        self._user = self.user_service.get_user_profile(user_id)
         
         if not self._user:
             show_snackbar(page, "User not found", error=True)
@@ -112,6 +107,9 @@ class ProfilePage:
         # Edit Profile Card
         edit_card = self._build_edit_card()
         
+        # Linked Accounts Card
+        linked_accounts_card = self._build_linked_accounts_card()
+        
         # Change Password Card
         password_card = self._build_password_card()
         
@@ -121,7 +119,7 @@ class ProfilePage:
                 header,
                 ft.Row([
                     ft.Column([profile_card], expand=1),
-                    ft.Column([edit_card, password_card], spacing=20, expand=2),
+                    ft.Column([edit_card, linked_accounts_card, password_card], spacing=20, expand=2),
                 ], spacing=20, expand=True, alignment=ft.MainAxisAlignment.START,
                    vertical_alignment=ft.CrossAxisAlignment.START),
             ], spacing=20, scroll=ft.ScrollMode.AUTO, expand=True),
@@ -327,15 +325,23 @@ class ProfilePage:
         """Build the change password card."""
         import flet as ft
         
-        # Check if user uses OAuth (can't change password)
+        # Check if user uses OAuth and has no password
         is_oauth = bool(self._user.get("oauth_provider"))
+        has_password = bool(self._user.get("password_hash"))
+        
+        # Need to fetch password_hash since get_user_profile doesn't include it
+        user_with_password = self.user_service.db.fetch_one(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (self._user.get("id"),)
+        )
+        has_password = bool(user_with_password and user_with_password.get("password_hash"))
         
         self._current_password_field = ft.TextField(
             label="Current Password",
             password=True,
             can_reveal_password=True,
             width=300,
-            disabled=is_oauth,
+            disabled=is_oauth and not has_password,
         )
         
         self._new_password_field = ft.TextField(
@@ -343,7 +349,6 @@ class ProfilePage:
             password=True,
             can_reveal_password=True,
             width=300,
-            disabled=is_oauth,
         )
         
         self._confirm_password_field = ft.TextField(
@@ -351,7 +356,6 @@ class ProfilePage:
             password=True,
             can_reveal_password=True,
             width=300,
-            disabled=is_oauth,
         )
         
         requirements = ft.Text(
@@ -360,25 +364,19 @@ class ProfilePage:
             color=ft.Colors.BLACK54,
         )
         
-        change_btn = create_action_button(
-            "Change Password",
-            on_click=lambda e: self._change_password(),
-            width=180,
-        )
+        content = []
         
-        content = [
-            ft.Text("Change Password", size=18, weight="bold", color=ft.Colors.BLACK87),
-            ft.Divider(height=15),
-        ]
-        
-        if is_oauth:
-            content.append(
+        if is_oauth and not has_password:
+            # OAuth user without password - show "Set Password" section
+            content.extend([
+                ft.Text("Set Password", size=18, weight="bold", color=ft.Colors.BLACK87),
+                ft.Divider(height=15),
                 ft.Container(
                     ft.Row([
                         ft.Icon(ft.Icons.INFO, color=ft.Colors.BLUE_600, size=18),
                         ft.Text(
                             f"You're signed in with {self._user.get('oauth_provider', 'OAuth').title()}. "
-                            "Password management is not available.",
+                            "Set a password to enable password login.",
                             size=13,
                             color=ft.Colors.BLUE_600,
                         ),
@@ -386,15 +384,69 @@ class ProfilePage:
                     bgcolor=ft.Colors.BLUE_50,
                     padding=15,
                     border_radius=8,
-                )
-            )
-        else:
+                ),
+                ft.Container(height=10),
+                self._new_password_field,
+                self._confirm_password_field,
+                requirements,
+                ft.Container(
+                    create_action_button(
+                        "Set Password",
+                        on_click=lambda e: self._set_password(),
+                        width=150,
+                    ),
+                    padding=ft.padding.only(top=10),
+                ),
+            ])
+        elif is_oauth and has_password:
+            # OAuth user with password - show change password
             content.extend([
+                ft.Text("Change Password", size=18, weight="bold", color=ft.Colors.BLACK87),
+                ft.Divider(height=15),
+                ft.Container(
+                    ft.Row([
+                        ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN_600, size=18),
+                        ft.Text(
+                            "Password is set. You can sign in with Google or your password.",
+                            size=13,
+                            color=ft.Colors.GREEN_700,
+                        ),
+                    ], spacing=10),
+                    bgcolor=ft.Colors.GREEN_50,
+                    padding=15,
+                    border_radius=8,
+                ),
+                ft.Container(height=10),
                 self._current_password_field,
                 self._new_password_field,
                 self._confirm_password_field,
                 requirements,
-                ft.Container(change_btn, padding=ft.padding.only(top=10)),
+                ft.Container(
+                    create_action_button(
+                        "Change Password",
+                        on_click=lambda e: self._change_password(),
+                        width=180,
+                    ),
+                    padding=ft.padding.only(top=10),
+                ),
+            ])
+        else:
+            # Regular password user - show change password
+            content.extend([
+                ft.Text("Change Password", size=18, weight="bold", color=ft.Colors.BLACK87),
+                ft.Divider(height=15),
+                self._current_password_field,
+                self._new_password_field,
+                self._confirm_password_field,
+                requirements,
+                ft.Container(
+                    create_action_button(
+                        "Change Password",
+                        on_click=lambda e: self._change_password(),
+                        width=180,
+                    ),
+                    padding=ft.padding.only(top=10),
+                ),
             ])
         
         return ft.Container(
@@ -405,8 +457,227 @@ class ProfilePage:
             border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
         )
     
+    def _build_linked_accounts_card(self) -> object:
+        """Build the linked accounts management card."""
+        import flet as ft
+        
+        user = self._user
+        has_google = bool(user.get("oauth_provider") == "google")
+        google_configured = self.google_auth.is_configured
+        
+        # Check if user has password (need to fetch since profile doesn't include it)
+        user_with_password = self.user_service.db.fetch_one(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (user.get("id"),)
+        )
+        has_password = bool(user_with_password and user_with_password.get("password_hash"))
+        
+        content = [
+            ft.Text("Linked Accounts", size=18, weight="bold", color=ft.Colors.BLACK87),
+            ft.Divider(height=15),
+        ]
+        
+        # Google Account Row
+        if has_google:
+            # Google is linked - show unlink option
+            google_status = ft.Container(
+                ft.Row([
+                    ft.Image(src="https://www.google.com/favicon.ico", width=20, height=20),
+                    ft.Text("Google Account", size=14, weight="w500"),
+                    ft.Container(
+                        ft.Text("Connected", size=11, color=ft.Colors.WHITE),
+                        bgcolor=ft.Colors.GREEN_600,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                        border_radius=4,
+                    ),
+                ], spacing=10),
+                padding=ft.padding.only(bottom=10),
+            )
+            content.append(google_status)
+            
+            if has_password:
+                # Can unlink if they have a password
+                unlink_btn = ft.OutlinedButton(
+                    "Unlink Google Account",
+                    icon=ft.Icons.LINK_OFF,
+                    on_click=lambda e: self._unlink_google(),
+                    style=ft.ButtonStyle(
+                        color=ft.Colors.RED_600,
+                        side=ft.BorderSide(1, ft.Colors.RED_300),
+                    ),
+                )
+                content.append(unlink_btn)
+            else:
+                # Can't unlink - no password set - point to Set Password section
+                content.append(
+                    ft.Container(
+                        ft.Row([
+                            ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.AMBER_700, size=16),
+                            ft.Text(
+                                "Set a password below to enable unlinking",
+                                size=12,
+                                color=ft.Colors.AMBER_700,
+                            ),
+                        ], spacing=8),
+                        bgcolor=ft.Colors.AMBER_50,
+                        padding=10,
+                        border_radius=6,
+                    )
+                )
+        else:
+            # Google is not linked - show link option
+            google_status = ft.Container(
+                ft.Row([
+                    ft.Image(src="https://www.google.com/favicon.ico", width=20, height=20),
+                    ft.Text("Google Account", size=14, weight="w500"),
+                    ft.Container(
+                        ft.Text("Not Connected", size=11, color=ft.Colors.WHITE),
+                        bgcolor=ft.Colors.GREY_500,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                        border_radius=4,
+                    ),
+                ], spacing=10),
+                padding=ft.padding.only(bottom=10),
+            )
+            content.append(google_status)
+            
+            if google_configured:
+                link_btn = ft.ElevatedButton(
+                    content=ft.Row([
+                        ft.Image(src="https://www.google.com/favicon.ico", width=16, height=16),
+                        ft.Text("Link Google Account", size=13),
+                    ], spacing=8),
+                    on_click=lambda e: self._link_google(),
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.WHITE,
+                        color=ft.Colors.BLACK87,
+                        side=ft.BorderSide(1, ft.Colors.GREY_400),
+                    ),
+                )
+                content.append(link_btn)
+            else:
+                content.append(
+                    ft.Text(
+                        "Google Sign-In is not configured",
+                        size=12,
+                        color=ft.Colors.GREY_500,
+                        italic=True,
+                    )
+                )
+        
+        return ft.Container(
+            ft.Column(content, spacing=10),
+            bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.WHITE),
+            border_radius=12,
+            padding=25,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
+        )
+    
+    def _link_google(self) -> None:
+        """Link Google account to current user."""
+        import flet as ft
+        
+        user_id = self._user.get("id")
+        user_email = self._user.get("email")
+        
+        show_snackbar(self._page, "Opening Google Sign-In... Please check your browser.")
+        
+        def on_google_complete(user_info):
+            """Called when Google Sign-In succeeds."""
+            try:
+                google_email = user_info.get("email")
+                
+                # Verify it's the same email as the account
+                if user_email and google_email != user_email:
+                    show_snackbar(
+                        self._page, 
+                        f"Google email ({google_email}) doesn't match your account email ({user_email})",
+                        error=True
+                    )
+                    return
+                
+                # Link the account
+                success, msg = self.auth_service.link_google_account(user_id, "google")
+                
+                if success:
+                    # Update app state
+                    app_state = get_app_state()
+                    app_state.auth.patch_state({"oauth_provider": "google"})
+                    
+                    show_snackbar(self._page, "Google account linked successfully!")
+                    
+                    # Refresh the page
+                    self.build(self._page)
+                else:
+                    show_snackbar(self._page, msg, error=True)
+                    
+            except Exception as ex:
+                print(f"[ERROR] Google linking failed: {ex}")
+                show_snackbar(self._page, f"Failed to link Google account: {ex}", error=True)
+        
+        def on_google_error(error_msg):
+            """Called when Google Sign-In fails."""
+            print(f"[ERROR] Google sign-in failed: {error_msg}")
+            show_snackbar(self._page, f"Google Sign-In failed: {error_msg}", error=True)
+        
+        self.google_auth.sign_in_async(
+            on_complete=on_google_complete,
+            on_error=on_google_error
+        )
+    
+    def _unlink_google(self) -> None:
+        """Unlink Google account from current user."""
+        import flet as ft
+        
+        user_id = self._user.get("id")
+        
+        def confirm_unlink(e):
+            self._page.close(dialog)
+            
+            success, msg = self.auth_service.unlink_google_account(user_id)
+            
+            if success:
+                # Update app state
+                app_state = get_app_state()
+                app_state.auth.patch_state({"oauth_provider": None})
+                
+                show_snackbar(self._page, "Google account unlinked successfully")
+                
+                # Refresh the page
+                self.build(self._page)
+            else:
+                show_snackbar(self._page, msg, error=True)
+        
+        def cancel(e):
+            self._page.close(dialog)
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Unlink Google Account?", weight="bold"),
+            content=ft.Text(
+                "You will no longer be able to sign in with Google. "
+                "You can still sign in using your password.",
+                size=14,
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=cancel),
+                ft.ElevatedButton(
+                    "Unlink",
+                    on_click=confirm_unlink,
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.RED_600,
+                        color=ft.Colors.WHITE,
+                    ),
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self._page.open(dialog)
+    
     def _save_profile(self) -> None:
         """Save profile changes including photo."""
+        from services.user_service import UserServiceError
+        
         name = self._name_field.value.strip()
         phone = self._phone_field.value.strip() or None
         
@@ -441,17 +712,17 @@ class ProfilePage:
                 show_snackbar(self._page, f"Error saving photo: {ex}", error=True)
                 return
         
-        # Build update query
-        if photo_filename:
-            self.db.execute(
-                "UPDATE users SET name = ?, phone = ?, profile_picture = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (name, phone, photo_filename, user_id)
+        # Update profile through service
+        try:
+            self.user_service.update_user_profile(
+                user_id=user_id,
+                name=name,
+                phone=phone,
+                profile_picture=photo_filename
             )
-        else:
-            self.db.execute(
-                "UPDATE users SET name = ?, phone = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (name, phone, user_id)
-            )
+        except UserServiceError as ex:
+            show_snackbar(self._page, str(ex), error=True)
+            return
         
         # Update app state
         app_state = get_app_state()
@@ -480,79 +751,18 @@ class ProfilePage:
             show_snackbar(self._page, "Passwords do not match", error=True)
             return
         
-        # Validate new password against policy
-        is_valid, errors = self.password_policy.validate(new_password)
-        if not is_valid:
-            show_snackbar(self._page, errors[0], error=True)
-            return
-        
         user_id = self._user.get("id")
         
-        # Verify current password
-        user = self.db.fetch_one(
-            "SELECT password_hash, password_salt FROM users WHERE id = ?",
-            (user_id,)
+        # Use service to change password (handles validation, history, logging)
+        result = self.user_service.change_user_password(
+            user_id=user_id,
+            current_password=current,
+            new_password=new_password
         )
         
-        if not user:
-            show_snackbar(self._page, "User not found", error=True)
+        if not result.get("success"):
+            show_snackbar(self._page, result.get("error", "Failed to change password"), error=True)
             return
-        
-        stored_hash = user.get("password_hash")
-        stored_salt = user.get("password_salt")
-        
-        if not stored_hash or not stored_salt:
-            show_snackbar(self._page, "Cannot change password for this account", error=True)
-            return
-        
-        try:
-            salt_bytes = bytes.fromhex(stored_salt)
-            current_hash = hashlib.pbkdf2_hmac(
-                "sha256", current.encode("utf-8"), salt_bytes, app_config.PBKDF2_ITERATIONS
-            ).hex()
-            
-            if not hmac.compare_digest(current_hash, stored_hash):
-                show_snackbar(self._page, "Current password is incorrect", error=True)
-                return
-        except Exception as e:
-            show_snackbar(self._page, "Error verifying password", error=True)
-            return
-        
-        # Check password history
-        allowed, error = self.password_history.check_reuse(
-            user_id, new_password, self.password_policy
-        )
-        if not allowed:
-            show_snackbar(self._page, error, error=True)
-            return
-        
-        # Hash new password
-        new_salt = secrets.token_bytes(app_config.SALT_LENGTH)
-        new_hash = hashlib.pbkdf2_hmac(
-            "sha256", new_password.encode("utf-8"), new_salt, app_config.PBKDF2_ITERATIONS
-        ).hex()
-        new_salt_hex = new_salt.hex()
-        
-        # Update password
-        self.db.execute(
-            """
-            UPDATE users SET 
-                password_hash = ?, 
-                password_salt = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (new_hash, new_salt_hex, user_id)
-        )
-        
-        # Add to password history
-        self.password_history.add_to_history(
-            user_id, new_hash, new_salt_hex, self.password_policy.history_count
-        )
-        
-        # Log the change
-        if self.auth_logger:
-            self.auth_logger.log_password_change(user_id, self._user.get("email"))
         
         # Clear password fields
         self._current_password_field.value = ""
@@ -561,6 +771,40 @@ class ProfilePage:
         self._page.update()
         
         show_snackbar(self._page, "Password changed successfully")
+    
+    def _set_password(self) -> None:
+        """Set password for OAuth user."""
+        new_password = self._new_password_field.value
+        confirm = self._confirm_password_field.value
+        
+        if not new_password:
+            show_snackbar(self._page, "Password is required", error=True)
+            return
+        
+        if new_password != confirm:
+            show_snackbar(self._page, "Passwords do not match", error=True)
+            return
+        
+        user_id = self._user.get("id")
+        
+        # Use service to set password for OAuth user
+        result = self.user_service.set_password_for_oauth_user(
+            user_id=user_id,
+            new_password=new_password
+        )
+        
+        if not result.get("success"):
+            show_snackbar(self._page, result.get("error", "Failed to set password"), error=True)
+            return
+        
+        # Clear password fields
+        self._new_password_field.value = ""
+        self._confirm_password_field.value = ""
+        
+        show_snackbar(self._page, "Password set successfully! You can now sign in with your password.")
+        
+        # Refresh the page to show updated UI
+        self.build(self._page)
 
 
 __all__ = ["ProfilePage"]

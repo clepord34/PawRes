@@ -1,20 +1,19 @@
 """Admin dashboard with navigation and analytics overview."""
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional
 
 from services.animal_service import AnimalService
 from services.rescue_service import RescueService
 from services.adoption_service import AdoptionService
 from services.analytics_service import AnalyticsService
 from services.map_service import MapService
-from state import get_app_state
 import app_config
 from components import (
     create_admin_sidebar, create_gradient_background,
     create_line_chart, create_bar_chart, create_pie_chart,
     create_chart_legend, create_clickable_stat_card, show_chart_details_dialog,
-    STATUS_COLORS, PIE_CHART_COLORS,
+    STATUS_COLORS, PIE_CHART_COLORS, create_interactive_map,
 )
 
 
@@ -43,8 +42,12 @@ class AdminDashboard:
         # Fetch data using analytics service
         stats = self.analytics_service.get_dashboard_stats()
         total_animals = stats["total_animals"]
-        total_adoptions = stats["total_adoptions"]
+        total_adoptions = stats["total_adoptions"]  # Actual approved count
         pending_applications = stats["pending_applications"]
+        
+        # Get total adoption requests for clarity (pending + approved + denied)
+        all_requests = self.adoption_service.get_all_requests() or []
+        total_requests = len([r for r in all_requests if (r.get("status") or "").lower() in ["pending", "approved", "denied"]])
         
         # Get pending rescue missions count
         pending_rescues = self.analytics_service.get_pending_rescue_missions()
@@ -69,6 +72,7 @@ class AdminDashboard:
         sidebar = create_admin_sidebar(page, current_route=page.route)
 
         # Stats cards - now with 4 clickable cards including Pending Rescue Missions
+        # Routes go to /manage_records with tab parameter (tab=0: Rescues, tab=1: Adoptions)
         stat_cards = ft.Row([
             create_clickable_stat_card(
                 title="Total Animals",
@@ -79,20 +83,20 @@ class AdminDashboard:
                 on_click=lambda e: page.go("/animals_list?admin=1"),
             ),
             create_clickable_stat_card(
-                title="Total Adoptions",
-                value=str(total_adoptions),
-                subtitle=adoptions_change,
+                title="Adoption Requests",
+                value=str(total_requests),
+                subtitle=f"{total_adoptions} approved",
                 icon=ft.Icons.FAVORITE,
                 icon_color=ft.Colors.ORANGE_600,
-                on_click=lambda e: page.go("/adoption_requests"),
+                on_click=lambda e: page.go("/manage_records?tab=1"),
             ),
             create_clickable_stat_card(
-                title="Pending Applications",
+                title="Pending Adoptions",
                 value=str(pending_applications),
                 subtitle=pending_change,
                 icon=ft.Icons.PENDING_ACTIONS,
                 icon_color=ft.Colors.BLUE_600,
-                on_click=lambda e: page.go("/adoption_requests"),
+                on_click=lambda e: page.go("/manage_records?tab=1"),
             ),
             create_clickable_stat_card(
                 title="Pending Rescues",
@@ -100,7 +104,7 @@ class AdminDashboard:
                 subtitle=rescues_change,
                 icon=ft.Icons.EMERGENCY,
                 icon_color=ft.Colors.RED_600,
-                on_click=lambda e: page.go("/rescue_missions?admin=1"),
+                on_click=lambda e: page.go("/manage_records?tab=0"),
             ),
         ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
 
@@ -274,42 +278,58 @@ class AdminDashboard:
         # ========================================
         # Map: Realtime Rescue Mission Map
         # ========================================
-        map_widget = self.map_service.create_map_with_markers(missions, is_admin=True)
+        # Check internet connectivity before creating map
+        is_online = self.map_service.check_map_tiles_available()
         
-        if map_widget:
+        if is_online:
+            # Use the interactive map wrapper with lock/unlock toggle
+            map_container = create_interactive_map(
+                map_service=self.map_service,
+                missions=missions,
+                page=page,
+                is_admin=True,
+                height=250,
+                title="Rescue Mission Map",
+                show_legend=True,
+                initially_locked=True,
+            )
+            # Wrap in fixed-size container for dashboard layout
             map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Rescue Mission Map", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
-                    ft.Divider(height=8, color=ft.Colors.GREY_300),
-                    ft.Container(
-                        map_widget,
-                        expand=True,
-                        border_radius=8,
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                    ),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
+                content=map_container,
                 width=420,
-                height=298,
-                padding=15,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
             )
         else:
-            # Fallback to placeholder if map creation fails
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Rescue Mission Map", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
-                    ft.Divider(height=8, color=ft.Colors.GREY_300),
-                    self.map_service.create_empty_map_placeholder(len(missions)),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
-                width=420,
-                height=298,
-                padding=15,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
-            )
+            # Use offline fallback with mission details when map creation fails
+            offline_widget = self.map_service.create_offline_map_fallback(missions, is_admin=True)
+            if offline_widget:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Rescue Mission Map", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                        ft.Divider(height=8, color=ft.Colors.GREY_300),
+                        offline_widget,
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
+                    width=420,
+                    height=298,
+                    padding=15,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                )
+            else:
+                # Final fallback to simple placeholder
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Rescue Mission Map", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                        ft.Divider(height=8, color=ft.Colors.GREY_300),
+                        self.map_service.create_empty_map_placeholder(len(missions)),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
+                    width=420,
+                    height=298,
+                    padding=15,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                )
 
         # Main content area with improved layout
         main_content = ft.Container(

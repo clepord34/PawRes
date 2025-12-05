@@ -1,21 +1,20 @@
-"""Login page with email/password authentication."""
+"""Login page with email/phone and password authentication."""
 from __future__ import annotations
 
-import threading
 from typing import Optional
 
-from services.auth_service import AuthService
+from services.auth_service import AuthService, AuthResult
 from services.google_auth_service import GoogleAuthService
 from state import get_app_state
 import app_config
 from components import (
-    create_header, create_form_card, create_gradient_background, create_action_button,
-    create_form_text_field, create_form_label, show_snackbar
+    create_header, create_gradient_background, create_action_button,
+    create_form_text_field, show_snackbar, create_error_dialog, create_info_dialog
 )
 
 
 class LoginPage:
-    """Login page with email/password and Google OAuth support."""
+    """Login page with email/phone and password plus Google OAuth support."""
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         # allow injecting a DB path or Database instance via AuthService
@@ -41,10 +40,10 @@ class LoginPage:
         # Header with logo/title - matching the image design
         header = create_header()
 
-        # Email field with icon - Enter key moves to password field
+        # Email/Phone field with icon - Enter key moves to password field
         self._email_field = create_form_text_field(
-            hint_text="Enter your email",
-            prefix_icon=ft.Icons.EMAIL_OUTLINED,
+            hint_text="Enter email or phone number",
+            prefix_icon=ft.Icons.CONTACT_MAIL_OUTLINED,
             on_submit=lambda e: self._password_field.focus(),
         )
         
@@ -124,7 +123,7 @@ class LoginPage:
         )
 
         # Simple text labels (no icons since they're in the text fields)
-        email_label = ft.Text("Email Address", size=13, weight="w500", color=ft.Colors.BLACK87)
+        email_label = ft.Text("Email or Phone Number", size=13, weight="w500", color=ft.Colors.BLACK87)
         password_label = ft.Text("Password", size=13, weight="w500", color=ft.Colors.BLACK87)
 
         # create a centered card/container for the form
@@ -171,12 +170,13 @@ class LoginPage:
             ),
         )
 
-        # Simple centered layout with gradient background
+        # Scrollable centered layout with gradient background
         layout = ft.Column(
             [header, card],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
         )
 
         page.controls.clear()
@@ -190,77 +190,105 @@ class LoginPage:
         except Exception:
             return
 
-        email = (self._email_field.value or "").strip()
+        email_or_phone = (self._email_field.value or "").strip()
         password = (self._password_field.value or "")
 
-        if not email or not password:
-            show_snackbar(page, "Please enter email and password")
+        if not email_or_phone or not password:
+            missing = []
+            if not email_or_phone:
+                missing.append("email or phone number")
+            if not password:
+                missing.append("password")
+            create_info_dialog(
+                page,
+                title="Missing Information",
+                message=f"Please enter your {' and '.join(missing)}.",
+                details="All fields are required to log in."
+            )
             return
 
         # Use the new login method that returns result status
-        from services.auth_service import AuthResult
-        
-        user, result = self.auth.login(email, password)
+        user, result = self.auth.login(email_or_phone, password)
         
         if result == AuthResult.ACCOUNT_LOCKED:
             # Check lockout status to show remaining time
-            is_locked, remaining = self.auth.get_lockout_status(email)
-            print(f"[DEBUG] Lockout status: is_locked={is_locked}, remaining={remaining}")
+            is_locked, remaining = self.auth.get_lockout_status(email_or_phone)
             if remaining:
-                show_snackbar(
-                    page, 
-                    f"Account locked. Please try again in {remaining} minute(s).",
-                    error=True
+                create_error_dialog(
+                    page,
+                    title="Account Temporarily Locked",
+                    message=f"Too many failed login attempts.",
+                    details=f"Your account has been locked for security reasons.\n\nPlease try again in {remaining} minute(s)."
                 )
             else:
-                show_snackbar(page, "Account is locked. Please try again later.", error=True)
+                create_error_dialog(
+                    page, 
+                    title="Account Locked",
+                    message="This account is temporarily locked.",
+                    details="Please wait a few minutes before trying again."
+                )
             return
         
         if result == AuthResult.ACCOUNT_DISABLED:
-            show_snackbar(page, "This account has been disabled. Contact an administrator.", error=True)
+            create_error_dialog(
+                page,
+                title="Account Disabled",
+                message="This account has been disabled by an administrator.",
+                details="If you believe this is a mistake, please contact the system administrator for assistance."
+            )
             return
         
         if not user:
             # Get current attempt count to show warning
             max_attempts = getattr(app_config, 'MAX_FAILED_LOGIN_ATTEMPTS', 5)
             
-            user_check = self.auth.db.fetch_one(
-                "SELECT failed_login_attempts FROM users WHERE email = ?", (email,)
-            )
-            print(f"[DEBUG] User check result: {user_check}")
+            attempts = self.auth.get_failed_login_attempts(email_or_phone)
             
-            if user_check:
-                attempts = user_check.get("failed_login_attempts", 0) or 0
+            if attempts is not None:
                 remaining_attempts = max_attempts - attempts
-                print(f"[DEBUG] Attempts: {attempts}, Remaining: {remaining_attempts}, Max: {max_attempts}")
                 
                 if remaining_attempts <= 0:
                     # Account just got locked
-                    is_locked, remaining_time = self.auth.get_lockout_status(email)
+                    is_locked, remaining_time = self.auth.get_lockout_status(email_or_phone)
                     if remaining_time:
-                        show_snackbar(
-                            page, 
-                            f"Account locked. Please try again in {remaining_time} minute(s).",
-                            error=True
+                        create_error_dialog(
+                            page,
+                            title="Account Locked",
+                            message="Too many failed login attempts.",
+                            details=f"Your account has been temporarily locked.\n\nPlease try again in {remaining_time} minute(s)."
                         )
                     else:
-                        show_snackbar(page, "Account is locked. Please try again later.", error=True)
+                        create_error_dialog(
+                            page,
+                            title="Account Locked",
+                            message="This account is temporarily locked.",
+                            details="Please wait a few minutes before trying again."
+                        )
                     return
                 elif remaining_attempts <= 3:
                     # Show warning when 3 or fewer attempts remaining
-                    show_snackbar(
-                        page, 
-                        f"Invalid email or password. {remaining_attempts} attempt(s) remaining before lockout.",
-                        error=True
+                    create_info_dialog(
+                        page,
+                        title="Login Failed",
+                        message="Invalid email/phone or password.",
+                        details=f"Warning: {remaining_attempts} attempt(s) remaining before your account is temporarily locked.",
+                        icon="warning"
                     )
                     return
             
-            show_snackbar(page, "Invalid email or password", error=True)
+            create_error_dialog(
+                page,
+                title="Login Failed",
+                message="Invalid email/phone or password.",
+                details="Please check your credentials and try again."
+            )
             return
 
         role = user.get("role") or "user"
         user_id = user.get("id")
         user_name = user.get("name")
+        email = user.get("email")
+        phone = user.get("phone")
         
         # Use centralized state management for login
         # Pass user data as dictionary matching AuthState.login() signature
@@ -268,10 +296,10 @@ class LoginPage:
         app_state.auth.login({
             "id": user_id,
             "email": email,
+            "phone": phone,
             "name": user_name,
             "role": role
         })
-        print(f"[DEBUG] User logged in via AppState: ID={user_id}, Email={email}, Role={role}")
 
         # navigate by role using state's redirect logic
         redirect_route = app_state.auth.get_redirect_route()
@@ -279,6 +307,11 @@ class LoginPage:
 
     def _on_google(self, page, e) -> None:
         """Handle Google Sign-In button click."""
+        try:
+            import flet as ft
+        except Exception:
+            return
+        
         if not self.google_auth.is_configured:
             show_snackbar(page, "Google Sign-In not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env")
             return
@@ -293,24 +326,85 @@ class LoginPage:
                 name = user_info.get("name", email.split("@")[0] if email else "User")
                 picture = user_info.get("picture")
                 
-                user = self.auth.login_oauth(
+                user, result = self.auth.login_oauth(
                     email=email,
                     name=name,
                     oauth_provider="google",
                     profile_picture=picture
                 )
                 
-                # Update app state
+                if result == AuthResult.OAUTH_CONFLICT:
+                    # User exists with password but no OAuth linked
+                    # Show dialog asking if they want to link the account
+                    def link_account(e):
+                        """Link Google account to existing password account."""
+                        success, msg = self.auth.link_google_account(user["id"], "google")
+                        if success:
+                            # Now log them in
+                            app_state = get_app_state()
+                            app_state.auth.login({
+                                "id": user["id"],
+                                "email": user.get("email"),
+                                "phone": user.get("phone"),
+                                "name": user.get("name"),
+                                "role": user.get("role", "user"),
+                                "profile_picture": user.get("profile_picture"),
+                                "oauth_provider": "google",
+                            })
+                            page.close(dialog)
+                            redirect_route = app_state.auth.get_redirect_route()
+                            page.go(redirect_route)
+                        else:
+                            page.close(dialog)
+                            show_snackbar(page, msg, error=True)
+                    
+                    def cancel(e):
+                        page.close(dialog)
+                        show_snackbar(page, "Google Sign-In cancelled")
+                    
+                    dialog = ft.AlertDialog(
+                        modal=True,
+                        title=ft.Text("Account Already Exists", weight="bold"),
+                        content=ft.Column([
+                            ft.Text(
+                                f"An account with email '{email}' already exists with a password.",
+                                size=14,
+                            ),
+                            ft.Container(height=10),
+                            ft.Text(
+                                "Would you like to link your Google account to this existing account? "
+                                "You'll then be able to sign in with either your password or Google.",
+                                size=13,
+                                color=ft.Colors.GREY_700,
+                            ),
+                        ], tight=True),
+                        actions=[
+                            ft.TextButton("Cancel", on_click=cancel),
+                            ft.ElevatedButton(
+                                "Link Google Account",
+                                on_click=link_account,
+                                style=ft.ButtonStyle(
+                                    bgcolor=ft.Colors.TEAL_600,
+                                    color=ft.Colors.WHITE,
+                                ),
+                            ),
+                        ],
+                        actions_alignment=ft.MainAxisAlignment.END,
+                    )
+                    page.open(dialog)
+                    return
+                
+                # Successful OAuth login
                 app_state = get_app_state()
                 app_state.auth.login({
                     "id": user["id"],
-                    "email": user["email"],
-                    "name": user["name"],
+                    "email": user.get("email"),
+                    "phone": user.get("phone"),
+                    "name": user.get("name"),
                     "role": user.get("role", "user"),
                     "profile_picture": user.get("profile_picture"),
+                    "oauth_provider": user.get("oauth_provider"),
                 })
-                
-                print(f"[DEBUG] Google user logged in: {email}")
                 
                 # Navigate to appropriate dashboard (must be done on main thread)
                 redirect_route = app_state.auth.get_redirect_route()

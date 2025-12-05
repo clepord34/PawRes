@@ -10,7 +10,7 @@ from services.rescue_service import RescueService
 from services.map_service import MapService
 from components import (
     create_page_header, create_gradient_background,
-    create_form_text_field, create_form_dropdown, show_snackbar
+    create_form_text_field, create_form_dropdown, show_snackbar, validate_contact
 )
 
 
@@ -70,7 +70,7 @@ class EmergencyRescuePage:
         # Contact field - required for emergency reports
         self._contact_field = create_form_text_field(
             label="Contact Number/Email",
-            hint_text="How can we reach you?",
+            hint_text="Email or phone (e.g., email@example.com or 09XXXXXXXXX)",
             width=400,
         )
         
@@ -300,6 +300,12 @@ class EmergencyRescuePage:
             return False, "Please enter your name."
         if not contact:
             return False, "Please enter contact information so we can reach you."
+        
+        # Validate contact is email or phone
+        is_valid, error_msg = validate_contact(contact)
+        if not is_valid:
+            return False, error_msg
+        
         if not location:
             return False, "Please enter or detect the location."
         if not details:
@@ -421,12 +427,10 @@ class EmergencyRescuePage:
             # Convert urgency label to code
             urgency = Urgency.from_label(urgency_label)
 
-            print(f"[DEBUG] Submitting emergency rescue: animal_type={animal_type}, reporter={reporter_name}, urgency={urgency}")
 
             # Use stored coordinates or try to geocode
             if self._current_coords:
                 latitude, longitude = self._current_coords
-                print(f"[DEBUG] Using geolocator coordinates: lat={latitude}, lng={longitude}")
             else:
                 loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor() as pool:
@@ -435,8 +439,16 @@ class EmergencyRescuePage:
                         self.map_service.geocode_location, 
                         location
                     )
-                latitude = coords[0] if coords else None
-                longitude = coords[1] if coords else None
+                
+                if coords:
+                    latitude = coords[0]
+                    longitude = coords[1]
+                else:
+                    # Location could not be geocoded - show error and don't save
+                    self._error_text.value = "Location not found. Please enter a valid address or use the GPS button to detect your location."
+                    show_snackbar(page, "❌ Could not find location. Please enter a valid address.", error=True)
+                    self._reset_submit_button(page)
+                    return
 
             # Submit rescue request with proper columns (user_id=None for anonymous)
             mission_id = self.rescue_service.submit_rescue_request(
@@ -453,7 +465,6 @@ class EmergencyRescuePage:
                 urgency=urgency,
             )
 
-            print(f"[DEBUG] Emergency rescue mission created with ID={mission_id}")
 
             self._current_coords = None
 
@@ -507,7 +518,7 @@ class EmergencyRescuePage:
         
         self._submit_btn.disabled = False
         self._submit_btn.content = ft.Row(
-            [ft.Icon(ft.Icons.EMERGENCY, size=18), ft.Text("Submit Emergency Report", size=14, weight="w600")],
+            [ft.Icon(ft.Icons.EMERGENCY, size=15), ft.Text("Submit Emergency Report", size=12, weight="w600")],
             spacing=8,
             alignment=ft.MainAxisAlignment.CENTER,
         )

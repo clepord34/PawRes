@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime
-from typing import Any, Callable, List, Optional
+from typing import Callable, Optional
 
 import app_config
-from app_config import AnimalStatus
 from state import get_app_state
 from services.photo_service import load_photo
 from services.rescue_service import RescueService
@@ -118,12 +117,7 @@ class AnimalsListPage:
             value=filter_status,
             options=filter_options,
             on_change=on_filter_change,
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
             border_radius=8,
-            color=ft.Colors.BLACK87,
-            text_size=14,
         )
         
         # Species filter dropdown
@@ -139,12 +133,7 @@ class AnimalsListPage:
             value="all",
             options=species_options,
             on_change=lambda e: self._on_species_filter(page, user_role, filter_status, e.control.value),
-            bgcolor=ft.Colors.WHITE,
-            border_color=ft.Colors.GREY_300,
-            focused_border_color=ft.Colors.TEAL_400,
             border_radius=8,
-            color=ft.Colors.BLACK87,
-            text_size=14,
         )
         
         # Store species filter value for export

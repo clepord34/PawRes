@@ -4,7 +4,7 @@ Uses AnimalState for state-driven data flow, ensuring consistency
 with the application's state management pattern.
 """
 from __future__ import annotations
-from typing import Optional, List, Dict
+from typing import Optional
 
 import app_config
 from state import get_app_state

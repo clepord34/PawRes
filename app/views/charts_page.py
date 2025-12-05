@@ -1,8 +1,7 @@
 """Analytics charts page with rescue and adoption statistics."""
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Tuple, List
-from datetime import datetime, timedelta
+from typing import Optional, Any, List
 
 import app_config
 from services.animal_service import AnimalService
@@ -11,11 +10,10 @@ from services.adoption_service import AdoptionService
 from services.analytics_service import AnalyticsService
 from components import (
     create_admin_sidebar, create_gradient_background,
-    create_page_title, create_chart_container, create_stat_card,
     create_line_chart, create_bar_chart, create_pie_chart,
-    create_chart_legend, create_empty_chart_message, create_insight_card,
-    create_insight_box, create_chart_card, create_clickable_stat_card, 
-    show_chart_details_dialog, CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS
+    create_chart_legend, create_empty_chart_message, create_insight_box, create_clickable_stat_card, 
+    show_chart_details_dialog, CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS,
+    create_interactive_map,
 )
 
 
@@ -45,12 +43,17 @@ class ChartsPage:
         total_adopted = sum(adopted_counts)
         pending_requests = self.adoption_service.get_all_requests() or []
         total_pending = len([r for r in pending_requests if (r.get("status") or "").lower() == "pending"])
+        total_requests = len([r for r in pending_requests if (r.get("status") or "").lower() in ["pending", "approved", "denied"]])
+        
+        # Get pending rescue missions count
+        pending_rescues = self.analytics_service.get_pending_rescue_missions()
         
         # Get actual percentage changes
         changes = self.analytics_service.get_monthly_changes()
         rescues_change = changes["rescues_change"]
         adoptions_change = changes["adoptions_change"]
         pending_change = changes["pending_change"]
+        pending_rescues_change = changes["rescues_change"]  # Use rescues change for pending rescues
 
         # Get additional analytics data
         rescue_status_dist = self.analytics_service.get_rescue_status_distribution()
@@ -232,33 +235,43 @@ class ChartsPage:
         from services.map_service import MapService
         map_service = MapService()
         missions = self.rescue_service.get_all_missions() or []
-        map_widget = map_service.create_map_with_markers(missions, is_admin=True)
+        
+        # Check internet connectivity before creating map
+        is_online = map_service.check_map_tiles_available()
 
-        # Build clickable stat cards
+        # Build clickable stat cards - routes go to /manage_records with tab parameter (tab=0: Rescues, tab=1: Adoptions)
         stats_row = ft.Row([
             create_clickable_stat_card(
-                title="Total Animals Rescued",
+                title="Animals Rescued",
                 value=str(total_rescued),
                 subtitle=rescues_change,
                 icon=ft.Icons.PETS,
                 icon_color=ft.Colors.GREEN_600,
-                on_click=lambda e: page.go("/rescue_missions?admin=1"),
+                on_click=lambda e: page.go("/manage_records?tab=0"),
             ),
             create_clickable_stat_card(
-                title="Total Adoptions",
-                value=f"{total_adopted:,}",
-                subtitle=adoptions_change,
+                title="Adoption Requests",
+                value=f"{total_requests:,}",
+                subtitle=f"{total_adopted} approved",
                 icon=ft.Icons.FAVORITE,
                 icon_color=ft.Colors.ORANGE_600,
-                on_click=lambda e: page.go("/adoption_requests"),
+                on_click=lambda e: page.go("/manage_records?tab=1"),
             ),
             create_clickable_stat_card(
-                title="Pending Applications",
+                title="Pending Adoptions",
                 value=str(total_pending),
                 subtitle=pending_change,
                 icon=ft.Icons.PENDING_ACTIONS,
                 icon_color=ft.Colors.BLUE_600,
-                on_click=lambda e: page.go("/adoption_requests"),
+                on_click=lambda e: page.go("/manage_records?tab=1"),
+            ),
+            create_clickable_stat_card(
+                title="Pending Rescues",
+                value=str(pending_rescues),
+                subtitle=pending_rescues_change,
+                icon=ft.Icons.EMERGENCY,
+                icon_color=ft.Colors.RED_600,
+                on_click=lambda e: page.go("/manage_records?tab=0"),
             ),
         ], spacing=15, expand=True)
 
@@ -456,33 +469,58 @@ class ChartsPage:
             shadow=ft.BoxShadow(blur_radius=10, spread_radius=2, color=ft.Colors.BLACK12, offset=(0, 3)),
         )
 
-        # Create map container with real map or fallback placeholder
-        if map_widget:
-            map_content = ft.Container(
-                map_widget,
+        # Create map container with interactive wrapper or offline fallback
+        if is_online:
+            map_container = create_interactive_map(
+                map_service=map_service,
+                missions=missions,
+                page=page,
+                is_admin=True,
                 height=500,
-                border_radius=8,
-                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                border=ft.border.all(1, ft.Colors.GREY_300),
+                title="Realtime Rescue Mission Map",
+                show_legend=True,
+                initially_locked=True,
             )
         else:
-            map_content = map_service.create_empty_map_placeholder(len(missions))
-        
-        map_container = ft.Container(
-            ft.Column([
-                ft.Row([
-                    ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
-                    ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                ], spacing=10),
-                ft.Divider(height=12, color=ft.Colors.GREY_200),
-                map_content,
-            ], spacing=8, horizontal_alignment="center"),
-            padding=25,
-            bgcolor=ft.Colors.WHITE,
-            border_radius=12,
-            border=ft.border.all(1, ft.Colors.GREY_200),
-            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
-        )
+            # Use offline fallback with mission list when no internet
+            offline_widget = map_service.create_offline_map_fallback(missions, is_admin=True)
+            if offline_widget:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                            ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ], spacing=10),
+                        ft.Divider(height=12, color=ft.Colors.GREY_200),
+                        ft.Container(
+                            offline_widget,
+                            height=500,
+                            border_radius=8,
+                            border=ft.border.all(1, ft.Colors.AMBER_200),
+                        ),
+                    ], spacing=8, horizontal_alignment="center"),
+                    padding=25,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
+            else:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                            ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ], spacing=10),
+                        ft.Divider(height=12, color=ft.Colors.GREY_200),
+                        map_service.create_empty_map_placeholder(len(missions)),
+                    ], spacing=8, horizontal_alignment="center"),
+                    padding=25,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
 
         # Refresh and Back buttons
         refresh_btn = ft.ElevatedButton(

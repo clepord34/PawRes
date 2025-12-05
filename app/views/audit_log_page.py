@@ -4,10 +4,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 import csv
-import io
 
 from services.logging_service import read_log_entries, LOGS_DIR
-from state import get_app_state
 import app_config
 from components import (
     create_action_button, show_snackbar, create_gradient_background,

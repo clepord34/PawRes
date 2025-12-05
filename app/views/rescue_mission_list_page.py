@@ -9,13 +9,12 @@ from typing import Optional
 
 from state import get_app_state
 from services.map_service import MapService
-from services.rescue_service import RescueService
 import app_config
 from app_config import RescueStatus
 from components import (
-    create_admin_sidebar, create_mission_status_badge, create_gradient_background,
-    create_page_title, create_section_card, create_map_container, create_empty_state,
-    show_snackbar, create_archive_dialog, create_remove_dialog, create_scrollable_data_table
+    create_admin_sidebar, create_gradient_background,
+    create_page_title, create_section_card, show_snackbar, create_archive_dialog, create_remove_dialog, create_scrollable_data_table,
+    create_interactive_map,
 )
 
 
@@ -135,15 +134,12 @@ class RescueMissionListPage:
         def make_admin_actions(mission_id: int, mission_name: str) -> object:
             # Use default argument to capture value at definition time
             def handle_archive(e, mid=mission_id):
-                print(f"[DEBUG] Archive clicked for mission {mid}")
                 def on_confirm(note):
-                    print(f"[DEBUG] Archive confirmed with note: {note}")
                     success = self._app_state.rescues.archive_mission(
                         mid, 
                         self._app_state.auth.user_id, 
                         note
                     )
-                    print(f"[DEBUG] Archive result: {success}")
                     if success:
                         show_snackbar(page, "Mission archived")
                         self.build(page, user_role="admin")
@@ -158,7 +154,6 @@ class RescueMissionListPage:
                 )
             
             def handle_remove(e, mid=mission_id):
-                print(f"[DEBUG] Remove clicked for mission {mid}")
                 def on_confirm(reason):
                     success = self._app_state.rescues.remove_mission(
                         mid,
@@ -248,6 +243,7 @@ class RescueMissionListPage:
                 
                 # Add Source column (Emergency or User based on user_id)
                 is_emergency = m.get('user_id') is None
+                user_id = m.get('user_id')
                 if is_emergency:
                     source_cell = ft.Row([
                         ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=ft.Colors.RED_600, size=14),
@@ -256,7 +252,8 @@ class RescueMissionListPage:
                 else:
                     source_cell = ft.Row([
                         ft.Icon(ft.Icons.ACCOUNT_CIRCLE, color=ft.Colors.BLUE_600, size=14),
-                        ft.Text("User", size=11, color=ft.Colors.BLUE_600, weight="w500"),
+                        ft.Text(f"User #{user_id}", size=11, color=ft.Colors.BLUE_600, weight="w500",
+                               tooltip=f"User ID: {user_id}"),
                     ], spacing=4, tight=True)
                 row_data.append(source_cell)
                 
@@ -297,39 +294,54 @@ class RescueMissionListPage:
         )
 
         # Map with rescue mission markers (already filtered to active only)
-        map_widget = self.map_service.create_map_with_markers(missions, is_admin=is_admin)
+        # Check internet connectivity before creating map
+        is_online = self.map_service.check_map_tiles_available()
         
-        if map_widget:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    ft.Container(
-                        map_widget,
-                        height=500,
-                        border_radius=8,
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                        border=ft.border.all(1, ft.Colors.GREY_300),
-                    ),
-                ], spacing=0),
-                padding=20,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+        if is_online:
+            # Use the interactive map wrapper with lock/unlock toggle
+            map_container = create_interactive_map(
+                map_service=self.map_service,
+                missions=missions,
+                page=page,
+                is_admin=is_admin,
+                height=500,
+                title="Realtime Rescue Mission Map",
+                show_legend=True,
+                initially_locked=True,
             )
         else:
-            # Fallback to placeholder
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Realtime Rescue Mission", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    self.map_service.create_empty_map_placeholder(len(missions)),
-                ], spacing=0),
-                padding=20,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
-            )
+            # Use offline fallback with mission details when map creation fails
+            offline_widget = self.map_service.create_offline_map_fallback(missions, is_admin=is_admin)
+            if offline_widget:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(height=15),
+                        ft.Container(
+                            offline_widget,
+                            height=500,
+                            border_radius=8,
+                            border=ft.border.all(1, ft.Colors.AMBER_200),
+                        ),
+                    ], spacing=0),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
+            else:
+                # Final fallback to simple placeholder
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Realtime Rescue Mission", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(height=15),
+                        self.map_service.create_empty_map_placeholder(len(missions)),
+                    ], spacing=0),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
 
         # Build content list
         content_items = [

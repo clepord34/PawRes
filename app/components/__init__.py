@@ -52,6 +52,7 @@ from .dialogs import (
     create_error_dialog,
     create_success_dialog,
     create_confirmation_dialog,
+    create_info_dialog,
     create_archive_dialog,
     create_remove_dialog,
     create_permanent_delete_dialog,
@@ -59,10 +60,31 @@ from .dialogs import (
 )
 
 # Utility functions
-from .utils import fig_to_base64, is_matplotlib_available, parse_date, parse_datetime
+from .utils import (
+    fig_to_base64, 
+    is_matplotlib_available, 
+    parse_date, 
+    parse_datetime,
+    is_valid_email,
+    is_valid_phone,
+    is_valid_contact,
+    validate_contact,
+    get_contact_type,
+    normalize_phone_number,
+    format_phone_for_display,
+    DEFAULT_PHONE_REGION,
+    # Location utilities
+    is_coordinate_string,
+    parse_coordinates_from_string,
+    format_coordinates_display,
+    format_location_for_display,
+)
 
 # Animal form component
 from .animal_form import AnimalFormWidget, create_animal_form
+
+# Map wrapper component
+from .map_wrapper import create_interactive_map, create_simple_locked_map
 
 # Chart components (Flet native charts)
 from .charts import (
@@ -79,6 +101,7 @@ from .charts import (
     create_insight_card,
     create_insight_box,
     create_chart_card,
+    create_impact_insight_widgets,
 )
 
 __all__ = [
@@ -128,6 +151,7 @@ __all__ = [
     "create_error_dialog",
     "create_success_dialog",
     "create_confirmation_dialog",
+    "create_info_dialog",
     "create_archive_dialog",
     "create_remove_dialog",
     "create_permanent_delete_dialog",
@@ -137,9 +161,25 @@ __all__ = [
     "is_matplotlib_available",
     "parse_date",
     "parse_datetime",
+    "is_valid_email",
+    "is_valid_phone",
+    "is_valid_contact",
+    "validate_contact",
+    "get_contact_type",
+    "normalize_phone_number",
+    "format_phone_for_display",
+    "DEFAULT_PHONE_REGION",
+    # Location utilities
+    "is_coordinate_string",
+    "parse_coordinates_from_string",
+    "format_coordinates_display",
+    "format_location_for_display",
     # Animal form
     "AnimalFormWidget",
     "create_animal_form",
+    # Map wrapper
+    "create_interactive_map",
+    "create_simple_locked_map",
     # Charts (Flet native)
     "CHART_COLORS",
     "PIE_CHART_COLORS",
@@ -154,4 +194,5 @@ __all__ = [
     "create_insight_card",
     "create_insight_box",
     "create_chart_card",
+    "create_impact_insight_widgets",
 ]

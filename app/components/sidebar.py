@@ -1,6 +1,6 @@
 """Sidebar components for the application."""
 from __future__ import annotations
-from typing import Callable, Optional
+from typing import Optional
 
 try:
     import flet as ft
@@ -53,7 +53,6 @@ def _handle_logout(page: object) -> None:
         from state import get_app_state
         app_state = get_app_state()
         app_state.reset()
-        print("[DEBUG] Logout: AppState reset completed")
     except Exception as e:
         print(f"[WARN] Logout: Could not reset AppState: {e}")
     
@@ -122,6 +121,7 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
                 ft.Container(expand=True),  # Spacer
                 profile,
                 logout_btn,
+                ft.Container(height=20),
             ],
             horizontal_alignment="center",
             spacing=12
@@ -198,6 +198,7 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
                 ft.Container(expand=True),  # Spacer
                 profile,
                 logout_btn,
+                ft.Container(height=20),
             ],
             horizontal_alignment="center",
             spacing=12

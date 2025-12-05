@@ -1,6 +1,6 @@
 """Photo upload widget component."""
 from __future__ import annotations
-from typing import Optional, Callable, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 import base64
 import os
 

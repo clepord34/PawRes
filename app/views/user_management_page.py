@@ -10,7 +10,7 @@ from services.password_policy import get_password_policy
 from state import get_app_state
 import app_config
 from components import (
-    create_form_text_field, create_form_dropdown, create_action_button,
+    create_action_button,
     show_snackbar, create_gradient_background, create_page_title,
     create_section_card, create_scrollable_data_table, create_stat_card
 )
@@ -45,6 +45,7 @@ class UserManagementPage:
         self._role_filter = None
         self._include_disabled = None
         self._user_table = None
+        self._table_container = None  # Container holding the table for updates
         self._page = None
     
     def build(self, page) -> None:
@@ -138,6 +139,9 @@ class UserManagementPage:
         # Build user table using consistent component
         self._refresh_users()
         
+        # Create a container to hold the table (allows dynamic updates)
+        self._table_container = ft.Container(content=self._user_table)
+        
         # Main content
         content_items = [
             create_page_title("User Management"),
@@ -146,7 +150,7 @@ class UserManagementPage:
             filter_row,
             create_section_card(
                 title="Users",
-                content=self._user_table,
+                content=self._table_container,
                 show_divider=True,
             ),
             ft.Container(height=30),
@@ -210,6 +214,10 @@ class UserManagementPage:
             heading_row_height=45,
             data_row_height=55,
         )
+        
+        # Update the container content if it exists
+        if self._table_container:
+            self._table_container.content = self._user_table
         
         if self._page:
             self._page.update()

@@ -31,14 +31,16 @@ def create_error_dialog(
     page,
     title: str = "Error",
     message: str = "An error occurred",
+    details: Optional[str] = None,
     on_close: Optional[Callable] = None,
 ) -> object:
-    """Create and show an error dialog.
+    """Create and show an error dialog with icon and optional details.
     
     Args:
         page: The Flet page instance
         title: Dialog title
-        message: Error message
+        message: Main error message
+        details: Optional additional details or hints
         on_close: Optional callback when dialog closes
     
     Returns:
@@ -52,16 +54,44 @@ def create_error_dialog(
         if on_close:
             on_close()
     
+    content_items = [
+        ft.Text(message, size=14, text_align=ft.TextAlign.CENTER),
+    ]
+    
+    if details:
+        content_items.extend([
+            ft.Container(height=12),
+            ft.Container(
+                content=ft.Text(
+                    details,
+                    size=12,
+                    color=ft.Colors.GREY_700,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                padding=12,
+                bgcolor=ft.Colors.GREY_100,
+                border_radius=8,
+                width=280,
+            ),
+        ])
+    
     dialog = ft.AlertDialog(
         modal=True,
-        title=ft.Text(title, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700),
-        content=ft.Text(message, text_align=ft.TextAlign.CENTER),
+        title=ft.Row([
+            ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED_600, size=28),
+            ft.Text(title, weight=ft.FontWeight.BOLD, color=ft.Colors.RED_700),
+        ], spacing=10),
+        content=ft.Column(
+            content_items,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
         actions=[
             ft.ElevatedButton(
                 "OK",
                 on_click=close_dialog,
                 style=ft.ButtonStyle(
-                    bgcolor=ft.Colors.RED_400,
+                    bgcolor=ft.Colors.RED_600,
                     color=ft.Colors.WHITE,
                     shape=ft.RoundedRectangleBorder(radius=8),
                 )
@@ -197,11 +227,103 @@ __all__ = [
     "create_error_dialog",
     "create_success_dialog",
     "create_confirmation_dialog",
+    "create_info_dialog",
     "create_archive_dialog",
     "create_remove_dialog",
     "create_permanent_delete_dialog",
     "create_restore_dialog",
 ]
+
+
+def create_info_dialog(
+    page,
+    title: str = "Information",
+    message: str = "",
+    details: Optional[str] = None,
+    icon: str = "info",
+    on_close: Optional[Callable] = None,
+) -> object:
+    """Create and show an informational dialog with icon.
+    
+    Args:
+        page: The Flet page instance
+        title: Dialog title
+        message: Main message
+        details: Optional additional details
+        icon: Icon type - 'info', 'warning', 'help', 'account'
+        on_close: Optional callback when dialog closes
+    
+    Returns:
+        The dialog instance
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed to create dialogs")
+    
+    def close_dialog(e):
+        page.close(dialog)
+        if on_close:
+            on_close()
+    
+    # Icon mapping
+    icon_map = {
+        "info": (ft.Icons.INFO_OUTLINE, ft.Colors.BLUE_600),
+        "warning": (ft.Icons.WARNING_AMBER, ft.Colors.AMBER_700),
+        "help": (ft.Icons.HELP_OUTLINE, ft.Colors.TEAL_600),
+        "account": (ft.Icons.ACCOUNT_CIRCLE, ft.Colors.PURPLE_600),
+        "phone": (ft.Icons.PHONE, ft.Colors.GREEN_600),
+        "email": (ft.Icons.EMAIL, ft.Colors.BLUE_600),
+    }
+    icon_data, icon_color = icon_map.get(icon, (ft.Icons.INFO_OUTLINE, ft.Colors.BLUE_600))
+    
+    content_items = [
+        ft.Text(message, size=14, text_align=ft.TextAlign.CENTER),
+    ]
+    
+    if details:
+        content_items.extend([
+            ft.Container(height=12),
+            ft.Container(
+                content=ft.Text(
+                    details,
+                    size=12,
+                    color=ft.Colors.GREY_700,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                padding=12,
+                bgcolor=ft.Colors.GREY_100,
+                border_radius=8,
+                width=280,
+            ),
+        ])
+    
+    dialog = ft.AlertDialog(
+        modal=True,
+        title=ft.Row([
+            ft.Icon(icon_data, color=icon_color, size=28),
+            ft.Text(title, weight=ft.FontWeight.BOLD, color=icon_color),
+        ], spacing=10),
+        content=ft.Column(
+            content_items,
+            tight=True,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
+        actions=[
+            ft.ElevatedButton(
+                "OK",
+                on_click=close_dialog,
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.TEAL_600,
+                    color=ft.Colors.WHITE,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                )
+            ),
+        ],
+        actions_alignment=ft.MainAxisAlignment.CENTER,
+    )
+    
+    page.open(dialog)
+    
+    return dialog
 
 
 def create_archive_dialog(

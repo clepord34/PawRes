@@ -10,7 +10,9 @@ from storage.file_store import get_file_store
 import app_config
 from components import (
     create_header, create_action_button, create_gradient_background,
-    create_form_text_field, create_form_label, show_snackbar, create_error_dialog
+    create_form_text_field, show_snackbar, create_error_dialog,
+    is_valid_contact, get_contact_type,
+    normalize_phone_number
 )
 
 
@@ -123,8 +125,8 @@ class SignupPage:
             prefix_icon=ft.Icons.PERSON_OUTLINE,
         )
         self._email_field = create_form_text_field(
-            hint_text="Enter your email",
-            prefix_icon=ft.Icons.EMAIL_OUTLINED,
+            hint_text="Enter email or phone number",
+            prefix_icon=ft.Icons.CONTACT_MAIL_OUTLINED,
         )
         self._password_field = create_form_text_field(
             hint_text="Enter your password",
@@ -139,7 +141,7 @@ class SignupPage:
 
         # Simple text labels
         name_label = ft.Text("Full Name", size=13, weight="w500", color=ft.Colors.BLACK87)
-        email_label = ft.Text("Email Address", size=13, weight="w500", color=ft.Colors.BLACK87)
+        email_label = ft.Text("Email or Phone Number", size=13, weight="w500", color=ft.Colors.BLACK87)
         password_label = ft.Text("Password", size=13, weight="w500", color=ft.Colors.BLACK87)
         confirm_label = ft.Text("Confirm Password", size=13, weight="w500", color=ft.Colors.BLACK87)
         
@@ -248,12 +250,17 @@ class SignupPage:
             return
 
         name = (self._name_field.value or "").strip()
-        email = (self._email_field.value or "").strip()
+        email_or_phone = (self._email_field.value or "").strip()
         password = (self._password_field.value or "")
         confirm = (self._confirm_field.value or "")
 
-        if not name or not email or not password or not confirm:
+        if not name or not email_or_phone or not password or not confirm:
             show_snackbar(page, "All fields are required")
+            return
+
+        # Validate email or phone format
+        if not is_valid_contact(email_or_phone):
+            show_snackbar(page, "Please enter a valid email or phone number (e.g., email@example.com or 09XXXXXXXXX)")
             return
 
         if password != confirm:
@@ -266,19 +273,36 @@ class SignupPage:
             show_snackbar(page, errors[0])  # Show first validation error
             return
 
+        # Determine if email or phone and prepare the data
+        contact_type = get_contact_type(email_or_phone)
+        if contact_type == "email":
+            email = email_or_phone
+            phone = None
+        else:
+            # Phone-based registration - store normalized phone in phone column
+            # email will be None (users can add it later in profile)
+            email = None
+            phone = normalize_phone_number(email_or_phone)
+            if not phone:
+                show_snackbar(page, "Invalid phone number format. Please use 09XXXXXXXXX or +63XXXXXXXXXX")
+                return
+
         # Save profile picture if one was selected
         profile_picture_filename = None
         if self._pending_photo_bytes and self._pending_photo_name:
             try:
-                # Use email prefix as custom name
-                username = email.split("@")[0] if email else "user"
+                # Use email/phone prefix as custom name
+                if email:
+                    username = email.split("@")[0]
+                else:
+                    # Use last 4 digits of phone for uniqueness
+                    username = f"phone_{phone[-4:]}" if phone else "user"
                 profile_picture_filename = self.file_store.save_bytes(
                     data=self._pending_photo_bytes,
                     original_name=self._pending_photo_name,
                     validate=False,
                     custom_name=f"profile_{username}"
                 )
-                print(f"[DEBUG] Saved profile picture: {profile_picture_filename}")
             except Exception as ex:
                 print(f"[WARN] Could not save profile picture: {ex}")
                 # Continue without profile picture
@@ -286,18 +310,55 @@ class SignupPage:
         try:
             user_id = self.auth.register_user(
                 name, email, password, 
+                phone=phone,
                 profile_picture=profile_picture_filename
             )
-            print(f"[DEBUG] User registered successfully with ID: {user_id}")
         except ValueError as exc:
-            print(f"[DEBUG] Registration failed - ValueError: {exc}")
-            create_error_dialog(page, title="Registration Failed", message=str(exc))
+            error_msg = str(exc)
+            
+            # Provide more descriptive error messages based on the error type
+            if "email" in error_msg.lower() and "registered" in error_msg.lower():
+                create_error_dialog(
+                    page, 
+                    title="Email Already Registered",
+                    message="An account with this email address already exists.",
+                    details="Try logging in instead, or use a different email address to create a new account."
+                )
+            elif "phone" in error_msg.lower() and "registered" in error_msg.lower():
+                create_error_dialog(
+                    page, 
+                    title="Phone Number Already Registered",
+                    message="An account with this phone number already exists.",
+                    details="Try logging in with this phone number, or use a different number to register."
+                )
+            elif "phone" in error_msg.lower() and "format" in error_msg.lower():
+                create_error_dialog(
+                    page, 
+                    title="Invalid Phone Number",
+                    message="The phone number format is not recognized.",
+                    details="Please use a valid Philippine phone number:\n• Mobile: 09XXXXXXXXX or +639XXXXXXXXX\n• Example: 09171234567"
+                )
+            elif "password" in error_msg.lower():
+                create_error_dialog(
+                    page, 
+                    title="Password Requirements Not Met",
+                    message=error_msg,
+                    details="Your password must include:\n• At least 8 characters\n• Uppercase and lowercase letters\n• At least one number\n• At least one special character"
+                )
+            else:
+                create_error_dialog(
+                    page, 
+                    title="Registration Failed", 
+                    message=error_msg
+                )
             return
         except Exception as exc:
-            print(f"[DEBUG] Registration failed - Exception: {exc}")
-            import traceback
-            traceback.print_exc()
-            create_error_dialog(page, title="Registration Failed", message="An error occurred during registration. Please try again.")
+            create_error_dialog(
+                page, 
+                title="Registration Failed", 
+                message="An unexpected error occurred during registration.",
+                details="Please try again later."
+            )
             return
 
         # Success: show success message and redirect

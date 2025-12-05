@@ -1,7 +1,6 @@
 """User dashboard with activity overview and featured animals."""
 from __future__ import annotations
-from typing import Optional, Dict, Any, List, Tuple
-from datetime import datetime, timedelta
+from typing import Optional
 import threading
 import random
 
@@ -15,10 +14,11 @@ from services.photo_service import load_photo
 from state import get_app_state
 from components import (
     create_user_sidebar, create_gradient_background,
-    create_section_card, create_chart_container,
-    create_bar_chart, create_pie_chart, create_chart_legend,
-    create_empty_chart_message, create_clickable_stat_card, show_chart_details_dialog,
-    CHART_COLORS, STATUS_COLORS
+    create_pie_chart, create_chart_legend,
+    show_chart_details_dialog,
+    create_impact_insight_widgets,
+    STATUS_COLORS,
+    create_interactive_map,
 )
 
 
@@ -30,6 +30,24 @@ class UserDashboard:
         self.adoption_service = AdoptionService(self.db_path)
         self.analytics_service = AnalyticsService(self.db_path)
         self.map_service = MapService()
+
+    def _sync_pending_addresses_background(self) -> None:
+        """Sync pending addresses in a background thread.
+        
+        This updates location text for missions that were submitted offline
+        and only have GPS coordinates stored.
+        """
+        def sync_task():
+            try:
+                updated = self.rescue_service.sync_pending_addresses(self.map_service)
+                if updated > 0:
+                    print(f"[INFO] Background sync: Updated {updated} mission address(es)")
+            except Exception as e:
+                print(f"[WARN] Background address sync failed: {e}")
+        
+        # Run in background thread to not block UI
+        sync_thread = threading.Thread(target=sync_task, daemon=True)
+        sync_thread.start()
 
     def build(self, page) -> None:
         """Build the user dashboard on the provided flet.Page instance."""
@@ -44,6 +62,9 @@ class UserDashboard:
         app_state = get_app_state()
         user_name = app_state.auth.user_name or "User"
         user_id = app_state.auth.user_id
+
+        # Trigger background address sync for any pending offline submissions
+        self._sync_pending_addresses_background()
 
         # Fetch data for charts
         all_adoptions = self.adoption_service.get_all_requests() or []
@@ -79,9 +100,15 @@ class UserDashboard:
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         # ===== YOUR IMPACT SECTION =====
-        # Get user activity stats for impact display
+        # Get user activity stats for impact display (backend - analytics service)
         user_activity_stats = self.analytics_service.get_user_activity_stats(user_id) if user_id else {}
         rescued_successfully = user_rescue_status_dist.get("rescued", 0) if user_rescue_status_dist else 0
+        
+        # Get impact insights from backend service
+        impact_insight_data = self.analytics_service.get_user_impact_insights(user_id) if user_id else []
+        
+        # Render insights using frontend component
+        insight_widgets = create_impact_insight_widgets(impact_insight_data)
         
         def create_impact_stat(icon, value, label, color):
             return ft.Container(
@@ -116,18 +143,7 @@ class UserDashboard:
                     create_impact_stat(ft.Icons.PENDING, user_activity_stats.get("pending_adoption_requests", 0), "Pending\nRequests", ft.Colors.BLUE_600),
                 ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
                 ft.Container(height=7),
-                ft.Container(
-                    ft.Text(
-                        "Thank you for making a difference in animals' lives! 🐾",
-                        size=12,
-                        color=ft.Colors.TEAL_700,
-                        weight="w500",
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    bgcolor=ft.Colors.TEAL_50,
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
-                    border_radius=20,
-                ),
+                ft.Row(insight_widgets, spacing=10, alignment=ft.MainAxisAlignment.CENTER, wrap=True),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
             margin=ft.margin.symmetric(horizontal=50),
             padding=20,
@@ -553,47 +569,66 @@ class UserDashboard:
             )
 
         # ===== REALTIME MAP =====
-        map_widget = self.map_service.create_map_with_markers(all_rescues, zoom=11, is_admin=False)
+        # Check internet connectivity before creating map
+        is_online = self.map_service.check_map_tiles_available()
         
-        if map_widget:
+        if is_online:
+            # Use the interactive map wrapper with lock/unlock toggle
             map_card = ft.Container(
-                ft.Column([
-                    ft.Row([
-                        ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
-                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ], spacing=8),
-                    ft.Divider(height=15, color=ft.Colors.GREY_200),
-                    ft.Container(
-                        map_widget,
-                        height=500,
-                        border_radius=8,
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                        border=ft.border.all(1, ft.Colors.GREY_300),
-                    ),
-                ], spacing=0),
+                create_interactive_map(
+                    map_service=self.map_service,
+                    missions=all_rescues,
+                    page=page,
+                    zoom=11,
+                    is_admin=False,
+                    height=500,
+                    title="Realtime Rescue Mission Map",
+                    show_legend=True,
+                    initially_locked=True,
+                ),
                 margin=ft.margin.symmetric(horizontal=80),
-                padding=20,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                border=ft.border.all(1, ft.Colors.GREY_200),
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
             )
         else:
-            map_card = ft.Container(
-                ft.Column([
-                    ft.Row([
-                        ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
-                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ], spacing=8),
-                    ft.Divider(height=15, color=ft.Colors.GREY_200),
-                    self.map_service.create_empty_map_placeholder(len(all_rescues)),
-                ], spacing=0),
-                padding=20,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                border=ft.border.all(1, ft.Colors.GREY_200),
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
-            )
+            # Use offline fallback with mission list when no internet
+            offline_widget = self.map_service.create_offline_map_fallback(all_rescues, is_admin=False)
+            if offline_widget:
+                map_card = ft.Container(
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                            ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ], spacing=8),
+                        ft.Divider(height=15, color=ft.Colors.GREY_200),
+                        ft.Container(
+                            offline_widget,
+                            height=500,
+                            border_radius=8,
+                            border=ft.border.all(1, ft.Colors.AMBER_200),
+                        ),
+                    ], spacing=0),
+                    margin=ft.margin.symmetric(horizontal=80),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
+            else:
+                map_card = ft.Container(
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                            ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ], spacing=8),
+                        ft.Divider(height=15, color=ft.Colors.GREY_200),
+                        self.map_service.create_empty_map_placeholder(len(all_rescues)),
+                    ], spacing=0),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
 
         # ===== MAIN LAYOUT =====
         # Activity section: Left side has activity cards stacked, right side has featured

@@ -1,6 +1,6 @@
 """Form field components for consistent form styling."""
 from __future__ import annotations
-from typing import Callable, List, Optional, Any
+from typing import Callable, List, Optional
 
 try:
     import flet as ft

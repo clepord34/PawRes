@@ -9,7 +9,7 @@ from services.photo_service import load_photo
 from state import get_app_state
 from components import (
     create_page_header, create_gradient_background,
-    create_form_text_field, show_snackbar
+    create_form_text_field, show_snackbar, validate_contact
 )
 
 
@@ -156,7 +156,7 @@ class AdoptionFormPage:
         )
         self._contact_field = create_form_text_field(
             label="Contact Information", 
-            hint_text="Phone number or email address",
+            hint_text="Email or phone number (e.g., email@example.com or 09XXXXXXXXX)",
             width=400,
         )
         self._reason_field = create_form_text_field(
@@ -167,14 +167,19 @@ class AdoptionFormPage:
             width=400,
         )
 
-        # Pre-fill user name from state for logged-in users
+        # Pre-fill user info from state for logged-in users
         app_state = get_app_state()
         if app_state.auth.user_name:
             self._name_field.value = app_state.auth.user_name
         
+        # Pre-fill contact info (email or phone from state)
+        user_contact = app_state.auth.user_contact
+        if user_contact:
+            self._contact_field.value = user_contact
+        
         # Pre-fill form if editing
         if existing_request:
-            self._contact_field.value = existing_request.get("contact", "")
+            self._contact_field.value = existing_request.get("contact", "") or user_contact or ""
             self._reason_field.value = existing_request.get("reason", "")
 
         # Error display
@@ -326,6 +331,11 @@ class AdoptionFormPage:
             return False, "Please enter your name."
         if not contact:
             return False, "Please enter contact information."
+        
+        # Validate contact is email or phone
+        is_valid, error_msg = validate_contact(contact)
+        if not is_valid:
+            return False, error_msg
 
         return True, ""
 

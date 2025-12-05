@@ -7,17 +7,17 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime
-from typing import Optional, List, Dict
+from typing import Optional
 
 import app_config
-from app_config import RescueStatus, AdoptionStatus, Urgency
+from app_config import RescueStatus, AdoptionStatus
 from services.map_service import MapService
 from state import get_app_state
 from components import (
-    create_user_sidebar, create_status_badge, create_gradient_background,
-    create_page_title, create_section_card, create_map_container,
-    create_empty_state, show_snackbar, create_confirmation_dialog,
-    create_scrollable_data_table, create_action_button
+    create_user_sidebar, create_gradient_background,
+    create_page_title, create_section_card, show_snackbar, create_confirmation_dialog,
+    create_scrollable_data_table, create_action_button,
+    create_interactive_map,
 )
 
 
@@ -45,7 +45,14 @@ class CheckStatusPage:
         self._rescue_status_filter = "all"
         self._rescue_urgency_filter = "all"
 
-    def build(self, page, user_id: int) -> None:
+    def build(self, page, user_id: int, tab: int = None) -> None:
+        """Build and display the check status page.
+        
+        Args:
+            page: The Flet page instance.
+            user_id: The user's ID.
+            tab: Initial tab index (0=Rescues, 1=Adoptions). If None, uses current tab state.
+        """
         try:
             import flet as ft
         except Exception as exc:
@@ -54,6 +61,10 @@ class CheckStatusPage:
         self._page = page
         self._user_id = user_id
         page.title = "Application Status"
+        
+        # Only set tab from parameter if explicitly provided (not None)
+        if tab is not None and tab in [0, 1]:
+            self._tab_index = tab
 
         # Get user info from centralized state management
         user_name = self._app_state.auth.user_name or "User"
@@ -81,12 +92,12 @@ class CheckStatusPage:
             tab_alignment=ft.TabAlignment.START,
             tabs=[
                 ft.Tab(
-                    text="Adoptions",
-                    icon=ft.Icons.VOLUNTEER_ACTIVISM_OUTLINED,
-                ),
-                ft.Tab(
                     text="Rescues",
                     icon=ft.Icons.LOCAL_HOSPITAL_OUTLINED,
+                ),
+                ft.Tab(
+                    text="Adoptions",
+                    icon=ft.Icons.VOLUNTEER_ACTIVISM_OUTLINED,
                 ),
             ],
         )
@@ -95,8 +106,8 @@ class CheckStatusPage:
         all_adoptions = self._app_state.adoptions.user_requests
         all_rescues = self._app_state.rescues.user_missions
 
-        # Build filter controls based on selected tab
-        if self._tab_index == 0:
+        # Build filter controls based on selected tab (0=Rescues, 1=Adoptions)
+        if self._tab_index == 1:
             # Adoption filters
             filtered_count = len([a for a in all_adoptions
                                  if self._adoption_status_filter == "all" or 
@@ -199,8 +210,8 @@ class CheckStatusPage:
             border_radius=10,
         )
 
-        # Build content based on selected tab (without filter row)
-        if self._tab_index == 0:
+        # Build content based on selected tab (0=Rescues, 1=Adoptions)
+        if self._tab_index == 1:
             content = self._build_adoption_requests_content(page, ft, user_id)
         else:
             content = self._build_rescue_missions_content(page, ft, user_id)
@@ -620,38 +631,53 @@ class CheckStatusPage:
             if not RescueStatus.is_cancelled(r.get("status") or "")
             and not RescueStatus.is_removed(r.get("status") or "")
         ]
-        map_widget = self.map_service.create_map_with_markers(rescues_for_map)
+        # Check internet connectivity before creating map
+        is_online = self.map_service.check_map_tiles_available()
         
-        if map_widget:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Your Rescue Mission Locations", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    ft.Container(
-                        map_widget,
-                        height=400,
-                        border_radius=8,
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                        border=ft.border.all(1, ft.Colors.GREY_300),
-                    ),
-                ], spacing=0),
-                padding=20,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+        if is_online:
+            # Use the interactive map wrapper with lock/unlock toggle
+            map_container = create_interactive_map(
+                map_service=self.map_service,
+                missions=rescues_for_map,
+                page=self._page,
+                is_admin=False,
+                height=400,
+                title="Your Rescue Mission Locations",
+                show_legend=True,
+                initially_locked=True,
             )
         else:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Your Rescue Mission Locations", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    self.map_service.create_empty_map_placeholder(len(rescues_for_map)),
-                ], spacing=0),
-                padding=20,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
-            )
+            # Use offline fallback with mission list when no internet
+            offline_widget = self.map_service.create_offline_map_fallback(rescues_for_map, is_admin=False)
+            if offline_widget:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Your Rescue Mission Locations", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(height=15),
+                        ft.Container(
+                            offline_widget,
+                            height=400,
+                            border_radius=8,
+                            border=ft.border.all(1, ft.Colors.AMBER_200),
+                        ),
+                    ], spacing=0),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
+            else:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Your Rescue Mission Locations", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(height=15),
+                        self.map_service.create_empty_map_placeholder(len(rescues_for_map)),
+                    ], spacing=0),
+                    padding=20,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                )
 
         return ft.Column([
             create_section_card(title="Your Rescue Missions", content=rescue_table, show_divider=True),

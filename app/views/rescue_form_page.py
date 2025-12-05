@@ -10,9 +10,23 @@ from services.rescue_service import RescueService
 from services.map_service import MapService
 from state import get_app_state
 from components import (
-    create_page_header, create_content_card, create_action_button, create_gradient_background,
-    create_form_text_field, create_form_dropdown, show_snackbar
+    create_page_header, create_gradient_background,
+    create_form_text_field, create_form_dropdown, show_snackbar, validate_contact
 )
+
+# Try to import the new flet_geolocator package
+try:
+    from flet_geolocator import Geolocator, GeolocatorPermissionStatus, GeolocatorPositionAccuracy
+    GEOLOCATOR_AVAILABLE = True
+except ImportError:
+    GEOLOCATOR_AVAILABLE = False
+
+# Fallback: IP-based geolocation using geocoder
+try:
+    import geocoder
+    GEOCODER_AVAILABLE = True
+except ImportError:
+    GEOCODER_AVAILABLE = False
 
 
 class RescueFormPage:
@@ -61,6 +75,7 @@ class RescueFormPage:
         # Reporter name field - pre-fill with user name if logged in
         app_state = get_app_state()
         user_name_value = app_state.auth.user_name or ""
+        user_contact_value = app_state.auth.user_contact or ""
         
         self._name_field = create_form_text_field(
             label="Your Name", 
@@ -69,11 +84,12 @@ class RescueFormPage:
             value=user_name_value,
         )
         
-        # Reporter phone field (required for contact)
+        # Reporter phone field (required for contact) - pre-fill from state
         self._phone_field = create_form_text_field(
-            label="Phone Number",
-            hint_text="For rescue team contact",
+            label="Contact Number/Email",
+            hint_text="Email or phone (e.g., email@example.com or 09XXXXXXXXX)",
             width=400,
+            value=user_contact_value,
         )
         
         # Location field with improved styling
@@ -97,10 +113,15 @@ class RescueFormPage:
         )
         
         # Create geolocator control for getting current location
-        self._geolocator = ft.Geolocator(
-            on_error=lambda e: self._handle_geolocator_error(page, e),
-        )
-        page.overlay.append(self._geolocator)
+        # Use the new flet_geolocator package (more stable than deprecated ft.Geolocator)
+        if GEOLOCATOR_AVAILABLE:
+            self._geolocator = Geolocator(
+                on_error=lambda e: self._handle_geolocator_error(page, e),
+            )
+            page.overlay.append(self._geolocator)
+        else:
+            self._geolocator = None
+            print("[WARN] flet_geolocator not available - GPS button will use fallback")
         
         # GPS Button to get current location
         self._location_btn = ft.Container(
@@ -295,7 +316,13 @@ class RescueFormPage:
         if not name:
             return False, "Please enter your name."
         if not phone:
-            return False, "Please enter your phone number so we can contact you."
+            return False, "Please enter contact information so we can reach you."
+        
+        # Validate contact is email or phone
+        is_valid, error_msg = validate_contact(phone)
+        if not is_valid:
+            return False, error_msg
+        
         if not location:
             return False, "Please enter or detect the location."
         if not details:
@@ -304,7 +331,7 @@ class RescueFormPage:
         return True, ""
 
     async def _get_current_location(self, page) -> None:
-        """Get the user's current location using geolocator."""
+        """Get the user's current location using geolocator with IP-based fallback."""
         try:
             import flet as ft
         except Exception:
@@ -317,54 +344,129 @@ class RescueFormPage:
         self._error_text.value = ""
         page.update()
         
+        position = None
+        used_fallback = False
+        
+        # First, try the Flet geolocator (works best on mobile/web)
+        if GEOLOCATOR_AVAILABLE and self._geolocator is not None:
+            try:
+                position = await self._try_flet_geolocator(page)
+            except Exception as e:
+                position = None
+        
+        # If Flet geolocator failed, try IP-based fallback (works on desktop)
+        if position is None and GEOCODER_AVAILABLE:
+            try:
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    position = await loop.run_in_executor(pool, self._get_ip_based_location)
+                if position:
+                    used_fallback = True
+            except Exception as e:
+                position = None
+        
+        # Process the result
+        if position:
+            # Store coordinates for submission
+            self._current_coords = (position[0], position[1])
+            
+            # Check if we're online before attempting reverse geocode
+            is_online = self.map_service.check_geocoding_available()
+            
+            if is_online and not used_fallback:
+                # Try to reverse geocode to get address (only if we have precise GPS coords)
+                try:
+                    address = self.map_service.reverse_geocode(position[0], position[1])
+                    if address:
+                        self._location_field.value = address
+                        show_snackbar(page, "📍 Location detected successfully!")
+                    else:
+                        self._location_field.value = f"{position[0]:.6f}, {position[1]:.6f}"
+                        show_snackbar(page, "📍 GPS coordinates captured!")
+                except Exception as e:
+                    self._location_field.value = f"{position[0]:.6f}, {position[1]:.6f}"
+                    show_snackbar(page, "📍 GPS coordinates captured!")
+            elif used_fallback:
+                # IP-based location - show coordinates and note it's approximate
+                self._location_field.value = f"{position[0]:.6f}, {position[1]:.6f}"
+                show_snackbar(page, "📍 Approximate location detected (IP-based). You can refine it manually.")
+            else:
+                # Offline mode - just use coordinates
+                self._location_field.value = f"{position[0]:.6f}, {position[1]:.6f}"
+                show_snackbar(page, "📡 Offline - GPS coordinates captured. Address will resolve when online.")
+            
+            # Show success indicator
+            self._location_status.content = ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN_600, size=20)
+            self._location_status.tooltip = "Location captured" + (" (approximate)" if used_fallback else "")
+            self._location_status.visible = True
+        else:
+            self._show_location_error(page, "Could not detect location. Please enter address manually.")
+        
+        # Restore button state
+        self._location_btn.visible = True
+        self._location_loading.visible = False
+        page.update()
+
+    async def _try_flet_geolocator(self, page) -> Optional[tuple]:
+        """Try to get location using Flet geolocator. Returns (lat, lng) or None."""
+        try:
+            import flet as ft
+        except Exception:
+            return None
+        
         try:
             # Check if location service is enabled
-            location_enabled = await self._geolocator.is_location_service_enabled_async()
-            if not location_enabled:
-                self._show_location_error(page, "Location services are disabled. Please enable them in your device settings.")
-                return
+            try:
+                location_enabled = await self._geolocator.is_location_service_enabled_async()
+                if not location_enabled:
+                    return None
+            except Exception as e:
             
             # Request permission
-            permission = await self._geolocator.request_permission_async(wait_timeout=30)
-            if permission in (ft.GeolocatorPermissionStatus.DENIED, 
-                             ft.GeolocatorPermissionStatus.DENIED_FOREVER):
-                self._show_location_error(page, "Location permission denied. Please grant access in settings.")
-                return
+            try:
+                permission = await self._geolocator.request_permission_async(wait_timeout=10)
+                if permission in (GeolocatorPermissionStatus.DENIED, 
+                                 GeolocatorPermissionStatus.DENIED_FOREVER):
+                    return None
+            except Exception as e:
             
-            # Get current position
-            position = await self._geolocator.get_current_position_async(
-                accuracy=ft.GeolocatorPositionAccuracy.BEST
+            # Get current position with shorter timeout
+            position = await asyncio.wait_for(
+                self._geolocator.get_current_position_async(
+                    accuracy=GeolocatorPositionAccuracy.BEST
+                ),
+                timeout=15.0
             )
             
             if position:
-                # Store coordinates for submission
-                self._current_coords = (position.latitude, position.longitude)
-                
-                # Try to reverse geocode to get address
-                address = self.map_service.reverse_geocode(position.latitude, position.longitude)
-                
-                if address:
-                    self._location_field.value = address
-                else:
-                    # Fallback to coordinates if reverse geocoding fails
-                    self._location_field.value = f"{position.latitude:.6f}, {position.longitude:.6f}"
-                
-                # Show success indicator
-                self._location_status.content = ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN_600, size=20)
-                self._location_status.tooltip = "Location detected successfully"
-                self._location_status.visible = True
-                
-                show_snackbar(page, "📍 Location detected successfully!")
+                return (position.latitude, position.longitude)
+            return None
+            
+        except asyncio.TimeoutError:
+            return None
+        except Exception as e:
+            error_str = str(e).lower()
+            if "pipe" in error_str or "closed" in error_str or "connection" in error_str:
             else:
-                self._show_location_error(page, "Could not determine your position. Please try again or enter manually.")
+            return None
+
+    def _get_ip_based_location(self) -> Optional[tuple]:
+        """Get approximate location based on IP address. Returns (lat, lng) or None.
         
-        except Exception as exc:
-            self._show_location_error(page, f"Location error: {str(exc)}")
-        finally:
-            # Restore button state
-            self._location_btn.visible = True
-            self._location_loading.visible = False
-            page.update()
+        This is a fallback for when GPS/geolocator is unavailable (e.g., Windows desktop).
+        The location is approximate (city-level accuracy).
+        """
+        if not GEOCODER_AVAILABLE:
+            return None
+        
+        try:
+            # Use IP-based geolocation
+            g = geocoder.ip('me')
+            if g.ok and g.latlng:
+                return (g.latlng[0], g.latlng[1])
+            return None
+        except Exception as e:
+            return None
     
     def _show_location_error(self, page, message: str) -> None:
         """Show location error with warning indicator."""
@@ -516,14 +618,42 @@ class RescueFormPage:
                 self._reset_submit_button(page)
                 return
 
-            print(f"[DEBUG] Submitting rescue request for user_id={user_id}, animal_type={animal_type}, urgency={urgency}")
 
+            # Check online status
+            is_online = self.map_service.check_geocoding_available()
+            
             # Use stored coordinates from geolocator if available, otherwise try to geocode
             if self._current_coords:
                 latitude, longitude = self._current_coords
-                print(f"[DEBUG] Using geolocator coordinates: lat={latitude}, lng={longitude}")
+                
+                # If we have coords and are online, try to get proper address for location field
+                if is_online and (not location or location.replace('.', '').replace(',', '').replace('-', '').replace(' ', '').isdigit()):
+                    # Location looks like coordinates, try to reverse geocode
+                    try:
+                        loop = asyncio.get_event_loop()
+                        with concurrent.futures.ThreadPoolExecutor() as pool:
+                            address = await loop.run_in_executor(
+                                pool,
+                                self.map_service.reverse_geocode,
+                                latitude, longitude
+                            )
+                        if address:
+                            location = address
+                    except Exception as e:
+                
+                # If offline, use placeholder for location text
+                if not is_online:
+                    location = "Pending address lookup"
             else:
-                # Try to geocode the location in a thread pool to not block UI
+                # No GPS coordinates - must geocode from text
+                if not is_online:
+                    # OFFLINE + NO GPS = BLOCKED
+                    self._error_text.value = "You're offline. Please tap the GPS button (📍) to capture your location."
+                    show_snackbar(page, "📡 Offline: GPS required. Tap the location button.", error=True)
+                    self._reset_submit_button(page)
+                    return
+                
+                # Online - try to geocode the location in a thread pool to not block UI
                 loop = asyncio.get_event_loop()
                 with concurrent.futures.ThreadPoolExecutor() as pool:
                     coords = await loop.run_in_executor(
@@ -531,13 +661,20 @@ class RescueFormPage:
                         self.map_service.geocode_location, 
                         location
                     )
-                latitude = coords[0] if coords else None
-                longitude = coords[1] if coords else None
                 
                 if coords:
-                    print(f"[DEBUG] Geocoded location to lat={latitude}, lng={longitude}")
+                    latitude = coords[0]
+                    longitude = coords[1]
                 else:
-                    print(f"[DEBUG] Could not geocode location, storing without coordinates")
+                    # Location could not be geocoded - check if it's a network issue
+                    if not self.map_service.check_geocoding_available():
+                        self._error_text.value = "Lost internet connection. Please use the GPS button (📍) to detect your location."
+                        show_snackbar(page, "📡 Connection lost. Use GPS to detect location.", error=True)
+                    else:
+                        self._error_text.value = "Location not found. Please enter a valid address or use the GPS button to detect your location."
+                        show_snackbar(page, "❌ Could not find location. Please enter a valid address.", error=True)
+                    self._reset_submit_button(page)
+                    return
 
             # Submit rescue request with new columns
             mission_id = self.rescue_service.submit_rescue_request(
@@ -554,7 +691,6 @@ class RescueFormPage:
                 urgency=urgency,
             )
 
-            print(f"[DEBUG] Rescue mission created with ID={mission_id}")
 
             # Reset stored coordinates after successful submission
             self._current_coords = None

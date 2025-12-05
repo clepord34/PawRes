@@ -1,7 +1,7 @@
 """User analytics page with personal statistics and charts."""
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
 import app_config
 from services.analytics_service import AnalyticsService
@@ -11,11 +11,12 @@ from services.map_service import MapService
 from state import get_app_state
 from components import (
     create_user_sidebar, create_gradient_background,
-    create_page_title, create_clickable_stat_card,
+    create_clickable_stat_card,
     create_line_chart, create_pie_chart,
     create_chart_legend, create_empty_chart_message,
     create_insight_box, show_chart_details_dialog,
-    CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS
+    CHART_COLORS, STATUS_COLORS,
+    create_interactive_map,
 )
 
 
@@ -65,11 +66,11 @@ class UserAnalyticsPage:
         app_state.rescues.load_user_missions(user_id)
         user_missions = app_state.rescues.user_missions or []
 
-        # Calculate stats
+        # Calculate stats - use actual approved count from distribution, not total_adoptions
         total_rescues = user_activity_stats.get("rescue_reports_filed", 0)
         rescued_successfully = user_rescue_status_dist.get("rescued", 0)
-        total_adoptions = user_activity_stats.get("total_adoptions", 0)
-        pending_adoptions = user_activity_stats.get("pending_adoption_requests", 0)
+        total_adoptions = user_adoption_status_dist.get("approved", 0)  # Actual adopted count
+        pending_adoptions = user_adoption_status_dist.get("pending", 0)  # Pending from distribution
         
         # Calculate success rate
         if total_rescues > 0:
@@ -77,7 +78,7 @@ class UserAnalyticsPage:
         else:
             success_rate = "No data"
 
-        # Stats cards row
+        # Stats cards row - routes go to /check_status with tab parameter (tab=0: Rescues, tab=1: Adoptions)
         stats_row = ft.Row([
             create_clickable_stat_card(
                 title="Rescues Reported",
@@ -85,7 +86,7 @@ class UserAnalyticsPage:
                 subtitle=f"{rescued_successfully} rescued",
                 icon=ft.Icons.PETS,
                 icon_color=ft.Colors.ORANGE_600,
-                on_click=lambda e: page.go("/check_status"),
+                on_click=lambda e: page.go("/check_status?tab=0"),
             ),
             create_clickable_stat_card(
                 title="Successfully Rescued",
@@ -93,7 +94,7 @@ class UserAnalyticsPage:
                 subtitle=success_rate,
                 icon=ft.Icons.CHECK_CIRCLE,
                 icon_color=ft.Colors.GREEN_600,
-                on_click=lambda e: page.go("/check_status"),
+                on_click=lambda e: page.go("/check_status?tab=0"),
             ),
             create_clickable_stat_card(
                 title="Animals Adopted",
@@ -101,7 +102,7 @@ class UserAnalyticsPage:
                 subtitle="Forever homes given",
                 icon=ft.Icons.FAVORITE,
                 icon_color=ft.Colors.TEAL_600,
-                on_click=lambda e: page.go("/check_status"),
+                on_click=lambda e: page.go("/check_status?tab=1"),
             ),
             create_clickable_stat_card(
                 title="Pending Requests",
@@ -109,7 +110,7 @@ class UserAnalyticsPage:
                 subtitle="Awaiting review",
                 icon=ft.Icons.PENDING_ACTIONS,
                 icon_color=ft.Colors.BLUE_600,
-                on_click=lambda e: page.go("/check_status"),
+                on_click=lambda e: page.go("/check_status?tab=1"),
             ),
         ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
 
@@ -122,34 +123,37 @@ class UserAnalyticsPage:
             formatted_labels = [f"Date: {label}" for label in day_labels]
             line_chart = create_line_chart(
                 data_series=[
-                    {"label": "Rescues Reported", "values": list(zip(range(len(day_labels)), rescues_reported)), "color": CHART_COLORS["secondary"]},
-                    {"label": "Adoptions Approved", "values": list(zip(range(len(day_labels)), adoptions_approved)), "color": CHART_COLORS["primary"]},
+                    {"label": "Rescues Reported", "values": list(zip(range(len(day_labels)), rescues_reported)), "color": CHART_COLORS["primary"]},
+                    {"label": "Adoptions Approved", "values": list(zip(range(len(day_labels)), adoptions_approved)), "color": CHART_COLORS["secondary"]},
                 ],
-                height=180,
+                width=600,
+                height=220,
                 x_labels=formatted_labels,
             )
             line_legend = create_chart_legend([
-                {"label": "Rescues Reported", "color": CHART_COLORS["secondary"], "value": sum(rescues_reported)},
-                {"label": "Adoptions Approved", "color": CHART_COLORS["primary"], "value": sum(adoptions_approved)},
+                {"label": "Rescues Reported", "color": CHART_COLORS["primary"], "value": sum(rescues_reported)},
+                {"label": "Adoptions Approved", "color": CHART_COLORS["secondary"], "value": sum(adoptions_approved)},
             ], horizontal=False)
         else:
-            line_chart = create_empty_chart_message("No activity in the last 30 days", width=600, height=180)
+            line_chart = create_empty_chart_message("No activity in the last 30 days", width=600, height=220)
             line_legend = ft.Container()
 
         activity_chart_container = ft.Container(
             ft.Column([
-                ft.Text("Your Activity (Last 30 Days)", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
-                ft.Divider(height=8, color=ft.Colors.GREY_300),
                 ft.Row([
-                    line_chart,
-                    ft.Container(line_legend, padding=ft.padding.only(left=15, right=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-            ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=700,
-            height=268,
-            padding=ft.padding.only(left=15, top=15, bottom=15, right=25),
+                    ft.Icon(ft.Icons.SHOW_CHART, size=20, color=ft.Colors.TEAL_600),
+                    ft.Text("Your Activity (Last 30 Days)", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                ], spacing=10),
+                ft.Divider(height=12, color=ft.Colors.GREY_200),
+                ft.Row([
+                    ft.Container(line_chart, padding=ft.padding.only(top=10)),
+                    ft.Container(line_legend, padding=ft.padding.only(left=15, top=10)),
+                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            padding=25,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
         )
 
@@ -170,7 +174,7 @@ class UserAnalyticsPage:
                         "title": f"{pct:.0f}%",
                         "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
                     })
-            rescue_pie_chart = create_pie_chart(rescue_sections, height=150, section_radius=60, center_space_radius=20, legend_refs=rescue_pie_refs)
+            rescue_pie_chart = create_pie_chart(rescue_sections, width=180, height=180, legend_refs=rescue_pie_refs)
             rescue_legend = create_chart_legend([
                 {"label": s.capitalize(), "color": STATUS_COLORS.get(s, STATUS_COLORS["default"]), "value": user_rescue_status_dist.get(s, 0)}
                 for s in status_order if user_rescue_status_dist.get(s, 0) > 0
@@ -180,7 +184,7 @@ class UserAnalyticsPage:
                 for s in status_order if user_rescue_status_dist.get(s, 0) > 0
             ]
         else:
-            rescue_pie_chart = create_empty_chart_message("No rescue data", width=150, height=150)
+            rescue_pie_chart = create_empty_chart_message("No rescue data", width=180, height=180)
             rescue_legend = ft.Container()
             rescue_data_for_dialog = []
 
@@ -191,7 +195,8 @@ class UserAnalyticsPage:
         rescue_chart_container = ft.Container(
             ft.Column([
                 ft.Row([
-                    ft.Text("Your Rescue Status", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                    ft.Icon(ft.Icons.PETS, size=18, color=ft.Colors.TEAL_600),
+                    ft.Text("Your Rescue Status", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87, expand=True),
                     ft.Container(
                         ft.IconButton(
                             icon=ft.Icons.OPEN_IN_NEW,
@@ -204,19 +209,20 @@ class UserAnalyticsPage:
                         border_radius=8,
                         border=ft.border.all(1, ft.Colors.TEAL_200),
                     ) if rescue_data_for_dialog else ft.Container(),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Divider(height=8, color=ft.Colors.GREY_300),
+                ], spacing=8),
+                ft.Divider(height=12, color=ft.Colors.GREY_200),
                 ft.Row([
-                    rescue_pie_chart,
-                    rescue_legend,
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=10, expand=True),
+                    ft.Container(rescue_pie_chart, alignment=ft.alignment.center),
+                    ft.Container(rescue_legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
+                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
             ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-            width=340,
-            height=268,
-            padding=15,
+            padding=20,
+            height=280,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+            expand=True,
         )
 
         # ========================================
@@ -236,7 +242,7 @@ class UserAnalyticsPage:
                         "title": f"{pct:.0f}%",
                         "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
                     })
-            adoption_pie_chart = create_pie_chart(adoption_sections, height=150, section_radius=60, center_space_radius=20, legend_refs=adoption_pie_refs)
+            adoption_pie_chart = create_pie_chart(adoption_sections, width=180, height=180, legend_refs=adoption_pie_refs)
             adoption_legend = create_chart_legend([
                 {"label": s.capitalize(), "color": STATUS_COLORS.get(s, STATUS_COLORS["default"]), "value": user_adoption_status_dist.get(s, 0)}
                 for s in status_order if user_adoption_status_dist.get(s, 0) > 0
@@ -246,7 +252,7 @@ class UserAnalyticsPage:
                 for s in status_order if user_adoption_status_dist.get(s, 0) > 0
             ]
         else:
-            adoption_pie_chart = create_empty_chart_message("No adoption data", width=150, height=150)
+            adoption_pie_chart = create_empty_chart_message("No adoption data", width=180, height=180)
             adoption_legend = ft.Container()
             adoption_data_for_dialog = []
 
@@ -257,7 +263,8 @@ class UserAnalyticsPage:
         adoption_chart_container = ft.Container(
             ft.Column([
                 ft.Row([
-                    ft.Text("Your Adoption Status", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                    ft.Icon(ft.Icons.FAVORITE, size=18, color=ft.Colors.TEAL_600),
+                    ft.Text("Your Adoption Status", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87, expand=True),
                     ft.Container(
                         ft.IconButton(
                             icon=ft.Icons.OPEN_IN_NEW,
@@ -270,26 +277,27 @@ class UserAnalyticsPage:
                         border_radius=8,
                         border=ft.border.all(1, ft.Colors.TEAL_200),
                     ) if adoption_data_for_dialog else ft.Container(),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Divider(height=8, color=ft.Colors.GREY_300),
+                ], spacing=8),
+                ft.Divider(height=12, color=ft.Colors.GREY_200),
                 ft.Row([
-                    adoption_pie_chart,
-                    adoption_legend,
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=10, expand=True),
+                    ft.Container(adoption_pie_chart, alignment=ft.alignment.center),
+                    ft.Container(adoption_legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
+                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
             ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-            width=340,
-            height=268,
-            padding=15,
+            padding=20,
+            height=280,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+            expand=True,
         )
 
         # Pie charts row
         pie_charts_row = ft.Row([
             rescue_chart_container,
             adoption_chart_container,
-        ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
+        ], spacing=15, expand=True)
 
         # ========================================
         # Map: Your Rescue Mission Locations
@@ -302,39 +310,61 @@ class UserAnalyticsPage:
             and not RescueStatus.is_removed(m.get("status") or "")
         ]
         
-        map_widget = self.map_service.create_map_with_markers(missions_for_map, is_admin=False)
+        # Check internet connectivity before creating map
+        is_online = self.map_service.check_map_tiles_available()
 
-        if map_widget:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Your Rescue Mission Locations", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
-                    ft.Divider(height=8, color=ft.Colors.GREY_300),
-                    ft.Container(
-                        map_widget,
-                        height=500,
-                        border_radius=8,
-                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                    ),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
-                margin=ft.margin.symmetric(horizontal=20),
-                padding=15,
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+        if is_online:
+            # Use the interactive map wrapper with lock/unlock toggle
+            map_container = create_interactive_map(
+                map_service=self.map_service,
+                missions=missions_for_map,
+                page=page,
+                is_admin=False,
+                height=500,
+                title="Your Rescue Mission Locations",
+                show_legend=True,
+                initially_locked=True,
             )
         else:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Your Rescue Mission Locations", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
-                    ft.Divider(height=8, color=ft.Colors.GREY_300),
-                    self.map_service.create_empty_map_placeholder(len(missions_for_map)),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
-                padding=15,
-                margin=ft.margin.symmetric(horizontal=20),
-                bgcolor=ft.Colors.WHITE,
-                border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
-            )
+            # Use offline fallback with mission list when no internet
+            offline_widget = self.map_service.create_offline_map_fallback(missions_for_map, is_admin=False)
+            if offline_widget:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                            ft.Text("Your Rescue Mission Locations", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                        ], spacing=10),
+                        ft.Divider(height=12, color=ft.Colors.GREY_200),
+                        ft.Container(
+                            offline_widget,
+                            height=500,
+                            border_radius=8,
+                            border=ft.border.all(1, ft.Colors.AMBER_200),
+                        ),
+                    ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=25,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                )
+            else:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Row([
+                            ft.Icon(ft.Icons.MAP, size=20, color=ft.Colors.TEAL_600),
+                            ft.Text("Your Rescue Mission Locations", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
+                        ], spacing=10),
+                        ft.Divider(height=12, color=ft.Colors.GREY_200),
+                        self.map_service.create_empty_map_placeholder(len(missions_for_map)),
+                    ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=25,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=12,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                )
 
         # ========================================
         # Insights Section
@@ -432,9 +462,9 @@ class UserAnalyticsPage:
                 ft.Container(height=20),
                 pie_charts_row,
                 ft.Container(height=20),
-                map_container,
-                ft.Container(height=20),
                 insights_container,
+                ft.Container(height=20),
+                map_container,
                 ft.Container(height=20),
                 ft.Row([refresh_btn, back_btn], alignment="center", spacing=15),
                 ft.Container(height=30),

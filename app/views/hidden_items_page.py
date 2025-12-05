@@ -1,7 +1,7 @@
 """Hidden Items Page - Admin view for archived and removed items."""
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import app_config
 from app_config import RescueStatus, AdoptionStatus, AnimalStatus

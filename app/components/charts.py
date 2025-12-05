@@ -5,7 +5,7 @@ hover effects, click handlers, and toggleable legends.
 """
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional, Tuple, Callable
+from typing import List, Dict, Any, Optional, Callable
 
 try:
     import flet as ft
@@ -623,9 +623,132 @@ def create_insight_card(
     )
 
 
+def _get_flet_color(color_name: str) -> str:
+    """Convert color name string to Flet color constant.
+    
+    Args:
+        color_name: Color name like "GREEN_600", "BLUE_700", etc.
+        
+    Returns:
+        Flet color value
+    """
+    if ft is None:
+        return color_name
+    
+    color_map = {
+        "GREEN_50": ft.Colors.GREEN_50,
+        "GREEN_600": ft.Colors.GREEN_600,
+        "GREEN_700": ft.Colors.GREEN_700,
+        "BLUE_50": ft.Colors.BLUE_50,
+        "BLUE_600": ft.Colors.BLUE_600,
+        "BLUE_700": ft.Colors.BLUE_700,
+        "ORANGE_50": ft.Colors.ORANGE_50,
+        "ORANGE_600": ft.Colors.ORANGE_600,
+        "ORANGE_700": ft.Colors.ORANGE_700,
+        "RED_50": ft.Colors.RED_50,
+        "RED_600": ft.Colors.RED_600,
+        "RED_700": ft.Colors.RED_700,
+        "AMBER_50": ft.Colors.AMBER_50,
+        "AMBER_600": ft.Colors.AMBER_600,
+        "AMBER_700": ft.Colors.AMBER_700,
+        "TEAL_50": ft.Colors.TEAL_50,
+        "TEAL_600": ft.Colors.TEAL_600,
+        "GREY_700": ft.Colors.GREY_700,
+    }
+    return color_map.get(color_name, color_name)
+
+
+def _get_flet_icon(icon_name: str) -> Any:
+    """Convert icon name string to Flet icon constant.
+    
+    Args:
+        icon_name: Icon name like "CHECK_CIRCLE", "WARNING_AMBER", etc.
+        
+    Returns:
+        Flet icon value
+    """
+    if ft is None:
+        return icon_name
+    
+    icon_map = {
+        "EMOJI_EVENTS": ft.Icons.EMOJI_EVENTS,
+        "TRENDING_UP": ft.Icons.TRENDING_UP,
+        "TRENDING_FLAT": ft.Icons.TRENDING_FLAT,
+        "WARNING_AMBER": ft.Icons.WARNING_AMBER,
+        "WARNING": ft.Icons.WARNING,
+        "CHECK_CIRCLE": ft.Icons.CHECK_CIRCLE,
+        "ASSIGNMENT": ft.Icons.ASSIGNMENT,
+        "SCHEDULE": ft.Icons.SCHEDULE,
+        "LOCAL_FIRE_DEPARTMENT": ft.Icons.LOCAL_FIRE_DEPARTMENT,
+        "INFO": ft.Icons.INFO,
+        "ADD_CIRCLE": ft.Icons.ADD_CIRCLE,
+        "THUMB_UP": ft.Icons.THUMB_UP,
+        "HELP_OUTLINE": ft.Icons.HELP_OUTLINE,
+        "MARK_EMAIL_UNREAD": ft.Icons.MARK_EMAIL_UNREAD,
+        "LIGHTBULB": ft.Icons.LIGHTBULB,
+        "VERIFIED": ft.Icons.VERIFIED,
+        "HEALING": ft.Icons.HEALING,
+        "LOCAL_HOSPITAL": ft.Icons.LOCAL_HOSPITAL,
+        "PETS": ft.Icons.PETS,
+        "HOME": ft.Icons.HOME,
+        "FAVORITE": ft.Icons.FAVORITE,
+        "VOLUNTEER_ACTIVISM": ft.Icons.VOLUNTEER_ACTIVISM,
+        "HOURGLASS_BOTTOM": ft.Icons.HOURGLASS_BOTTOM,
+        "WAVING_HAND": ft.Icons.WAVING_HAND,
+        "PENDING_ACTIONS": ft.Icons.PENDING_ACTIONS,
+        "DIRECTIONS_RUN": ft.Icons.DIRECTIONS_RUN,
+        "AUTO_AWESOME": ft.Icons.AUTO_AWESOME,
+    }
+    return icon_map.get(icon_name, ft.Icons.INFO)
+
+
+def _build_rich_text(detail_data: Dict[str, Any]) -> Any:
+    """Build rich text using TextSpan from structured detail data.
+    
+    Args:
+        detail_data: Dict with 'parts' list containing text segments with styling
+        
+    Returns:
+        A Flet Text control with styled TextSpan elements
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed")
+    
+    if not isinstance(detail_data, dict) or "parts" not in detail_data:
+        # Fallback for plain string
+        return ft.Text(str(detail_data), size=12, color=ft.Colors.BLACK54)
+    
+    spans = []
+    for part in detail_data.get("parts", []):
+        text = part.get("text", "")
+        weight = part.get("weight", "normal")
+        color = part.get("color")
+        icon_name = part.get("icon")
+        
+        # Build text style
+        font_weight = ft.FontWeight.BOLD if weight == "bold" else ft.FontWeight.NORMAL
+        text_color = _get_flet_color(color) if color else ft.Colors.BLACK54
+        
+        spans.append(
+            ft.TextSpan(
+                text,
+                ft.TextStyle(
+                    size=12,
+                    color=text_color,
+                    weight=font_weight,
+                )
+            )
+        )
+    
+    return ft.Text(
+        spans=spans,
+        size=12,
+    )
+
+
 def create_insight_box(
     title: str,
-    insight_data: Dict[str, str],
+    insight_data: Dict[str, Any],
     icon: Any,
     icon_color: str,
     bg_color: str,
@@ -635,11 +758,15 @@ def create_insight_box(
     
     Used in analytics dashboards to display key insights with a consistent
     structure: icon + title header, headline text, optional detail, optional action.
+    Uses rich Flet components (TextSpan, Icons) for an AI-like presentation.
     
     Args:
         title: Section title (e.g., "Rescue Insights")
-        insight_data: Dict with 'headline', optional 'detail', optional 'action'
-        icon: Flet icon to display
+        insight_data: Dict with structured 'headline', 'detail', 'action' objects
+            - headline: Dict with 'text', 'icon', 'color'
+            - detail: Dict with 'parts' list for rich text
+            - action: Dict with 'icon', 'text', 'color', 'bg_color', 'severity'
+        icon: Flet icon to display (used as fallback)
         icon_color: Color for icon background and accents
         bg_color: Background color for the box
         border_color: Border color for the box
@@ -650,16 +777,37 @@ def create_insight_box(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
+    # Handle both old format (strings) and new format (structured dicts)
     if isinstance(insight_data, dict):
-        headline = insight_data.get("headline", "No data")
-        detail = insight_data.get("detail", "")
-        action = insight_data.get("action", "")
+        headline_data = insight_data.get("headline", {"text": "No data"})
+        detail_data = insight_data.get("detail")
+        action_data = insight_data.get("action")
     else:
-        headline = str(insight_data)
-        detail = ""
-        action = ""
+        headline_data = {"text": str(insight_data)}
+        detail_data = None
+        action_data = None
+    
+    # Extract headline components
+    if isinstance(headline_data, dict):
+        headline_text = headline_data.get("text", "No data")
+        headline_icon = headline_data.get("icon")
+        headline_color = _get_flet_color(headline_data.get("color", "BLACK87"))
+    else:
+        headline_text = str(headline_data)
+        headline_icon = None
+        headline_color = ft.Colors.BLACK87
+    
+    # Build headline row with optional icon
+    if headline_icon:
+        headline_row = ft.Row([
+            ft.Icon(_get_flet_icon(headline_icon), size=18, color=headline_color),
+            ft.Text(headline_text, size=14, weight=ft.FontWeight.W_600, color=headline_color, expand=True),
+        ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    else:
+        headline_row = ft.Text(headline_text, size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87)
     
     content_items = [
+        # Header with icon badge and title
         ft.Row([
             ft.Container(
                 ft.Icon(icon, size=20, color=ft.Colors.WHITE),
@@ -668,27 +816,62 @@ def create_insight_box(
                 bgcolor=icon_color,
                 border_radius=18,
                 alignment=ft.alignment.center,
+                shadow=ft.BoxShadow(blur_radius=4, spread_radius=0, color=ft.Colors.with_opacity(0.3, icon_color), offset=(0, 2)),
             ),
             ft.Text(title, size=14, weight="bold", color=icon_color),
         ], spacing=10),
         ft.Container(height=12),
-        ft.Text(headline, size=15, weight="w600", color=ft.Colors.BLACK87),
+        # Rich headline
+        headline_row,
     ]
     
-    if detail:
+    # Add rich detail text if present
+    if detail_data:
         content_items.append(ft.Container(height=6))
-        content_items.append(ft.Text(detail, size=12, color=ft.Colors.BLACK54))
+        content_items.append(_build_rich_text(detail_data))
     
-    if action:
+    # Add styled action badge if present
+    if action_data:
         content_items.append(ft.Container(height=10))
-        content_items.append(
-            ft.Container(
-                ft.Text(action, size=11, color=icon_color, weight="w500"),
-                bgcolor=ft.Colors.with_opacity(0.1, icon_color),
-                padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                border_radius=6,
+        
+        if isinstance(action_data, dict):
+            action_icon = action_data.get("icon")
+            action_text = action_data.get("text", "")
+            action_color = _get_flet_color(action_data.get("color", icon_color))
+            action_bg = _get_flet_color(action_data.get("bg_color", "GREY_100"))
+            severity = action_data.get("severity", "info")
+            
+            # Build action row with icon and styled text
+            if action_icon:
+                action_row = ft.Row([
+                    ft.Icon(_get_flet_icon(action_icon), size=14, color=action_color),
+                    ft.Text(action_text, size=11, color=action_color, weight=ft.FontWeight.W_500),
+                ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            else:
+                action_row = ft.Text(action_text, size=11, color=action_color, weight=ft.FontWeight.W_500)
+            
+            # Background opacity based on severity
+            bg_opacity = 0.2 if severity in ["urgent", "warning"] else 0.15
+            
+            content_items.append(
+                ft.Container(
+                    action_row,
+                    bgcolor=ft.Colors.with_opacity(bg_opacity, action_color),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                    border_radius=6,
+                )
             )
-        )
+        else:
+            # Fallback for old string format
+            action_text = str(action_data)
+            content_items.append(
+                ft.Container(
+                    ft.Text(action_text, size=11, color=icon_color, weight=ft.FontWeight.W_500),
+                    bgcolor=ft.Colors.with_opacity(0.15, icon_color),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                    border_radius=6,
+                )
+            )
     
     return ft.Container(
         ft.Column(content_items, spacing=0),
@@ -913,6 +1096,78 @@ def create_chart_card(
     )
 
 
+def create_impact_insight_widgets(insight_data: List[Dict[str, Any]]) -> List[Any]:
+    """Create styled insight widgets from service-generated insight data.
+    
+    Converts backend insight data (from AnalyticsService.get_user_impact_insights)
+    into rich Flet UI components using TextSpan for formatted text.
+    
+    Args:
+        insight_data: List of insight dictionaries from the analytics service.
+            Each dict contains:
+            - icon: Icon name string (e.g., "PENDING_ACTIONS")
+            - parts: List of text parts with weight, color properties
+            - color: Main color string (e.g., "BLUE_700")
+            - bg_color: Background color string (e.g., "BLUE_50")
+    
+    Returns:
+        List of Flet Container widgets ready to be displayed
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed")
+    
+    widgets = []
+    
+    for insight in insight_data:
+        icon_name = insight.get("icon", "INFO")
+        parts = insight.get("parts", [])
+        color_name = insight.get("color", "TEAL_700")
+        bg_color_name = insight.get("bg_color", "TEAL_50")
+        
+        # Convert color names to Flet colors
+        icon_color = _get_flet_color(color_name)
+        bg_color = _get_flet_color(bg_color_name)
+        flet_icon = _get_flet_icon(icon_name)
+        
+        # Build TextSpan list from parts
+        spans = []
+        for part in parts:
+            text = part.get("text", "")
+            weight = part.get("weight", "normal")
+            part_color = part.get("color")
+            
+            font_weight = ft.FontWeight.BOLD if weight == "bold" else ft.FontWeight.NORMAL
+            text_color = _get_flet_color(part_color) if part_color else icon_color
+            
+            spans.append(
+                ft.TextSpan(
+                    text,
+                    ft.TextStyle(
+                        weight=font_weight,
+                        color=text_color,
+                    )
+                )
+            )
+        
+        # Create text control with spans
+        text_control = ft.Text(spans=spans, size=12)
+        
+        # Create the insight widget
+        widget = ft.Container(
+            ft.Row([
+                ft.Icon(flet_icon, size=16, color=icon_color),
+                text_control,
+            ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+            bgcolor=bg_color,
+            padding=ft.padding.symmetric(horizontal=16, vertical=8),
+            border_radius=20,
+        )
+        
+        widgets.append(widget)
+    
+    return widgets
+
+
 __all__ = [
     "CHART_COLORS",
     "PIE_CHART_COLORS",
@@ -927,4 +1182,5 @@ __all__ = [
     "create_insight_card",
     "create_insight_box",
     "create_chart_card",
+    "create_impact_insight_widgets",
 ]

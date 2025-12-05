@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import csv
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 import app_config
 from app_config import RescueStatus, AdoptionStatus, AnimalStatus
@@ -34,8 +34,13 @@ class ManageRecordsPage:
         # Filter state for adoption requests
         self._adoption_status_filter = "all"
     
-    def build(self, page) -> None:
-        """Build and display the manage records page."""
+    def build(self, page, tab: int = None) -> None:
+        """Build and display the manage records page.
+        
+        Args:
+            page: The Flet page instance.
+            tab: Initial tab index (0=Rescues, 1=Adoptions, 2=Hidden). If None, uses current tab state.
+        """
         try:
             import flet as ft
         except Exception as exc:
@@ -47,10 +52,15 @@ class ManageRecordsPage:
             create_archive_dialog, create_remove_dialog,
             create_scrollable_data_table, create_empty_state,
             create_restore_dialog, create_permanent_delete_dialog,
+            create_interactive_map,
         )
         
         self._page = page
         page.title = "Manage Records - PawRes Admin"
+        
+        # Only set tab from parameter if explicitly provided (not None)
+        if tab is not None and tab in [0, 1, 2]:
+            self._tab_index = tab
         
         # Auth check
         if not self._app_state.auth.is_authenticated or self._app_state.auth.user_role != "admin":
@@ -119,13 +129,14 @@ class ManageRecordsPage:
                         ft.dropdown.Option(RescueStatus.ONGOING, "On-going"),
                         ft.dropdown.Option(RescueStatus.RESCUED, "Rescued"),
                         ft.dropdown.Option(RescueStatus.FAILED, "Failed"),
+                        ft.dropdown.Option(RescueStatus.CANCELLED, "Cancelled"),
                     ],
                     border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, "status", e.control.value),
                 ),
                 ft.Dropdown(
                     hint_text="Urgency",
-                    width=130,
+                    width=160,
                     value=self._rescue_urgency_filter,
                     options=[
                         ft.dropdown.Option("all", "All Urgency"),
@@ -165,6 +176,7 @@ class ManageRecordsPage:
                         ft.dropdown.Option(AdoptionStatus.PENDING, "Pending"),
                         ft.dropdown.Option(AdoptionStatus.APPROVED, "Approved"),
                         ft.dropdown.Option(AdoptionStatus.DENIED, "Denied"),
+                        ft.dropdown.Option(AdoptionStatus.CANCELLED, "Cancelled"),
                     ],
                     border_radius=8,
                     on_change=lambda e: self._on_adoption_filter_change(page, e.control.value),
@@ -227,7 +239,7 @@ class ManageRecordsPage:
         if self._tab_index == 0:
             content = self._build_rescue_missions_content(page, ft, show_snackbar, create_section_card, 
                                                           create_scrollable_data_table, create_archive_dialog, 
-                                                          create_remove_dialog)
+                                                          create_remove_dialog, create_interactive_map)
         elif self._tab_index == 1:
             content = self._build_adoption_requests_content(page, ft, show_snackbar, create_section_card,
                                                             create_scrollable_data_table, create_archive_dialog,
@@ -261,13 +273,13 @@ class ManageRecordsPage:
     
     def _build_rescue_missions_content(self, page, ft, show_snackbar, create_section_card,
                                         create_scrollable_data_table, create_archive_dialog,
-                                        create_remove_dialog):
+                                        create_remove_dialog, create_interactive_map):
         """Build the rescue missions tab content."""
         
         # Get already loaded missions from state manager
         all_missions = self._app_state.rescues.missions
         
-        # Apply status filter
+        # Apply status filter (including cancelled when selected)
         if self._rescue_status_filter == "all":
             missions = all_missions
         else:
@@ -400,6 +412,7 @@ class ManageRecordsPage:
                 bgcolor=bg_color, padding=ft.padding.symmetric(horizontal=8, vertical=4), border_radius=10)
             
             is_emergency = m.get('user_id') is None
+            user_id = m.get('user_id')
             if is_emergency:
                 source_cell = ft.Row([
                     ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=ft.Colors.RED_600, size=14),
@@ -408,7 +421,8 @@ class ManageRecordsPage:
             else:
                 source_cell = ft.Row([
                     ft.Icon(ft.Icons.ACCOUNT_CIRCLE, color=ft.Colors.BLUE_600, size=14),
-                    ft.Text("User", size=11, color=ft.Colors.BLUE_600, weight="w500"),
+                    ft.Text(f"User #{user_id}", size=11, color=ft.Colors.BLUE_600, weight="w500",
+                           tooltip=f"User ID: {user_id}"),
                 ], spacing=4, tight=True)
             
             row_data = [
@@ -446,28 +460,44 @@ class ManageRecordsPage:
             heading_row_height=45, data_row_height=50)
         
         # Map with rescue mission markers
-        map_widget = self.map_service.create_map_with_markers(missions, is_admin=True)
+        # Check internet connectivity before creating map
+        is_online = self.map_service.check_map_tiles_available()
         
-        if map_widget:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    ft.Container(map_widget, height=500, border_radius=8,
-                                clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-                                border=ft.border.all(1, ft.Colors.GREY_300)),
-                ], spacing=0),
-                padding=20, bgcolor=ft.Colors.WHITE, border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)))
+        if is_online:
+            # Use the interactive map wrapper with lock/unlock toggle
+            map_container = create_interactive_map(
+                map_service=self.map_service,
+                missions=missions,
+                page=self._page,
+                is_admin=True,
+                height=500,
+                title="Realtime Rescue Mission Map",
+                show_legend=True,
+                initially_locked=True,
+            )
         else:
-            map_container = ft.Container(
-                ft.Column([
-                    ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Container(height=15),
-                    self.map_service.create_empty_map_placeholder(len(missions)),
-                ], spacing=0),
-                padding=20, bgcolor=ft.Colors.WHITE, border_radius=12,
-                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)))
+            # Use offline fallback with mission details when map creation fails
+            offline_widget = self.map_service.create_offline_map_fallback(missions, is_admin=True)
+            if offline_widget:
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(height=15),
+                        ft.Container(offline_widget, height=500, border_radius=8,
+                                    border=ft.border.all(1, ft.Colors.AMBER_200)),
+                    ], spacing=0),
+                    padding=20, bgcolor=ft.Colors.WHITE, border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)))
+            else:
+                # Final fallback to simple placeholder
+                map_container = ft.Container(
+                    ft.Column([
+                        ft.Text("Realtime Rescue Mission Map", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(height=15),
+                        self.map_service.create_empty_map_placeholder(len(missions)),
+                    ], spacing=0),
+                    padding=20, bgcolor=ft.Colors.WHITE, border_radius=12,
+                    shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)))
         
         return ft.Column([
             create_section_card(title="Rescue Missions", content=data_table, show_divider=True),
@@ -525,8 +555,9 @@ class ManageRecordsPage:
         # Get already loaded requests from state manager
         all_requests = self._app_state.adoptions.requests
         
-        # Filter out user-cancelled requests
-        all_requests = [r for r in all_requests if not AdoptionStatus.is_cancelled(r.get("status") or "")]
+        # Filter out user-cancelled requests by default, unless specifically filtering by cancelled
+        if self._adoption_status_filter != AdoptionStatus.CANCELLED:
+            all_requests = [r for r in all_requests if not AdoptionStatus.is_cancelled(r.get("status") or "")]
         
         # Apply status filter
         if self._adoption_status_filter == "all":

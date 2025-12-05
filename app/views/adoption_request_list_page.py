@@ -9,11 +9,9 @@ from typing import Optional
 import app_config
 from app_config import AdoptionStatus
 from state import get_app_state
-from services.adoption_service import AdoptionService
 from components import (
-    create_admin_sidebar, create_adoption_status_dropdown, create_status_badge, 
-    create_gradient_background, create_page_title, create_section_card, 
-    create_empty_state, show_snackbar, create_archive_dialog, create_remove_dialog,
+    create_admin_sidebar, create_gradient_background, create_page_title, create_section_card, 
+    show_snackbar, create_archive_dialog, create_remove_dialog,
     create_scrollable_data_table
 )
 
