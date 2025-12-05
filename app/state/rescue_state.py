@@ -136,7 +136,6 @@ class RescueState(StateManager[Dict[str, Any]]):
                 "error": None,
             })
             
-            print(f"[DEBUG] RescueState: Loaded {len(missions)} missions")
             
         except Exception as e:
             print(f"[ERROR] RescueState: Failed to load missions: {e}")
@@ -198,7 +197,6 @@ class RescueState(StateManager[Dict[str, Any]]):
                 coords = map_service.geocode_location(location)
                 if coords:
                     latitude, longitude = coords
-                    print(f"[DEBUG] RescueState: Geocoded '{location}' to ({latitude}, {longitude})")
             
             service = self._get_service()
             mission_id = service.submit_rescue_request(
@@ -215,7 +213,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             # Reload missions to get fresh data
             self.load_missions()
             
-            print(f"[DEBUG] RescueState: Submitted rescue mission ID={mission_id}")
             return mission_id
             
         except Exception as e:
@@ -240,7 +237,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             if success:
                 # Reload missions to get fresh data
                 self.load_missions()
-                print(f"[DEBUG] RescueState: Updated mission {mission_id} status to '{status}'")
             
             return success
             
@@ -401,7 +397,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_missions()
-                print(f"[DEBUG] RescueState: Archived mission {mission_id}")
             
             return success
             
@@ -427,7 +422,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_missions()
-                print(f"[DEBUG] RescueState: Removed mission {mission_id}")
             
             return success
             
@@ -451,7 +445,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_missions()
-                print(f"[DEBUG] RescueState: Restored mission {mission_id}")
             
             return success
             
@@ -477,7 +470,6 @@ class RescueState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_missions()
-                print(f"[DEBUG] RescueState: Permanently deleted mission {mission_id}")
             
             return success
             
@@ -510,7 +502,6 @@ class RescueState(StateManager[Dict[str, Any]]):
                 "error": None,
             })
             
-            print(f"[DEBUG] RescueState: Loaded {len(missions)} active missions")
             
         except Exception as e:
             print(f"[ERROR] RescueState: Failed to load active missions: {e}")

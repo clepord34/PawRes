@@ -1,7 +1,7 @@
 """Central application state controller (singleton)."""
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Callable, List
+from typing import Any, Dict, Optional
 import threading
 
 from .base import Observable
@@ -206,7 +206,6 @@ class AppState(Observable):
         # Re-setup subscriptions for future use
         self._setup_state_subscriptions()
         
-        print("[DEBUG] AppState: Full reset completed")
     
     def get_dashboard_stats(self) -> Dict[str, Any]:
         """Get aggregated statistics for dashboard display.

@@ -306,6 +306,25 @@ class GoogleAuthService:
         """Check if Google OAuth is properly configured."""
         return bool(self.client_id and self.client_secret)
     
+    def check_internet_available(self) -> bool:
+        """Check if internet connection is available for OAuth.
+        
+        Returns:
+            True if Google's OAuth servers are reachable, False otherwise
+        """
+        try:
+            import socket
+            # Create socket with its own timeout (don't use setdefaulttimeout which affects global state)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            try:
+                sock.connect(("accounts.google.com", 443))
+                return True
+            finally:
+                sock.close()
+        except (socket.error, socket.timeout, OSError):
+            return False
+    
     def _generate_pkce_pair(self) -> tuple[str, str]:
         """Generate PKCE code verifier and challenge.
         
@@ -438,6 +457,13 @@ class GoogleAuthService:
                 on_error(error_msg)
             return None
         
+        # Check internet connectivity before attempting OAuth
+        if not self.check_internet_available():
+            error_msg = "No internet connection. Google Sign-In requires an active internet connection."
+            if on_error:
+                on_error(error_msg)
+            return None
+        
         # Reset callback handler state
         OAuthCallbackHandler.auth_code = None
         OAuthCallbackHandler.error = None
@@ -445,7 +471,7 @@ class GoogleAuthService:
         # Start local server for callback
         try:
             server = HTTPServer(("localhost", self.callback_port), OAuthCallbackHandler)
-            server.timeout = 120  # 2 minute timeout
+            server.timeout = 300  # 5 minute timeout - give user plenty of time to sign in
         except OSError as e:
             error_msg = f"Could not start callback server: {e}"
             if on_error:
@@ -456,14 +482,28 @@ class GoogleAuthService:
         auth_url = self.get_auth_url()
         webbrowser.open(auth_url)
         
-        # Wait for callback (handle one request)
+        # Wait for callback - handle multiple requests in case of browser prefetch
+        # Keep handling requests until we get an auth code/error or timeout
+        import time
+        start_time = time.time()
+        max_wait = 300  # 5 minutes max
+        
         try:
-            server.handle_request()
-        except Exception as e:
-            error_msg = f"Error handling OAuth callback: {e}"
-            if on_error:
-                on_error(error_msg)
-            return None
+            while True:
+                # Check if we already have a result
+                if OAuthCallbackHandler.auth_code or OAuthCallbackHandler.error:
+                    break
+                
+                # Check for timeout
+                if time.time() - start_time > max_wait:
+                    break
+                
+                # Handle one request (with timeout)
+                try:
+                    server.handle_request()
+                except Exception:
+                    # Ignore errors during request handling, continue waiting
+                    pass
         finally:
             server.server_close()
         

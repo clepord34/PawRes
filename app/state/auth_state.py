@@ -13,8 +13,10 @@ class UserSession:
     """User session data structure."""
     user_id: Optional[int] = None
     email: str = ""
+    phone: str = ""
     name: str = ""
     role: str = "user"
+    oauth_provider: Optional[str] = None  # 'google' if linked, None if password-only
     is_authenticated: bool = False
     last_activity: Optional[str] = None  # ISO format timestamp
     
@@ -28,8 +30,10 @@ class UserSession:
         return cls(
             user_id=data.get("user_id"),
             email=data.get("email", ""),
+            phone=data.get("phone", ""),
             name=data.get("name", ""),
             role=data.get("role", "user"),
+            oauth_provider=data.get("oauth_provider"),
             is_authenticated=data.get("is_authenticated", False),
             last_activity=data.get("last_activity")
         )
@@ -65,8 +69,10 @@ class AuthState(StateManager[Dict[str, Any]]):
                 session = UserSession(
                     user_id=user_id,
                     email=self._page.session.get("user_email", ""),
+                    phone=self._page.session.get("user_phone", ""),
                     name=self._page.session.get("user_name", ""),
                     role=self._page.session.get("user_role", "user"),
+                    oauth_provider=self._page.session.get("oauth_provider"),
                     is_authenticated=True
                 )
                 self.update_state(session.to_dict(), notify=True)
@@ -83,8 +89,10 @@ class AuthState(StateManager[Dict[str, Any]]):
             if state.get("is_authenticated"):
                 self._page.session.set("user_id", state.get("user_id"))
                 self._page.session.set("user_email", state.get("email"))
+                self._page.session.set("user_phone", state.get("phone"))
                 self._page.session.set("user_name", state.get("name"))
                 self._page.session.set("user_role", state.get("role"))
+                self._page.session.set("oauth_provider", state.get("oauth_provider"))
             else:
                 # Clear session on logout
                 self._page.session.clear()
@@ -120,6 +128,24 @@ class AuthState(StateManager[Dict[str, Any]]):
         return self.state.get("email", "")
     
     @property
+    def user_phone(self) -> str:
+        """Get current user phone."""
+        return self.state.get("phone", "")
+    
+    @property
+    def user_contact(self) -> str:
+        """Get current user's contact info (email or phone).
+        
+        Returns email if available, otherwise phone.
+        """
+        email = self.state.get("email", "")
+        phone = self.state.get("phone", "")
+        # If email looks like a phone number, return phone
+        if email and "@" in email:
+            return email
+        return phone or email
+    
+    @property
     def user_role(self) -> str:
         """Get current user role."""
         return self.state.get("role", "user")
@@ -129,18 +155,30 @@ class AuthState(StateManager[Dict[str, Any]]):
         """Check if current user is an admin."""
         return self.user_role == "admin"
     
+    @property
+    def oauth_provider(self) -> Optional[str]:
+        """Get current user's OAuth provider (e.g., 'google') or None if password-only."""
+        return self.state.get("oauth_provider")
+    
+    @property
+    def has_google_linked(self) -> bool:
+        """Check if current user has Google account linked."""
+        return self.oauth_provider == "google"
+    
     def login(self, user_data: Dict[str, Any]) -> None:
         """Process successful login.
         
         Args:
             user_data: User data from AuthService.login()
-                       Expected keys: id, email, name, role
+                       Expected keys: id, email, phone, name, role, oauth_provider
         """
         session = UserSession(
             user_id=user_data.get("id"),
             email=user_data.get("email", ""),
+            phone=user_data.get("phone", ""),
             name=user_data.get("name", ""),
             role=user_data.get("role", "user"),
+            oauth_provider=user_data.get("oauth_provider"),
             is_authenticated=True,
             last_activity=datetime.utcnow().isoformat()
         )
@@ -180,9 +218,9 @@ class AuthState(StateManager[Dict[str, Any]]):
         """Update specific user info fields.
         
         Args:
-            **kwargs: Fields to update (name, email, etc.)
+            **kwargs: Fields to update (name, email, phone, etc.)
         """
-        allowed_fields = {"name", "email", "role"}
+        allowed_fields = {"name", "email", "phone", "role"}
         updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
         
         if updates:

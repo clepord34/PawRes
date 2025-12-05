@@ -3,12 +3,11 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import json
 import threading
 import time
 from collections import OrderedDict
-from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar, Tuple
+from datetime import datetime
+from typing import Any, Callable, Dict, Generic, List, Optional, TypeVar
 
 T = TypeVar("T")
 

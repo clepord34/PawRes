@@ -60,7 +60,14 @@ def render_check_status(page, params: Dict[str, Any]) -> None:
         print("[WARNING] No user_id in session, redirecting to login")
         page.go("/")
         return
-    CheckStatusPage(db_path=app_config.DB_PATH).build(page, user_id=user_id)
+    # Parse tab parameter (0=Rescues, 1=Adoptions)
+    tab = 0
+    if "tab" in params:
+        try:
+            tab = int(params["tab"])
+        except (ValueError, TypeError):
+            pass
+    CheckStatusPage(db_path=app_config.DB_PATH).build(page, user_id=user_id, tab=tab)
     page.update()
 
 

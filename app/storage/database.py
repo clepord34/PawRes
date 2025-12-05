@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence
 import app_config
 
 
@@ -434,6 +434,10 @@ class Database:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN previous_status TEXT")
 				conn.commit()
 				print("[INFO] Added previous_status column to rescue_missions table")
+			if 'rescued_at' not in rescue_cols_final:
+				cur.execute("ALTER TABLE rescue_missions ADD COLUMN rescued_at TIMESTAMP")
+				conn.commit()
+				print("[INFO] Added rescued_at column to rescue_missions table")
 			
 			# Add archive/remove columns to adoption_requests
 			cur.execute("PRAGMA table_info(adoption_requests)")
@@ -470,6 +474,10 @@ class Database:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN denial_reason TEXT")
 				conn.commit()
 				print("[INFO] Added denial_reason column to adoption_requests table")
+			if 'approved_at' not in adopt_cols_final:
+				cur.execute("ALTER TABLE adoption_requests ADD COLUMN approved_at TIMESTAMP")
+				conn.commit()
+				print("[INFO] Added approved_at column to adoption_requests table")
 			
 			# Add archive/remove columns to animals
 			cur.execute("PRAGMA table_info(animals)")
@@ -532,6 +540,53 @@ class Database:
 			conn.commit()
 			if missions_to_migrate:
 				print(f"[INFO] Migrated {len(missions_to_migrate)} rescue missions to use structured columns")
+			
+			# =========================================================================
+			# Create UNIQUE index on phone column for users table
+			# =========================================================================
+			# Check if the unique index already exists
+			cur.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_users_phone_unique'")
+			if not cur.fetchone():
+				# First, we need to normalize any existing phone numbers
+				# This handles legacy data that might have duplicate phones in different formats
+				try:
+					from components.utils import normalize_phone_number
+					
+					# Get all users with phone numbers
+					cur.execute("SELECT id, phone FROM users WHERE phone IS NOT NULL AND phone != ''")
+					users_with_phones = cur.fetchall()
+					
+					phone_map = {}  # normalized_phone -> first user_id that has it
+					duplicates_found = []
+					
+					for user in users_with_phones:
+						user_id, phone = user[0], user[1]
+						if phone:
+							normalized = normalize_phone_number(phone)
+							if normalized:
+								if normalized in phone_map:
+									# Duplicate found - clear this one
+									duplicates_found.append((user_id, phone))
+								else:
+									phone_map[normalized] = user_id
+									# Update to normalized format
+									if phone != normalized:
+										cur.execute("UPDATE users SET phone = ? WHERE id = ?", (normalized, user_id))
+					
+					# Clear duplicate phones (keep first one)
+					for user_id, _ in duplicates_found:
+						cur.execute("UPDATE users SET phone = NULL WHERE id = ?", (user_id,))
+						print(f"[WARN] Cleared duplicate phone for user {user_id}")
+					
+					conn.commit()
+					
+				except ImportError:
+					print("[WARN] Could not import normalize_phone_number, skipping phone normalization")
+				
+				# Now create the unique index (allowing NULLs)
+				cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone) WHERE phone IS NOT NULL")
+				conn.commit()
+				print("[INFO] Created unique index on users.phone column")
 				
 		except Exception as e:
 			# Log but don't fail - column might already be in the CREATE TABLE statement

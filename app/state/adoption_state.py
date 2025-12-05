@@ -135,7 +135,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
                 "error": None,
             })
             
-            print(f"[DEBUG] AdoptionState: Loaded {len(requests)} adoption requests")
             
         except Exception as e:
             print(f"[ERROR] AdoptionState: Failed to load requests: {e}")
@@ -365,7 +364,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_requests()
-                print(f"[DEBUG] AdoptionState: Denied request {request_id}")
             
             return success
             
@@ -391,7 +389,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_requests()
-                print(f"[DEBUG] AdoptionState: Archived request {request_id}")
             
             return success
             
@@ -417,7 +414,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_requests()
-                print(f"[DEBUG] AdoptionState: Removed request {request_id}")
             
             return success
             
@@ -441,7 +437,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_requests()
-                print(f"[DEBUG] AdoptionState: Restored request {request_id}")
             
             return success
             
@@ -467,7 +462,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_requests()
-                print(f"[DEBUG] AdoptionState: Permanently deleted request {request_id}")
             
             return success
             
@@ -500,7 +494,6 @@ class AdoptionState(StateManager[Dict[str, Any]]):
                 "error": None,
             })
             
-            print(f"[DEBUG] AdoptionState: Loaded {len(requests)} active requests")
             
         except Exception as e:
             print(f"[ERROR] AdoptionState: Failed to load active requests: {e}")

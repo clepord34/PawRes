@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from storage.database import Database
 from services.logging_service import get_admin_logger, get_auth_logger
 from services.password_policy import (
     get_password_policy,
-    PasswordPolicy,
     PasswordHistoryManager
 )
 import app_config
@@ -516,6 +514,274 @@ class UserService:
             "disabled": disabled["count"] if disabled else 0,
             "recent_signups": recent["count"] if recent else 0,
         }
+    
+    # ----- Profile Operations (Self-Service) -----
+    
+    def get_user_profile(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get user profile data for self-service profile page.
+        
+        Args:
+            user_id: User's ID
+            
+        Returns:
+            User profile dictionary or None if not found
+        """
+        return self.db.fetch_one(
+            """
+            SELECT id, name, email, phone, role, created_at, last_login, 
+                   oauth_provider, profile_picture
+            FROM users WHERE id = ?
+            """,
+            (user_id,)
+        )
+    
+    def update_user_profile(
+        self,
+        user_id: int,
+        name: Optional[str] = None,
+        phone: Optional[str] = None,
+        profile_picture: Optional[str] = None
+    ) -> bool:
+        """Update user's own profile (self-service).
+        
+        Args:
+            user_id: User's ID
+            name: New name (optional)
+            phone: New phone (optional)
+            profile_picture: New profile picture filename (optional)
+            
+        Returns:
+            True if update succeeded
+            
+        Raises:
+            UserServiceError: If validation fails
+        """
+        from components.utils import normalize_phone_number
+        
+        user = self.get_user(user_id)
+        if not user:
+            raise UserServiceError("User not found")
+        
+        updates = []
+        params = []
+        
+        if name is not None:
+            if not name or len(name) > app_config.MAX_NAME_LENGTH:
+                raise UserServiceError(
+                    f"Name must be 1-{app_config.MAX_NAME_LENGTH} characters"
+                )
+            updates.append("name = ?")
+            params.append(name)
+        
+        if phone is not None:
+            if phone:
+                # Normalize phone number
+                normalized = normalize_phone_number(phone)
+                if not normalized:
+                    raise UserServiceError("Invalid phone number format")
+                
+                # Check for duplicate phone (excluding current user)
+                existing = self.db.fetch_one(
+                    "SELECT id FROM users WHERE phone = ? AND id != ?",
+                    (normalized, user_id)
+                )
+                if existing:
+                    raise UserServiceError("This phone number is already registered to another account")
+                
+                updates.append("phone = ?")
+                params.append(normalized)
+            else:
+                updates.append("phone = ?")
+                params.append(None)
+        
+        if profile_picture is not None:
+            updates.append("profile_picture = ?")
+            params.append(profile_picture)
+        
+        if not updates:
+            return True  # Nothing to update
+        
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(user_id)
+        
+        self.db.execute(
+            f"UPDATE users SET {', '.join(updates)} WHERE id = ?",
+            params
+        )
+        
+        return True
+    
+    def change_user_password(
+        self,
+        user_id: int,
+        current_password: str,
+        new_password: str
+    ) -> Dict[str, Any]:
+        """Change user's own password (self-service).
+        
+        Args:
+            user_id: User's ID
+            current_password: Current password for verification
+            new_password: New password
+            
+        Returns:
+            Dict with 'success' bool and optional 'error' message
+        """
+        import hmac
+        
+        # Get user with password fields
+        user = self.db.fetch_one(
+            "SELECT id, email, password_hash, password_salt, oauth_provider FROM users WHERE id = ?",
+            (user_id,)
+        )
+        
+        if not user:
+            return {"success": False, "error": "User not found"}
+        
+        # Check if OAuth user (no password)
+        if user.get("oauth_provider"):
+            return {"success": False, "error": "Cannot change password for OAuth accounts. Use 'Set Password' instead."}
+        
+        stored_hash = user.get("password_hash")
+        stored_salt = user.get("password_salt")
+        
+        if not stored_hash or not stored_salt:
+            return {"success": False, "error": "Cannot change password for this account"}
+        
+        # Verify current password
+        try:
+            salt_bytes = bytes.fromhex(stored_salt)
+            current_hash = hashlib.pbkdf2_hmac(
+                "sha256", current_password.encode("utf-8"), salt_bytes, app_config.PBKDF2_ITERATIONS
+            ).hex()
+            
+            if not hmac.compare_digest(current_hash, stored_hash):
+                return {"success": False, "error": "Current password is incorrect"}
+        except Exception:
+            return {"success": False, "error": "Error verifying password"}
+        
+        # Validate new password against policy
+        is_valid, errors = self.password_policy.validate(new_password)
+        if not is_valid:
+            return {"success": False, "error": errors[0]}
+        
+        # Check password history
+        allowed, error = self.password_history.check_reuse(
+            user_id, new_password, self.password_policy
+        )
+        if not allowed:
+            return {"success": False, "error": error}
+        
+        # Hash new password
+        new_salt = secrets.token_bytes(app_config.SALT_LENGTH)
+        new_hash = hashlib.pbkdf2_hmac(
+            "sha256", new_password.encode("utf-8"), new_salt, app_config.PBKDF2_ITERATIONS
+        ).hex()
+        new_salt_hex = new_salt.hex()
+        
+        # Update password
+        self.db.execute(
+            """
+            UPDATE users SET 
+                password_hash = ?, 
+                password_salt = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (new_hash, new_salt_hex, user_id)
+        )
+        
+        # Add to password history
+        self.password_history.add_to_history(
+            user_id, new_hash, new_salt_hex, self.password_policy.history_count
+        )
+        
+        # Log the change
+        self.auth_logger.log_password_change(user_id, user.get("email"))
+        
+        return {"success": True}
+    
+    def set_password_for_oauth_user(
+        self,
+        user_id: int,
+        new_password: str
+    ) -> Dict[str, Any]:
+        """Set password for an OAuth-only user (self-service).
+        
+        This allows OAuth users to add a password so they can unlink
+        their OAuth provider and still log in.
+        
+        Args:
+            user_id: User's ID
+            new_password: New password to set
+            
+        Returns:
+            Dict with 'success' bool and optional 'error' message
+        """
+        # Get user with password fields
+        user = self.db.fetch_one(
+            "SELECT id, email, password_hash, oauth_provider FROM users WHERE id = ?",
+            (user_id,)
+        )
+        
+        if not user:
+            return {"success": False, "error": "User not found"}
+        
+        # This is for OAuth users without a password
+        if not user.get("oauth_provider"):
+            return {"success": False, "error": "This account is not linked to an OAuth provider"}
+        
+        if user.get("password_hash"):
+            return {"success": False, "error": "Password is already set. Use 'Change Password' instead."}
+        
+        # Validate new password against policy
+        is_valid, errors = self.password_policy.validate(new_password)
+        if not is_valid:
+            return {"success": False, "error": errors[0]}
+        
+        # Hash new password
+        new_salt = secrets.token_bytes(app_config.SALT_LENGTH)
+        new_hash = hashlib.pbkdf2_hmac(
+            "sha256", new_password.encode("utf-8"), new_salt, app_config.PBKDF2_ITERATIONS
+        ).hex()
+        new_salt_hex = new_salt.hex()
+        
+        # Set password
+        self.db.execute(
+            """
+            UPDATE users SET 
+                password_hash = ?, 
+                password_salt = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (new_hash, new_salt_hex, user_id)
+        )
+        
+        # Add to password history
+        self.password_history.add_to_history(
+            user_id, new_hash, new_salt_hex, self.password_policy.history_count
+        )
+        
+        # Log the change
+        self.auth_logger.log_password_change(user_id, user.get("email"))
+        
+        return {"success": True}
+    
+    def is_oauth_user(self, user_id: int) -> bool:
+        """Check if user uses OAuth authentication.
+        
+        Args:
+            user_id: User's ID
+            
+        Returns:
+            True if user uses OAuth
+        """
+        user = self.db.fetch_one(
+            "SELECT oauth_provider FROM users WHERE id = ?",
+            (user_id,)
+        )
+        return bool(user and user.get("oauth_provider"))
 
 
 __all__ = ["UserService", "UserServiceError"]

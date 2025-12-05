@@ -74,11 +74,19 @@ class RescueService:
         old_status = RescueStatus.normalize(existing.get('status', ''))
         new_status = RescueStatus.normalize(status)
         
-        # Update the status
-        self.db.execute(
-            "UPDATE rescue_missions SET status = ?, updated_at = ? WHERE id = ?",
-            (status, datetime.now(), mission_id)
-        )
+        # Update the status (also set rescued_at if changing to rescued)
+        now = datetime.now()
+        if new_status == RescueStatus.RESCUED and old_status != RescueStatus.RESCUED:
+            # Setting rescued_at timestamp when status becomes 'rescued'
+            self.db.execute(
+                "UPDATE rescue_missions SET status = ?, updated_at = ?, rescued_at = ? WHERE id = ?",
+                (status, now, now, mission_id)
+            )
+        else:
+            self.db.execute(
+                "UPDATE rescue_missions SET status = ?, updated_at = ? WHERE id = ?",
+                (status, now, mission_id)
+            )
         
         # Handle status transitions
         if new_status == RescueStatus.RESCUED and old_status != RescueStatus.RESCUED:
@@ -186,13 +194,13 @@ class RescueService:
     def get_all_missions_for_analytics(self) -> List[Dict[str, Any]]:
         """Return missions that count in analytics and charts.
         
-        Excludes "removed" status items. Includes archived items (they preserve
-        their original status in the compound format like "rescued|archived").
+        Excludes "removed" and "cancelled" status items. Includes archived items 
+        (they preserve their original status in the compound format like "rescued|archived").
         
         Used for historical data in charts like 'Rescued vs Adopted'.
         """
         rows = self.db.fetch_all(
-            "SELECT * FROM rescue_missions WHERE status != 'removed' ORDER BY mission_date DESC"
+            "SELECT * FROM rescue_missions WHERE status NOT IN ('removed', 'cancelled') ORDER BY mission_date DESC"
         )
         return rows
 
@@ -402,6 +410,101 @@ class RescueService:
                    CASE WHEN status = 'removed' THEN removed_at ELSE archived_at END DESC"""
         )
         return rows
+
+    def get_missions_pending_address(self) -> List[Dict[str, Any]]:
+        """Return missions that have coordinates but no resolved address.
+        
+        These are missions submitted offline that need their location
+        field updated via reverse geocoding when online.
+        """
+        rows = self.db.fetch_all(
+            """SELECT id, latitude, longitude, location FROM rescue_missions 
+               WHERE latitude IS NOT NULL 
+               AND longitude IS NOT NULL
+               AND (location IS NULL OR location = '' OR location = 'Pending address lookup' OR location LIKE '%,%')
+               ORDER BY mission_date DESC
+               LIMIT 10"""
+        )
+        return rows
+
+    def update_mission_location(self, mission_id: int, location: str) -> bool:
+        """Update the location text for a mission after reverse geocoding.
+        
+        Args:
+            mission_id: ID of the mission to update
+            location: The human-readable address from reverse geocoding
+            
+        Returns:
+            True if updated successfully
+        """
+        existing = self.db.fetch_one(
+            "SELECT id FROM rescue_missions WHERE id = ?",
+            (mission_id,)
+        )
+        if not existing:
+            return False
+        
+        self.db.execute(
+            "UPDATE rescue_missions SET location = ?, updated_at = ? WHERE id = ?",
+            (location, datetime.now(), mission_id)
+        )
+        print(f"[INFO] Updated location for mission {mission_id}: {location[:50]}...")
+        return True
+
+    def sync_pending_addresses(self, map_service) -> int:
+        """Sync pending addresses for missions submitted offline.
+        
+        This method finds missions with coordinates but without resolved
+        addresses and attempts to reverse geocode them.
+        
+        Args:
+            map_service: MapService instance for reverse geocoding
+            
+        Returns:
+            Number of missions updated
+        """
+        # Check if we're online first
+        if not map_service.check_geocoding_available():
+            return 0
+        
+        pending = self.get_missions_pending_address()
+        if not pending:
+            return 0
+        
+        updated_count = 0
+        for mission in pending:
+            mission_id = mission['id']
+            lat = mission['latitude']
+            lng = mission['longitude']
+            current_location = mission.get('location', '')
+            
+            # Skip if location already looks like an address (has letters and no comma-separated numbers)
+            if current_location and not current_location.startswith('Pending') and not self._looks_like_coordinates(current_location):
+                continue
+            
+            try:
+                address = map_service.reverse_geocode(lat, lng)
+                if address:
+                    self.update_mission_location(mission_id, address)
+                    updated_count += 1
+                    print(f"[INFO] Synced address for mission {mission_id}: {address[:40]}...")
+            except Exception as e:
+                print(f"[WARN] Failed to sync address for mission {mission_id}: {e}")
+                # Don't break on errors - try next mission
+                continue
+        
+        if updated_count > 0:
+            print(f"[INFO] sync_pending_addresses: Updated {updated_count} mission(s)")
+        
+        return updated_count
+
+    def _looks_like_coordinates(self, text: str) -> bool:
+        """Check if text looks like GPS coordinates (e.g., '13.642598, 123.395812')."""
+        if not text:
+            return False
+        # Remove spaces and check if it's mostly numbers, dots, commas, and minus signs
+        cleaned = text.replace(' ', '').replace(',', '').replace('.', '').replace('-', '')
+        return cleaned.isdigit() and ',' in text
 
 
 __all__ = ["RescueService"]

@@ -63,8 +63,8 @@ class AdoptionService:
     def get_all_requests_for_analytics(self) -> List[Dict[str, Any]]:
         """Return adoption requests that count in analytics and charts.
         
-        Excludes "removed" status items. Includes archived items (they preserve
-        their original status in the compound format like "approved|archived").
+        Excludes "removed" and "cancelled" status items. Includes archived items 
+        (they preserve their original status in the compound format like "approved|archived").
         
         Used for dashboard stats and adoption trend charts.
         """
@@ -86,7 +86,7 @@ class AdoptionService:
             FROM adoption_requests ar
             LEFT JOIN users u ON ar.user_id = u.id
             LEFT JOIN animals a ON ar.animal_id = a.id
-            WHERE ar.status != 'removed'
+            WHERE ar.status NOT IN ('removed', 'cancelled')
             ORDER BY ar.request_date DESC
         """
         return self.db.fetch_all(sql)
@@ -120,28 +120,32 @@ class AdoptionService:
         animal_id = existing.get("animal_id")
         
         # Update the adoption request status with timestamp
-        # If approving, also set was_approved flag for historical tracking
-        if new_status_lower == "approved":
+        # If approving, also set was_approved flag and approved_at for historical tracking
+        now = datetime.now()
+        if new_status_lower == "approved" and old_status != "approved":
+            self.db.execute(
+                "UPDATE adoption_requests SET status = ?, updated_at = ?, was_approved = 1, approved_at = ? WHERE id = ?",
+                (status, now, now, request_id)
+            )
+        elif new_status_lower == "approved":
             self.db.execute(
                 "UPDATE adoption_requests SET status = ?, updated_at = ?, was_approved = 1 WHERE id = ?",
-                (status, datetime.now(), request_id)
+                (status, now, request_id)
             )
         else:
             self.db.execute(
                 "UPDATE adoption_requests SET status = ?, updated_at = ? WHERE id = ?",
-                (status, datetime.now(), request_id)
+                (status, now, request_id)
             )
         
         # Handle status transitions
         if new_status_lower == "approved":
-            print(f"[DEBUG] Approving adoption - animal_id: {animal_id}")
             if animal_id:
                 # Update the animal status to 'adopted'
                 self.db.execute(
                     f"UPDATE animals SET status = '{AnimalStatus.ADOPTED}', updated_at = ? WHERE id = ?",
                     (datetime.now(), animal_id)
                 )
-                print(f"[DEBUG] Updated animal {animal_id} status to '{AnimalStatus.ADOPTED}'")
                 
                 # Auto-deny all OTHER pending requests for this same animal
                 self.db.execute(
@@ -154,7 +158,6 @@ class AdoptionService:
                         AND LOWER(status) = '{AdoptionStatus.PENDING}'""",
                     (datetime.now(), animal_id, request_id)
                 )
-                print(f"[DEBUG] Auto-denied other pending requests for animal {animal_id}")
         
         elif new_status_lower == "denied" and old_status == "approved":
             # Changing FROM approved TO denied - may need to revert animal status
@@ -173,7 +176,6 @@ class AdoptionService:
                         f"UPDATE animals SET status = '{AnimalStatus.HEALTHY}', updated_at = ? WHERE id = ?",
                         (datetime.now(), animal_id)
                     )
-                    print(f"[DEBUG] Reverted animal {animal_id} status to '{AnimalStatus.HEALTHY}' after adoption denial")
         
         return True
 

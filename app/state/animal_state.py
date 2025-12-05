@@ -140,7 +140,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
                 "error": None,
             })
             
-            print(f"[DEBUG] AnimalState: Loaded {len(animals)} animals")
             
         except Exception as e:
             print(f"[ERROR] AnimalState: Failed to load animals: {e}")
@@ -350,7 +349,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_animals()
-                print(f"[DEBUG] AnimalState: Archived animal {animal_id}")
             
             return success
             
@@ -380,7 +378,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
             
             if result.get("success"):
                 self.load_animals()
-                print(f"[DEBUG] AnimalState: Removed animal {animal_id}, affected {result.get('adoptions_affected', 0)} adoptions")
             
             return result
             
@@ -404,7 +401,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
             
             if success:
                 self.load_animals()
-                print(f"[DEBUG] AnimalState: Restored animal {animal_id}")
             
             return success
             
@@ -431,7 +427,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
             
             if result.get("success"):
                 self.load_animals()
-                print(f"[DEBUG] AnimalState: Permanently deleted animal {animal_id}")
             
             return result
             
@@ -463,7 +458,6 @@ class AnimalState(StateManager[Dict[str, Any]]):
                 "error": None,
             })
             
-            print(f"[DEBUG] AnimalState: Loaded {len(animals)} active animals")
             
         except Exception as e:
             print(f"[ERROR] AnimalState: Failed to load active animals: {e}")

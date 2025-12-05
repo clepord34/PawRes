@@ -1,7 +1,7 @@
 """Map service for geocoding and map generation."""
 from __future__ import annotations
 
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Callable
 import logging
 import time
 import app_config
@@ -55,6 +55,46 @@ class MapService:
             time.sleep(1.5 - time_since_last)
         MapService._last_request_time = time.time()
     
+    def check_geocoding_available(self) -> bool:
+        """Check if geocoding service is available (has internet connectivity).
+        
+        Returns:
+            True if geocoding service is reachable, False otherwise
+        """
+        if not self.geocoder:
+            return False
+        
+        try:
+            import socket
+            # Create socket with its own timeout (don't use setdefaulttimeout which affects global state)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            try:
+                sock.connect(("nominatim.openstreetmap.org", 443))
+                return True
+            finally:
+                sock.close()
+        except (socket.error, socket.timeout, OSError):
+            return False
+    
+    def check_map_tiles_available(self) -> bool:
+        """Check if OpenStreetMap tile server is reachable.
+        
+        Returns:
+            True if tile server is reachable, False otherwise
+        """
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            try:
+                sock.connect(("tile.openstreetmap.org", 443))
+                return True
+            finally:
+                sock.close()
+        except (socket.error, socket.timeout, OSError):
+            return False
+    
     def geocode_location(self, location: str) -> Optional[Tuple[float, float]]:
         """
         Convert a location string to latitude/longitude coordinates.
@@ -63,7 +103,9 @@ class MapService:
             location: Address or location description
             
         Returns:
-            Tuple of (latitude, longitude) or None if geocoding fails
+            Tuple of (latitude, longitude) or None if geocoding fails.
+            Returns None for network errors - use check_geocoding_available() 
+            to distinguish between "not found" and "offline".
         """
         if not self.geocoder or not location or not location.strip():
             return None
@@ -79,10 +121,15 @@ class MapService:
                 logger.warning(f"Could not geocode location: '{location}'")
                 return None
         except (GeocoderTimedOut, GeocoderServiceError) as e:
-            logger.error(f"Geocoding error for '{location}': {e}")
+            logger.error(f"Geocoding error (network issue) for '{location}': {e}")
             return None
         except Exception as e:
-            logger.error(f"Unexpected error geocoding '{location}': {e}")
+            # Check if it's a network-related error
+            error_str = str(e).lower()
+            if any(x in error_str for x in ['network', 'connection', 'timeout', 'unreachable', 'socket']):
+                logger.error(f"Geocoding network error for '{location}': {e}")
+            else:
+                logger.error(f"Unexpected error geocoding '{location}': {e}")
             return None
     
     def reverse_geocode(self, latitude: float, longitude: float) -> Optional[str]:
@@ -94,7 +141,9 @@ class MapService:
             longitude: The longitude coordinate
             
         Returns:
-            Address string or None if reverse geocoding fails
+            Address string or None if reverse geocoding fails.
+            Falls back gracefully to None when offline - caller should
+            use coordinates as fallback display.
         """
         if not self.geocoder:
             return None
@@ -110,7 +159,7 @@ class MapService:
                 logger.warning(f"Could not reverse geocode: ({latitude}, {longitude})")
                 return None
         except (GeocoderTimedOut, GeocoderServiceError) as e:
-            logger.error(f"Reverse geocoding error for ({latitude}, {longitude}): {e}")
+            logger.error(f"Reverse geocoding error (network issue) for ({latitude}, {longitude}): {e}")
             return None
         except Exception as e:
             logger.error(f"Unexpected error reverse geocoding ({latitude}, {longitude}): {e}")
@@ -126,7 +175,15 @@ class MapService:
         else:  # Other
             return "🐾"
     
-    def create_map_with_markers(self, missions: List[dict], center: Optional[Tuple[float, float]] = None, zoom: Optional[float] = None, is_admin: bool = False):
+    def create_map_with_markers(
+        self, 
+        missions: List[dict], 
+        center: Optional[Tuple[float, float]] = None, 
+        zoom: Optional[float] = None, 
+        is_admin: bool = False,
+        locked: bool = True,
+        on_unlock_request: Optional[Callable] = None,
+    ):
         """
         Create a Flet Map control with markers for rescue missions.
         
@@ -135,13 +192,18 @@ class MapService:
             center: Optional center coordinates (lat, lng)
             zoom: Optional zoom level
             is_admin: If True, show sensitive info (reporter, contact, source) in tooltip
+            locked: If True, disable scroll/zoom interactions (prevents accidental scrolling)
+            on_unlock_request: Optional callback when user tries to interact with locked map
             
         Returns:
             ft.Map control with marker layers
         """
         try:
             import flet as ft
-            from flet_map import Map, MarkerLayer, Marker, MapLatitudeLongitude, TileLayer, MapInteractionConfiguration, MapInteractiveFlag
+            from flet_map import (
+                Map, MarkerLayer, Marker, MapLatitudeLongitude, TileLayer,
+                MapInteractionConfiguration, MapInteractiveFlag
+            )
         except ImportError:
             logger.error("flet or flet-map not installed")
             return None
@@ -186,6 +248,7 @@ class MapService:
             
             # Determine if this is an emergency submission (user_id is None)
             is_emergency = mission.get('user_id') is None
+            user_id = mission.get('user_id')
             
             # For legacy data, try to parse from notes if columns are empty
             if not mission.get('urgency'):
@@ -251,13 +314,13 @@ class MapService:
             # Admin-only section with separator
             if is_admin:
                 tooltip_lines.append("───────────────────")
-                # Source line
+                # Source line with user ID if applicable
                 if is_emergency:
                     tooltip_lines.append("🚨 Source: Emergency")
                 else:
-                    tooltip_lines.append("👨 Source: User")
+                    tooltip_lines.append(f"👨 Source: User #{user_id}")
                 # Reporter and contact
-                tooltip_lines.append(f"👤 Reporter: {reporter_name}")
+                tooltip_lines.append(f"👨 Reporter: {reporter_name}")
                 if reporter_phone:
                     tooltip_lines.append(f"📞 Contact: {reporter_phone}")
             
@@ -298,27 +361,25 @@ class MapService:
             max_zoom=19,
         )
         
-        # Create a reference to update the map's interaction configuration on click
-        map_ref = ft.Ref[Map]()
+        # Configure interaction based on locked state
+        # When locked: disable scroll wheel zoom to prevent accidental zooming while scrolling page
+        # Still allow tap on markers for tooltips
+        if locked:
+            # Only allow tapping (for marker tooltips), no zoom/drag/scroll
+            interaction_flags = MapInteractiveFlag.NONE
+        else:
+            # Full interactivity when unlocked
+            interaction_flags = MapInteractiveFlag.ALL
         
-        def on_map_tap(e):
-            """Enable map interactions when user clicks on the map."""
-            if map_ref.current:
-                map_ref.current.interaction_configuration = MapInteractionConfiguration(
-                    flags=MapInteractiveFlag.ALL
-                )
-                map_ref.current.update()
+        interaction_config = MapInteractionConfiguration(
+            flags=interaction_flags,
+        )
         
-        # Create the map with both tile layer and marker layer
-        # Initially disable interactions - user must click to enable drag/zoom
+        # Create the map with interaction configuration
         map_control = Map(
-            ref=map_ref,
             initial_center=MapLatitudeLongitude(center[0], center[1]),
             initial_zoom=zoom or self.DEFAULT_ZOOM,
-            interaction_configuration=MapInteractionConfiguration(
-                flags=MapInteractiveFlag.NONE  # Disabled until user clicks
-            ),
-            on_tap=on_map_tap,  # Enable interactions on click
+            interaction_configuration=interaction_config,
             layers=[tile_layer, marker_layer],
             expand=True,
         )
@@ -353,4 +414,157 @@ class MapService:
             alignment=ft.alignment.center,
             bgcolor=ft.Colors.GREY_100,
             border_radius=8,
+        )
+    
+    def create_offline_map_fallback(self, missions: List[dict], is_admin: bool = False) -> object:
+        """
+        Create an offline-friendly fallback widget showing mission locations as a styled list.
+        
+        Use this when map tiles are unavailable due to no internet connection.
+        Shows mission locations with urgency indicators and status badges.
+        
+        Args:
+            missions: List of mission dicts with location, status, urgency, etc.
+            is_admin: If True, show admin-only info (user IDs, contacts)
+            
+        Returns:
+            Flet Container with styled mission list
+        """
+        try:
+            import flet as ft
+        except ImportError:
+            return None
+        
+        # Filter valid missions (same logic as create_map_with_markers)
+        valid_missions = [
+            m for m in missions 
+            if m.get('latitude') is not None 
+            and m.get('longitude') is not None
+            and not RescueStatus.is_removed(m.get('status') or '')
+            and not RescueStatus.is_cancelled(m.get('status') or '')
+        ]
+        
+        if not valid_missions:
+            return ft.Container(
+                ft.Column([
+                    ft.Icon(ft.Icons.WIFI_OFF, size=48, color=ft.Colors.GREY_400),
+                    ft.Text("No Internet Connection", size=16, color=ft.Colors.GREY_600, weight="w600"),
+                    ft.Text("Map tiles unavailable offline", size=13, color=ft.Colors.GREY_500),
+                    ft.Container(height=8),
+                    ft.Text("No rescue locations to display", size=12, color=ft.Colors.GREY_500),
+                ], horizontal_alignment="center", alignment="center", spacing=8),
+                height=300,
+                alignment=ft.alignment.center,
+                bgcolor=ft.Colors.GREY_100,
+                border_radius=8,
+            )
+        
+        # Create mission location cards
+        location_cards = []
+        for mission in valid_missions[:10]:  # Limit to 10 for performance
+            mission_id = mission.get('id', 0)
+            location = mission.get('location', 'Unknown location')
+            status = mission.get('status', 'pending')
+            urgency = (mission.get('urgency') or 'medium').lower()
+            animal_type = mission.get('animal_type') or 'Animal'
+            
+            # Urgency color
+            urgency_colors = {
+                'high': (ft.Colors.RED_100, ft.Colors.RED_700, ft.Icons.PRIORITY_HIGH),
+                'medium': (ft.Colors.ORANGE_100, ft.Colors.ORANGE_700, ft.Icons.PETS),
+                'low': (ft.Colors.GREEN_100, ft.Colors.GREEN_700, ft.Icons.CHECK_CIRCLE),
+            }
+            bg_color, text_color, icon = urgency_colors.get(urgency, urgency_colors['medium'])
+            
+            # Status color
+            status_normalized = RescueStatus.normalize(status)
+            if status_normalized == RescueStatus.RESCUED:
+                status_color = ft.Colors.GREEN_600
+            elif status_normalized == RescueStatus.FAILED:
+                status_color = ft.Colors.RED_600
+            elif status_normalized == RescueStatus.ONGOING:
+                status_color = ft.Colors.TEAL_600
+            else:
+                status_color = ft.Colors.ORANGE_600
+            
+            # Truncate location
+            location_display = location[:45] + "..." if len(location) > 45 else location
+            
+            # Build card content
+            card_content = [
+                ft.Row([
+                    ft.Container(
+                        ft.Icon(icon, color=text_color, size=16),
+                        padding=6,
+                        bgcolor=bg_color,
+                        border_radius=8,
+                    ),
+                    ft.Column([
+                        ft.Text(f"#{mission_id} - {animal_type}", size=12, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Text(location_display, size=11, color=ft.Colors.GREY_700,
+                               tooltip=location if len(location) > 45 else None),
+                    ], spacing=2, expand=True),
+                    ft.Container(
+                        ft.Text(RescueStatus.get_label(status), size=10, color=ft.Colors.WHITE, weight="w500"),
+                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        bgcolor=status_color,
+                        border_radius=10,
+                    ),
+                ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ]
+            
+            # Add admin-only info
+            if is_admin:
+                user_id = mission.get('user_id')
+                source_text = "Emergency" if user_id is None else f"User #{user_id}"
+                card_content.append(
+                    ft.Row([
+                        ft.Text(f"Source: {source_text}", size=10, color=ft.Colors.GREY_600),
+                        ft.Text(f"Urgency: {urgency.capitalize()}", size=10, color=text_color),
+                    ], spacing=15)
+                )
+            
+            location_cards.append(
+                ft.Container(
+                    ft.Column(card_content, spacing=6),
+                    padding=12,
+                    bgcolor=ft.Colors.WHITE,
+                    border_radius=8,
+                    border=ft.border.all(1, ft.Colors.GREY_200),
+                )
+            )
+        
+        # Show count if more missions exist
+        remaining = len(valid_missions) - 10
+        if remaining > 0:
+            location_cards.append(
+                ft.Container(
+                    ft.Text(f"+ {remaining} more location(s)", size=12, color=ft.Colors.GREY_600, 
+                           text_align=ft.TextAlign.CENTER),
+                    padding=10,
+                )
+            )
+        
+        return ft.Container(
+            ft.Column([
+                # Header
+                ft.Row([
+                    ft.Icon(ft.Icons.WIFI_OFF, size=20, color=ft.Colors.AMBER_700),
+                    ft.Text("Offline Mode - Map Unavailable", size=14, weight="w600", color=ft.Colors.AMBER_800),
+                ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                ft.Divider(height=1, color=ft.Colors.GREY_300),
+                ft.Text(f"{len(valid_missions)} rescue location(s) marked", size=12, color=ft.Colors.GREY_600,
+                       text_align=ft.TextAlign.CENTER),
+                ft.Container(height=8),
+                # Scrollable list of locations
+                ft.Container(
+                    ft.Column(location_cards, spacing=8, scroll=ft.ScrollMode.AUTO),
+                    height=280,
+                    expand=True,
+                ),
+            ], spacing=10, horizontal_alignment="center"),
+            padding=15,
+            bgcolor=ft.Colors.GREY_100,
+            border_radius=8,
+            border=ft.border.all(1, ft.Colors.AMBER_200),
         )

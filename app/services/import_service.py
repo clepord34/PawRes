@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import app_config
 from services.animal_service import AnimalService
-from storage.file_store import get_file_store, FileStoreError
+from storage.file_store import get_file_store
 
 
 @dataclass

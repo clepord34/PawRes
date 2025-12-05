@@ -59,7 +59,14 @@ def render_manage_records(page, params: Dict[str, Any]) -> None:
     """Render the combined manage records page (rescue missions, adoptions, hidden items)."""
     from views.manage_records_page import ManageRecordsPage
     clear_page(page)
-    ManageRecordsPage(db_path=app_config.DB_PATH).build(page)
+    # Parse tab parameter (0=Rescues, 1=Adoptions, 2=Hidden)
+    tab = 0
+    if "tab" in params:
+        try:
+            tab = int(params["tab"])
+        except (ValueError, TypeError):
+            pass
+    ManageRecordsPage(db_path=app_config.DB_PATH).build(page, tab=tab)
     page.update()
 
 
