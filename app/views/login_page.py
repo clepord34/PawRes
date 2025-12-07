@@ -67,7 +67,6 @@ class LoginPage:
         )
         
         # Google button - white with border
-        # Check if Google OAuth is configured
         google_configured = self.google_auth.is_configured
         self._google_btn = ft.Container(
             ft.ElevatedButton(
@@ -207,11 +206,9 @@ class LoginPage:
             )
             return
 
-        # Use the new login method that returns result status
         user, result = self.auth.login(email_or_phone, password)
         
         if result == AuthResult.ACCOUNT_LOCKED:
-            # Check lockout status to show remaining time
             is_locked, remaining = self.auth.get_lockout_status(email_or_phone)
             if remaining:
                 create_error_dialog(
@@ -239,7 +236,6 @@ class LoginPage:
             return
         
         if not user:
-            # Get current attempt count to show warning
             max_attempts = getattr(app_config, 'MAX_FAILED_LOGIN_ATTEMPTS', 5)
             
             attempts = self.auth.get_failed_login_attempts(email_or_phone)
@@ -266,7 +262,6 @@ class LoginPage:
                         )
                     return
                 elif remaining_attempts <= 3:
-                    # Show warning when 3 or fewer attempts remaining
                     create_info_dialog(
                         page,
                         title="Login Failed",
@@ -290,7 +285,6 @@ class LoginPage:
         email = user.get("email")
         phone = user.get("phone")
         
-        # Use centralized state management for login
         # Pass user data as dictionary matching AuthState.login() signature
         app_state = get_app_state()
         app_state.auth.login({
@@ -334,8 +328,6 @@ class LoginPage:
                 )
                 
                 if result == AuthResult.OAUTH_CONFLICT:
-                    # User exists with password but no OAuth linked
-                    # Show dialog asking if they want to link the account
                     def link_account(e):
                         """Link Google account to existing password account."""
                         success, msg = self.auth.link_google_account(user["id"], "google")
@@ -419,7 +411,6 @@ class LoginPage:
             print(f"[ERROR] Google sign-in failed: {error_msg}")
             show_snackbar(page, f"Google Sign-In failed: {error_msg}")
         
-        # Run OAuth flow in background thread to not block UI
         self.google_auth.sign_in_async(
             on_complete=on_google_complete,
             on_error=on_google_error

@@ -91,17 +91,14 @@ def create_interactive_map(
         if map_container_ref.current:
             map_container_ref.current.content = new_map
         
-        # Update overlay visibility AND disabled state
         # When unlocked, overlay must be both invisible AND disabled to not block events
         if overlay_ref.current:
             overlay_ref.current.visible = is_locked[0]
             overlay_ref.current.disabled = not is_locked[0]
         
-        # Update header button appearance
         if lock_button_ref.current:
             update_lock_button()
         
-        # Update status badge
         if status_badge_ref.current:
             update_status_badge()
         
@@ -147,7 +144,6 @@ def create_interactive_map(
             ], spacing=3, tight=True)
             badge.bgcolor = ft.Colors.with_opacity(0.95, ft.Colors.TEAL_50)
     
-    # Create the initial map
     initial_map = create_map_widget(is_locked[0])
     
     # Semi-transparent overlay when locked (clickable to unlock)

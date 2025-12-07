@@ -3,11 +3,16 @@
 # Header components
 from .header import create_header, create_page_header
 
-# Sidebar components
 from .sidebar import create_admin_sidebar, create_user_sidebar
 
 # Button components
-from .buttons import create_nav_button, create_action_button, create_logout_button, create_table_action_button
+from .buttons import (
+    create_nav_button, 
+    create_action_button, 
+    create_logout_button, 
+    create_table_action_button,
+    create_ai_download_button,
+)
 
 # Status badge components
 from .status_badge import create_status_badge, create_mission_status_badge, create_adoption_status_dropdown
@@ -104,11 +109,20 @@ from .charts import (
     create_impact_insight_widgets,
 )
 
+# AI suggestion components
+from .ai_suggestion_card import (
+    create_ai_suggestion_card,
+    create_ai_loading_card,
+    create_ai_analyze_button,
+)
+
+# AI download dialog
+from .ai_download_dialog import create_ai_download_dialog
+
 __all__ = [
     # Headers
     "create_header",
     "create_page_header",
-    # Sidebars
     "create_admin_sidebar",
     "create_user_sidebar",
     # Buttons
@@ -195,4 +209,10 @@ __all__ = [
     "create_insight_box",
     "create_chart_card",
     "create_impact_insight_widgets",
+    # AI suggestion components
+    "create_ai_suggestion_card",
+    "create_ai_loading_card",
+    "create_ai_analyze_button",
+    # AI download dialog
+    "create_ai_download_dialog",
 ]

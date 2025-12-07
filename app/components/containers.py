@@ -243,7 +243,6 @@ def create_data_table(
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
     
-    # Build header row
     header_cells = []
     for i, col in enumerate(columns):
         expand = column_widths[i] if column_widths and i < len(column_widths) else 1
@@ -328,7 +327,6 @@ def create_scrollable_data_table(
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
     
-    # Build header row with improved styling
     header_cells = []
     for col in columns:
         label_text = col.get("label", "")
@@ -348,7 +346,6 @@ def create_scrollable_data_table(
         border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.TEAL_200)),
     )
     
-    # Build data rows with alternating background colors
     data_row_widgets = []
     if rows:
         for row_idx, row_data in enumerate(rows):
@@ -381,7 +378,6 @@ def create_scrollable_data_table(
             )
             data_row_widgets.append(row_widget)
     
-    # Build the table content
     if data_row_widgets:
         # Scrollable body for data rows
         scrollable_body = ft.Column(
@@ -544,8 +540,9 @@ def create_animal_card(
     show_adopt_button: bool = True,
     is_rescued: bool = False,
     rescue_info: Optional[Dict[str, Any]] = None,
+    breed: Optional[str] = None,
 ) -> object:
-    """Create an animal display card.
+    """Create an animal display card with enhanced visual design.
     
     Args:
         animal_id: Animal ID
@@ -562,6 +559,7 @@ def create_animal_card(
         show_adopt_button: Whether to show the adopt button (for user view)
         is_rescued: Whether this animal came from a rescue mission
         rescue_info: Dict with rescue mission details (location, date, reporter, urgency)
+        breed: Animal breed (optional)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
@@ -572,7 +570,7 @@ def create_animal_card(
     if "|archived" in status.lower():
         clean_status = status.lower().replace("|archived", "")
     
-    # Status color mapping
+    # Status color mapping with enhanced colors
     status_lower = clean_status.lower()
     status_colors = {
         "healthy": ft.Colors.GREEN_600,
@@ -581,7 +579,25 @@ def create_animal_card(
         "adopted": ft.Colors.PURPLE_600,
         "processing": ft.Colors.BLUE_600,  # Needs admin setup
     }
+    status_bg_colors = {
+        "healthy": ft.Colors.GREEN_50,
+        "recovering": ft.Colors.ORANGE_50,
+        "injured": ft.Colors.RED_50,
+        "adopted": ft.Colors.PURPLE_50,
+        "processing": ft.Colors.BLUE_50,
+    }
     status_color = status_colors.get(status_lower, ft.Colors.GREY_600)
+    status_bg = status_bg_colors.get(status_lower, ft.Colors.GREY_100)
+    
+    # Status icons for visual recognition
+    status_icons = {
+        "healthy": ft.Icons.CHECK_CIRCLE,
+        "recovering": ft.Icons.HEALING,
+        "injured": ft.Icons.LOCAL_HOSPITAL,
+        "adopted": ft.Icons.FAVORITE,
+        "processing": ft.Icons.HOURGLASS_EMPTY,
+    }
+    status_icon = status_icons.get(status_lower, ft.Icons.INFO)
     
     # Display text for status (show user-friendly text for processing)
     status_display = "Needs Setup" if status_lower == "processing" else clean_status.capitalize()
@@ -589,93 +605,113 @@ def create_animal_card(
     # Determine if animal is adoptable (only healthy animals can be adopted, not processing)
     is_adoptable = status_lower in ("healthy", "available", "adoptable", "ready")
     
-    # Animal image
+    # Animal image - full width with golden ratio height
+    # Golden ratio: if card is 360px total content, image should be ~222px (0.618) and description ~138px (0.382)
+    # Adjusting to 200px image height for better golden ratio with description area
+    image_height = 250
+    
     if photo_base64:
         animal_image = ft.Container(
             content=ft.Image(
                 src_base64=photo_base64,
-                width=130,
-                height=130,
+                width=250,
+                height=image_height,
                 fit=ft.ImageFit.COVER,
-                border_radius=8,
+                border_radius=ft.border_radius.only(top_left=14, top_right=14),
             ),
-            width=130,
-            height=130,
-            border_radius=8,
+            width=250,
+            height=image_height,
+            border_radius=ft.border_radius.only(top_left=14, top_right=14),
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         )
     else:
         animal_image = ft.Container(
-            ft.Icon(ft.Icons.PETS, size=48, color=ft.Colors.GREY_400),
-            width=130,
-            height=130,
-            bgcolor=ft.Colors.GREY_300,
-            border_radius=8,
+            ft.Icon(ft.Icons.PETS, size=70, color=ft.Colors.GREY_400),
+            width=250,
+            height=image_height,
+            bgcolor=ft.Colors.GREY_200,
+            border_radius=ft.border_radius.only(top_left=14, top_right=14),
             alignment=ft.alignment.center,
         )
     
-    # Action buttons
+    # Action buttons with enhanced styling
     if is_admin and on_edit:
         # For adopted animals, just show Edit (no edit for adopted animals)
         if status_lower == "adopted":
-            # Show archive/remove for adopted animals
             if on_archive or on_remove:
                 buttons = ft.Row([
                     ft.IconButton(
                         icon=ft.Icons.ARCHIVE_OUTLINED,
                         icon_color=ft.Colors.AMBER_700,
-                        icon_size=20,
+                        icon_size=15,
                         tooltip="Archive",
                         on_click=lambda e: on_archive(animal_id) if on_archive else None,
+                        style=ft.ButtonStyle(
+                            bgcolor={ft.ControlState.HOVERED: ft.Colors.AMBER_50},
+                            shape=ft.CircleBorder(),
+                        ),
                     ) if on_archive else ft.Container(),
                     ft.IconButton(
                         icon=ft.Icons.DELETE_OUTLINE,
                         icon_color=ft.Colors.RED_600,
-                        icon_size=20,
+                        icon_size=15,
                         tooltip="Remove",
                         on_click=lambda e: on_remove(animal_id) if on_remove else None,
+                        style=ft.ButtonStyle(
+                            bgcolor={ft.ControlState.HOVERED: ft.Colors.RED_50},
+                            shape=ft.CircleBorder(),
+                        ),
                     ) if on_remove else ft.Container(),
-                ], spacing=0, alignment=ft.MainAxisAlignment.CENTER)
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER)
             else:
                 buttons = ft.Container()  # No actions for adopted animals
         else:
-            # Build admin action buttons
             action_buttons = []
             
-            # Edit button
+            # Edit icon button
             action_buttons.append(
-                ft.ElevatedButton(
-                    "Edit",
-                    width=80,
-                    height=32,
+                ft.IconButton(
+                    icon=ft.Icons.EDIT,
+                    icon_color=ft.Colors.TEAL_600,
+                    icon_size=15,
+                    tooltip="Edit",
                     on_click=lambda e: on_edit(animal_id) if on_edit else None,
                     style=ft.ButtonStyle(
-                        bgcolor=ft.Colors.TEAL_600,
-                        color=ft.Colors.WHITE,
-                        shape=ft.RoundedRectangleBorder(radius=6),
-                        text_style=ft.TextStyle(size=11),
-                    )
-                ),
+                        bgcolor={ft.ControlState.HOVERED: ft.Colors.TEAL_50},
+                        shape=ft.CircleBorder(),
+                    ),
+                )
             )
             
-            # Archive/Remove icons
-            if on_archive or on_remove:
+            # Archive/Remove icons with enhanced styling
+            if on_archive:
                 action_buttons.append(
-                    ft.Row([
-                        ft.IconButton(
-                            icon=ft.Icons.ARCHIVE_OUTLINED,
-                            icon_color=ft.Colors.AMBER_700,
-                            icon_size=18,
-                            tooltip="Archive",
-                            on_click=lambda e: on_archive(animal_id) if on_archive else None,
-                        ) if on_archive else ft.Container(),
-                        ft.IconButton(
-                            icon=ft.Icons.DELETE_OUTLINE,
-                            icon_color=ft.Colors.RED_600,
-                            icon_size=18,
-                            tooltip="Remove",
-                            on_click=lambda e: on_remove(animal_id) if on_remove else None,
-                        ) if on_remove else ft.Container(),
-                    ], spacing=0, tight=True)
+                    ft.IconButton(
+                        icon=ft.Icons.ARCHIVE_OUTLINED,
+                        icon_color=ft.Colors.AMBER_700,
+                        icon_size=15,
+                        tooltip="Archive",
+                        on_click=lambda e: on_archive(animal_id) if on_archive else None,
+                        style=ft.ButtonStyle(
+                            bgcolor={ft.ControlState.HOVERED: ft.Colors.AMBER_50},
+                            shape=ft.CircleBorder(),
+                        ),
+                    )
+                )
+            
+            if on_remove:
+                action_buttons.append(
+                    ft.IconButton(
+                        icon=ft.Icons.DELETE_OUTLINE,
+                        icon_color=ft.Colors.RED_600,
+                        icon_size=15,
+                        tooltip="Remove",
+                        on_click=lambda e: on_remove(animal_id) if on_remove else None,
+                        style=ft.ButtonStyle(
+                            bgcolor={ft.ControlState.HOVERED: ft.Colors.RED_50},
+                            shape=ft.CircleBorder(),
+                        ),
+                    )
                 )
             
             buttons = ft.Row(action_buttons, spacing=4, alignment=ft.MainAxisAlignment.CENTER)
@@ -683,38 +719,49 @@ def create_animal_card(
         if is_adoptable:
             buttons = ft.Row([
                 ft.ElevatedButton(
-                    "Adopt",
-                    width=120,
-                    height=35,
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.FAVORITE_BORDER, size=16, color=ft.Colors.WHITE),
+                        ft.Text("Adopt Me", size=13, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+                    ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
                     on_click=lambda e: on_adopt(animal_id),
+                    width=130,
                     style=ft.ButtonStyle(
-                        bgcolor=ft.Colors.TEAL_400,
+                        bgcolor={
+                            ft.ControlState.DEFAULT: ft.Colors.TEAL_500,
+                            ft.ControlState.HOVERED: ft.Colors.TEAL_600,
+                        },
                         color=ft.Colors.WHITE,
-                        shape=ft.RoundedRectangleBorder(radius=20),
-                        text_style=ft.TextStyle(size=12),
+                        shape=ft.RoundedRectangleBorder(radius=17),
+                        elevation={"default": 2, "hovered": 4},
+                        animation_duration=200,
+                        padding=ft.padding.symmetric(vertical=5)
                     )
                 ),
             ], spacing=8, alignment=ft.MainAxisAlignment.CENTER)
         else:
-            # Show disabled button or status message for non-adoptable animals
             if status_lower == "adopted":
                 buttons = ft.Container(
-                    ft.Text("Already Adopted", size=11, color=ft.Colors.PURPLE_600, weight="w500"),
-                    padding=ft.padding.symmetric(vertical=8),
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.FAVORITE, size=16, color=ft.Colors.PURPLE_600),
+                        ft.Text("Already Adopted", size=13, color=ft.Colors.PURPLE_600, weight=ft.FontWeight.W_500),
+                    ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(vertical=5),
                 )
             else:
                 buttons = ft.Container(
-                    ft.Text("Not Available", size=11, color=ft.Colors.GREY_500, weight="w500"),
-                    padding=ft.padding.symmetric(vertical=8),
+                    content=ft.Row([
+                        ft.Icon(ft.Icons.BLOCK, size=16, color=ft.Colors.GREY_500),
+                        ft.Text("Not Available", size=13, color=ft.Colors.GREY_500, weight=ft.FontWeight.W_500),
+                    ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                    padding=ft.padding.symmetric(vertical=5),
                 )
     else:
         buttons = ft.Container()
     
-    # Wrap image with "Rescued" badge overlay if animal came from rescue mission
+    # Wrap image with enhanced "Rescued" badge overlay if animal came from rescue mission
     if is_rescued:
         # For admin, add clickable info button inside the badge
         if is_admin and rescue_info:
-            # Format rescue date
             rescue_date = rescue_info.get("date", "")
             if rescue_date:
                 try:
@@ -732,7 +779,6 @@ def create_animal_card(
             description = rescue_info.get("description", "")
             source = rescue_info.get("source", "Unknown")
             
-            # Store info for the dialog callback
             mission_id = rescue_info.get("mission_id", None)
             info_data = {
                 "mission_id": mission_id,
@@ -751,7 +797,6 @@ def create_animal_card(
                 if not page:
                     return
                 
-                # Build content with description if available
                 content_items = [
                     ft.Row([ft.Icon(ft.Icons.LOCATION_ON, size=18, color=ft.Colors.TEAL_600), 
                            ft.Text("Location:", weight="w600", size=13)], spacing=8),
@@ -778,7 +823,6 @@ def create_animal_card(
                     ft.Text(data["urgency"], size=12, color=ft.Colors.BLACK87),
                 ]
                 
-                # Add description if available
                 if data["description"]:
                     content_items.extend([
                         ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
@@ -803,60 +847,177 @@ def create_animal_card(
                 )
                 page.open(dlg)
             
-            # Badge with info icon inside - show mission # if available
+            # Enhanced badge with info icon inside - show mission # if available
             badge_text = f"Rescued #{mission_id}" if mission_id else "Rescued"
             badge_content = ft.Container(
                 ft.Row([
-                    ft.Text(badge_text, size=9, color=ft.Colors.WHITE, weight="w600"),
-                    ft.Icon(ft.Icons.INFO_OUTLINE, size=12, color=ft.Colors.WHITE),
+                    ft.Icon(ft.Icons.HEALTH_AND_SAFETY, size=13, color=ft.Colors.WHITE),
+                    ft.Text(badge_text, size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=13, color=ft.Colors.WHITE),
                 ], spacing=4, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 bgcolor=ft.Colors.ORANGE_600,
-                padding=ft.padding.symmetric(horizontal=6, vertical=2),
-                border_radius=8,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=12,
                 on_click=show_rescue_info,
                 tooltip="Click for rescue details",
+                shadow=ft.BoxShadow(
+                    blur_radius=4,
+                    spread_radius=0,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.ORANGE_900),
+                    offset=(0, 2),
+                ),
             )
         else:
-            # Regular badge without info button (for non-admin or no rescue info)
+            # Enhanced regular badge without info button (for non-admin or no rescue info)
             badge_content = ft.Container(
-                ft.Text("Rescued", size=9, color=ft.Colors.WHITE, weight="w600"),
+                ft.Row([
+                    ft.Icon(ft.Icons.HEALTH_AND_SAFETY, size=13, color=ft.Colors.WHITE),
+                    ft.Text("Rescued", size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
                 bgcolor=ft.Colors.ORANGE_600,
-                padding=ft.padding.symmetric(horizontal=6, vertical=2),
-                border_radius=8,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=12,
+                shadow=ft.BoxShadow(
+                    blur_radius=4,
+                    spread_radius=0,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.ORANGE_900),
+                    offset=(0, 2),
+                ),
             )
         
         image_with_badge = ft.Stack([
             animal_image,
             ft.Container(
                 badge_content,
-                right=5,
-                top=5,
+                right=4,
+                top=4,
             ),
         ])
     else:
         image_with_badge = animal_image
     
-    # Build card content
+    if age is None:
+        age_display = ""
+    elif age == 0:
+        age_display = ", Under 1 yr"
+    elif age > 20:
+        age_display = ", 20+ yrs"
+    elif age == 1:
+        age_display = ", 1 yr old"
+    else:
+        age_display = f", {age} yrs old"
+    
+    species_text = species.capitalize()
+    if breed and breed.lower() not in ("not specified", "unknown", "not applicable", "n/a", ""):
+        species_breed_text = f"{species_text} ({breed})"
+    else:
+        species_breed_text = species_text
+    
+    # Info section with separated name/age and reduced spacing for golden ratio
+    info_section = ft.Container(
+        ft.Column([
+            # Animal name - bold and prominent
+            ft.Text(
+                name, 
+                size=14, 
+                weight=ft.FontWeight.W_700, 
+                color=ft.Colors.BLACK87,
+                text_align=ft.TextAlign.CENTER,
+                max_lines=1,
+                overflow=ft.TextOverflow.ELLIPSIS,
+            ),
+            # Age - separate line, lighter
+            ft.Text(
+                age_display.lstrip(", ") if age_display else "Age unknown", 
+                size=12, 
+                weight=ft.FontWeight.W_400,
+                color=ft.Colors.BLACK54, 
+                text_align=ft.TextAlign.CENTER,
+            ),
+            # Species/breed
+            ft.Text(
+                species_breed_text, 
+                size=11, 
+                color=ft.Colors.BLACK54, 
+                text_align=ft.TextAlign.CENTER,
+                max_lines=1,
+                overflow=ft.TextOverflow.ELLIPSIS,
+            ),
+            # Status badge with icon
+            ft.Container(
+                ft.Row([
+                    ft.Icon(status_icon, size=14, color=status_color),
+                    ft.Text(status_display, size=12, color=status_color, weight=ft.FontWeight.W_600),
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+                bgcolor=status_bg,
+                padding=ft.padding.symmetric(horizontal=10, vertical=5),  
+                border_radius=16,
+                border=ft.border.all(1, status_color),
+            ),
+            ft.Container(
+                ft.Divider(height=2, color=ft.Colors.GREY_300, thickness=1),
+                padding=ft.padding.symmetric(vertical=5),
+            ),
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=1),  
+        padding=ft.padding.only(left=14, right=14, top=5, bottom=0),  
+    )
+    
+    if show_adopt_button and on_adopt:
+        button_container = ft.Container(
+            buttons,
+            padding=ft.padding.only(bottom=10),
+        )
+    else:
+        button_container = ft.Container(
+            buttons,
+            padding=ft.padding.only(bottom=5),
+        )
+    
     card_content = [
         image_with_badge,
-        ft.Container(height=10),
-        ft.Text(f"{name}, {age}yrs old" if age else name, size=14, weight="bold", color=ft.Colors.BLACK87),
-        ft.Text(species.capitalize(), size=12, color=ft.Colors.BLACK54),
-        ft.Text(status_display, size=12, color=status_color, weight="w500"),
+        info_section,
+        button_container,
     ]
     
-    card_content.append(ft.Container(height=8))
-    card_content.append(buttons)
-    
-    return ft.Container(
-        ft.Column(card_content, horizontal_alignment="center", spacing=0),
-        width=180,
-        padding=15,
-        bgcolor=ft.Colors.WHITE,
-        border_radius=12,
-        border=ft.border.all(1, ft.Colors.GREY_300),
-        shadow=_get_card_shadow(),
+    card = ft.Container(
+        ft.Column(card_content, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+        width=250,
+        bgcolor=ft.Colors.GREY_50,  # Nicer subtle background instead of pure white
+        border_radius=14,
+        border=ft.border.all(1.5, ft.Colors.GREY_300),
+        shadow=[
+            # Multiple shadows for depth - static to avoid re-render
+            ft.BoxShadow(
+                blur_radius=16,
+                spread_radius=0,
+                color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
+                offset=(0, 6),
+            ),
+            ft.BoxShadow(
+                blur_radius=8,
+                spread_radius=0,
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                offset=(0, 3),
+            ),
+        ],
+        animate_scale=175,  # Animate scale changes over 200ms
+        on_hover=lambda e: _handle_card_hover(e, card),
     )
+    
+    return card
+
+
+def _handle_card_hover(e, card):
+    """Handle card hover animation - only scale to avoid blinking."""
+    if ft is None:
+        return
+    
+    if e.data == "true":  # Mouse entered
+        card.scale = 1.03
+    else:  # Mouse exited
+        card.scale = 1.0
+    
+    card.update()
 
 
 __all__ = [

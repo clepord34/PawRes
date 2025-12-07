@@ -39,13 +39,11 @@ class RescueMissionListPage:
 
         is_admin = user_role == "admin"
 
-        # Sidebar (for admin only)
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
             sidebar = None
 
-        # Load missions through state manager (active only for admin, excludes archived/removed)
         if is_admin:
             self._app_state.rescues.load_active_missions()
         else:
@@ -57,7 +55,6 @@ class RescueMissionListPage:
             # Determine color based on status using RescueStatus constants
             normalized = RescueStatus.normalize(status)
             
-            # Check if status is cancelled (user cancelled) - show locked grey badge
             if RescueStatus.is_cancelled(status):
                 return ft.Container(
                     ft.Row([
@@ -119,7 +116,6 @@ class RescueMissionListPage:
                     border_radius=15,
                 )
             else:
-                # User sees static badge
                 return ft.Container(
                     ft.Row([
                         ft.Icon(icon, color=ft.Colors.WHITE, size=14),
@@ -132,7 +128,6 @@ class RescueMissionListPage:
 
         # Helper to create admin action buttons (Archive/Remove)
         def make_admin_actions(mission_id: int, mission_name: str) -> object:
-            # Use default argument to capture value at definition time
             def handle_archive(e, mid=mission_id):
                 def on_confirm(note):
                     success = self._app_state.rescues.archive_mission(
@@ -190,7 +185,6 @@ class RescueMissionListPage:
                 ),
             ], spacing=0, tight=True)
 
-        # Build table rows for DataTable
         table_rows = []
         if missions:
             for m in missions:
@@ -199,21 +193,25 @@ class RescueMissionListPage:
                 notes = str(m.get("notes", ""))
                 status = str(m.get("status", ""))
 
-                # Use new columns instead of notes parsing
                 name = m.get("animal_name") or m.get("reporter_name") or "Unknown"
                 animal_type = m.get("animal_type") or "Unknown"
+                breed = m.get("breed") or "Not Specified"
                 reporter_phone = m.get("reporter_phone") or "N/A"
                 details = notes  # Notes now contains only situation description
                 
                 # Truncate long text for table display
                 location_display = location[:30] + "..." if len(location) > 30 else location
                 details_display = details[:40] + "..." if len(details) > 40 else details
+                breed_display = breed[:20] + "..." if len(breed) > 20 else breed
 
-                # Build row data
                 row_data = [
                     ft.Text(f"#{mid}", size=11, color=ft.Colors.TEAL_700, weight="w600"),
                     ft.Text(name, size=11, color=ft.Colors.BLACK87, weight="w500"),
                     ft.Text(animal_type, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                    ft.Container(
+                        ft.Text(breed_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                        tooltip=breed if len(breed) > 20 else None,
+                    ),
                     ft.Text(reporter_phone, size=11, color=ft.Colors.BLACK87, weight="w500"),
                     ft.Container(
                         ft.Text(location_display, size=11, color=ft.Colors.BLACK87, weight="w500", tooltip=location if len(location) > 30 else None),
@@ -225,7 +223,6 @@ class RescueMissionListPage:
                     ),
                 ]
                 
-                # Add Urgency column with color-coded badge
                 urgency = (m.get("urgency") or "medium").lower()
                 urgency_colors = {
                     "low": (ft.Colors.GREEN_100, ft.Colors.GREEN_700),
@@ -241,7 +238,6 @@ class RescueMissionListPage:
                 )
                 row_data.append(urgency_badge)
                 
-                # Add Source column (Emergency or User based on user_id)
                 is_emergency = m.get('user_id') is None
                 user_id = m.get('user_id')
                 if is_emergency:
@@ -259,17 +255,16 @@ class RescueMissionListPage:
                 
                 row_data.append(make_status_badge(status, mid))
                 
-                # Add admin actions column
                 if is_admin:
                     row_data.append(make_admin_actions(mid, name))
 
                 table_rows.append(row_data)
         
-        # Define table columns with expand values for proper sizing
         table_columns = [
             {"label": "#", "expand": 0},
             {"label": "Reporter", "expand": 2},
             {"label": "Animal", "expand": 1},
+            {"label": "Breed", "expand": 1},
             {"label": "Contact", "expand": 1},
             {"label": "Location", "expand": 2},
             {"label": "Details", "expand": 2},
@@ -278,11 +273,9 @@ class RescueMissionListPage:
             {"label": "Status", "expand": 2},
         ]
         
-        # Add Actions column for admin
         if is_admin:
             table_columns.append({"label": "Actions", "expand": 1})
 
-        # Create scrollable DataTable
         data_table = create_scrollable_data_table(
             columns=table_columns,
             rows=table_rows,
@@ -294,11 +287,9 @@ class RescueMissionListPage:
         )
 
         # Map with rescue mission markers (already filtered to active only)
-        # Check internet connectivity before creating map
         is_online = self.map_service.check_map_tiles_available()
         
         if is_online:
-            # Use the interactive map wrapper with lock/unlock toggle
             map_container = create_interactive_map(
                 map_service=self.map_service,
                 missions=missions,
@@ -310,7 +301,6 @@ class RescueMissionListPage:
                 initially_locked=True,
             )
         else:
-            # Use offline fallback with mission details when map creation fails
             offline_widget = self.map_service.create_offline_map_fallback(missions, is_admin=is_admin)
             if offline_widget:
                 map_container = ft.Container(
@@ -343,7 +333,6 @@ class RescueMissionListPage:
                     shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
                 )
 
-        # Build content list
         content_items = [
             create_page_title("Rescue Mission List"),
             ft.Container(height=20),

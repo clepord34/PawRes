@@ -27,7 +27,6 @@ def create_nav_button(
     if ft is None:
         raise RuntimeError("Flet must be installed to create buttons")
     
-    # Use different colors for active state
     if is_active:
         bg_color = ft.Colors.TEAL_600
         text_color = ft.Colors.WHITE
@@ -169,4 +168,49 @@ def create_table_action_button(
             color=ft.Colors.WHITE,
             shape=ft.RoundedRectangleBorder(radius=6),
         )
+    )
+
+
+def create_ai_download_button(
+    on_click: Callable,
+    icon_size: int = 16,
+    text_size: int = 12,
+    height: int = 40,
+    border_radius: int = 8,
+    padding: Optional[object] = None
+) -> object:
+    """Create a Download AI Models button.
+    
+    This button is used to trigger the AI models download dialog.
+    
+    Args:
+        on_click: Click handler callback
+        icon_size: Size of the icon (default: 16)
+        text_size: Size of the text (default: 12)
+        height: Button height (default: 40)
+        border_radius: Border radius for the button (default: 8)
+        padding: Custom padding (default: symmetric horizontal=16, vertical=10)
+        
+    Returns:
+        ElevatedButton configured for AI model downloads
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed to create buttons")
+    
+    if padding is None:
+        padding = ft.padding.symmetric(horizontal=16, vertical=10)
+    
+    return ft.ElevatedButton(
+        content=ft.Row([
+            ft.Icon(ft.Icons.SMART_TOY, size=icon_size, color=ft.Colors.WHITE),
+            ft.Text("Download AI Models", size=text_size, weight="w500", color=ft.Colors.WHITE),
+        ], spacing=6),
+        style=ft.ButtonStyle(
+            bgcolor=ft.Colors.PURPLE_600,
+            shape=ft.RoundedRectangleBorder(radius=border_radius),
+            padding=padding,
+        ),
+        on_click=on_click,
+        tooltip="Download AI models for breed classification",
+        height=height,
     )

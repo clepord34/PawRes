@@ -48,7 +48,6 @@ class AdoptionFormPage:
         # fetch adoptable animals
         animals = self.animal_service.get_adoptable_animals() or []
         
-        # Create a dict for quick animal lookup
         animals_dict = {a.get("id"): a for a in animals}
 
         # animal dropdown - needs to be ft.Dropdown for option text support
@@ -83,7 +82,6 @@ class AdoptionFormPage:
                         border_radius=8,
                         alignment=ft.alignment.center,
                     )
-                # Show animal info
                 animal_name = animal.get("name", "Unknown")
                 animal_species = animal.get("species", "Unknown")
                 animal_age = animal.get("age", "N/A")
@@ -257,7 +255,6 @@ class AdoptionFormPage:
             self._contact_field,
         ], spacing=12)
         
-        # Additional details section
         details_section = ft.Column([
             ft.Row([
                 ft.Icon(ft.Icons.DESCRIPTION, color=ft.Colors.TEAL_700, size=20),
@@ -315,7 +312,6 @@ class AdoptionFormPage:
         page.add(create_gradient_background(layout))
         page.update()
 
-        # Update photo display for initial animal_id
         if animal_id:
             update_animal_photo(animal_id)
 
@@ -332,7 +328,6 @@ class AdoptionFormPage:
         if not contact:
             return False, "Please enter contact information."
         
-        # Validate contact is email or phone
         is_valid, error_msg = validate_contact(contact)
         if not is_valid:
             return False, error_msg
@@ -368,7 +363,6 @@ class AdoptionFormPage:
             contact = (self._contact_field.value or "").strip()
             reason = (self._reason_field.value or "").strip()
 
-            # Validate animal is still adoptable (for new requests)
             if not self._edit_request_id:
                 animal = next((a for a in self.animal_service.get_all_animals() if a.get("id") == animal_id), None)
                 if not animal:
@@ -394,7 +388,6 @@ class AdoptionFormPage:
                     page.update()
                     return
 
-            # Get user_id from centralized state management
             app_state = get_app_state()
             user_id = app_state.auth.user_id
             if not user_id:
@@ -404,7 +397,6 @@ class AdoptionFormPage:
                 return
 
             if self._edit_request_id:
-                # Update existing request
                 updated = self.adoption_service.update_request(
                     request_id=self._edit_request_id,
                     contact=contact,
@@ -430,8 +422,8 @@ class AdoptionFormPage:
                 # show success
                 show_snackbar(page, "Application submitted successfully!")
 
-                # navigate to check status
-                page.go(f"/check_status?request_id={request_id}")
+                # navigate to your adoption requests (check status page, adoptions tab)
+                page.go("/check_status?tab=1")
 
         except Exception as exc:
             self._error_text.value = f"Error: {str(exc)}"

@@ -50,7 +50,6 @@ class EditAnimalPage:
 
         self._animal_id = animal_id
 
-        # Fetch animal data
         animal = self.service.get_animal_by_id(animal_id)
 
         if not animal:
@@ -58,19 +57,16 @@ class EditAnimalPage:
             page.go("/animals_list?admin=1")
             return
 
-        # Store original photo for potential deletion
         self._original_photo = animal.get('photo')
 
         # Header with logo
         header = create_page_header("Paw Rescue")
 
-        # Check for rescue mission info
         rescue_info = None
         rescue_mission_id = animal.get("rescue_mission_id")
         if rescue_mission_id:
             mission = self.rescue_service.get_mission_by_id(rescue_mission_id)
             if mission:
-                # Format rescue date
                 rescue_date = mission.get("created_at", "")
                 if rescue_date:
                     try:
@@ -95,7 +91,6 @@ class EditAnimalPage:
         def handle_submit(form_data):
             """Handle form submission."""
             try:
-                # Save new photo with animal name if there's a pending upload
                 new_photo_filename = None
                 if form_data.get("pending_image_bytes"):
                     new_photo_filename = self.file_store.save_bytes(
@@ -105,7 +100,6 @@ class EditAnimalPage:
                         custom_name=form_data["name"]
                     )
                 
-                # Get original animal data to check if name changed
                 original_animal = self.service.get_animal_by_id(self._animal_id)
                 original_name = original_animal.get('name', '') if original_animal else ''
                 
@@ -113,11 +107,11 @@ class EditAnimalPage:
                     self._animal_id,
                     type=form_data["type"],
                     name=form_data["name"],
+                    breed=form_data.get("breed") or None,
                     age=form_data["age"],
                     health_status=form_data["health_status"]
                 )
                 
-                # Handle photo updates
                 if new_photo_filename and success:
                     self.service.update_animal_photo(self._animal_id, new_photo_filename)
                 elif success and original_name != form_data["name"] and not form_data.get("pending_image_bytes"):
@@ -145,7 +139,6 @@ class EditAnimalPage:
             """Handle cancel button click."""
             page.go("/animals_list?admin=1")
 
-        # Create the animal form using shared component
         animal_form = create_animal_form(
             page=page,
             mode="edit",
@@ -155,7 +148,6 @@ class EditAnimalPage:
             rescue_info=rescue_info,
         )
 
-        # Build the form card
         card = animal_form.build()
 
         # Main layout - wrapped in scrollable container

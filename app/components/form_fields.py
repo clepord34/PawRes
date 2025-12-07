@@ -56,7 +56,6 @@ def create_form_text_field(
     else:
         field_kwargs["hint_text"] = hint_text
     
-    # Use prefix_icon property directly - this shows the icon at all times
     if prefix_icon:
         field_kwargs["prefix_icon"] = prefix_icon
     
@@ -129,7 +128,6 @@ def create_form_dropdown(
     else:
         dropdown_kwargs["hint_text"] = hint_text
     
-    # Use leading_icon (preferred) or fall back to prefix_icon for backward compatibility
     icon = leading_icon or prefix_icon
     if icon:
         dropdown_kwargs["leading_icon"] = icon

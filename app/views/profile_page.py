@@ -71,7 +71,6 @@ class ProfilePage:
             page.go("/")
             return
         
-        # Load user data through service
         self._user = self.user_service.get_user_profile(user_id)
         
         if not self._user:
@@ -81,7 +80,6 @@ class ProfilePage:
         
         is_admin = app_state.auth.is_admin
         
-        # Create appropriate sidebar
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route="/profile")
         else:
@@ -168,7 +166,6 @@ class ProfilePage:
                         self._pending_photo_bytes = f.read()
                     self._pending_photo_name = file_info.name
                     
-                    # Update preview
                     photo_b64 = base64.b64encode(self._pending_photo_bytes).decode()
                     self._photo_widget.content = ft.Image(
                         src_base64=photo_b64,
@@ -231,7 +228,6 @@ class ProfilePage:
         oauth = user.get("oauth_provider")
         auth_method = oauth.title() if oauth else "Password"
         
-        # Format dates
         created = user.get("created_at", "")
         if isinstance(created, str) and created:
             created = created[:10]
@@ -325,7 +321,6 @@ class ProfilePage:
         """Build the change password card."""
         import flet as ft
         
-        # Check if user uses OAuth and has no password
         is_oauth = bool(self._user.get("oauth_provider"))
         has_password = bool(self._user.get("password_hash"))
         
@@ -465,7 +460,6 @@ class ProfilePage:
         has_google = bool(user.get("oauth_provider") == "google")
         google_configured = self.google_auth.is_configured
         
-        # Check if user has password (need to fetch since profile doesn't include it)
         user_with_password = self.user_service.db.fetch_one(
             "SELECT password_hash FROM users WHERE id = ?",
             (user.get("id"),)
@@ -600,7 +594,6 @@ class ProfilePage:
                 success, msg = self.auth_service.link_google_account(user_id, "google")
                 
                 if success:
-                    # Update app state
                     app_state = get_app_state()
                     app_state.auth.patch_state({"oauth_provider": "google"})
                     
@@ -637,7 +630,6 @@ class ProfilePage:
             success, msg = self.auth_service.unlink_google_account(user_id)
             
             if success:
-                # Update app state
                 app_state = get_app_state()
                 app_state.auth.patch_state({"oauth_provider": None})
                 
@@ -695,11 +687,9 @@ class ProfilePage:
         
         user_id = self._user.get("id")
         
-        # Handle photo upload if there's a pending photo
         photo_filename = None
         if self._pending_photo_bytes:
             try:
-                # Save photo with user's name as filename base
                 photo_filename = self.file_store.save_bytes(
                     self._pending_photo_bytes,
                     original_name=self._pending_photo_name or "profile.jpg",
@@ -712,7 +702,6 @@ class ProfilePage:
                 show_snackbar(self._page, f"Error saving photo: {ex}", error=True)
                 return
         
-        # Update profile through service
         try:
             self.user_service.update_user_profile(
                 user_id=user_id,
@@ -724,7 +713,6 @@ class ProfilePage:
             show_snackbar(self._page, str(ex), error=True)
             return
         
-        # Update app state
         app_state = get_app_state()
         app_state.auth.update_user_info(name=name)
         
@@ -753,7 +741,6 @@ class ProfilePage:
         
         user_id = self._user.get("id")
         
-        # Use service to change password (handles validation, history, logging)
         result = self.user_service.change_user_password(
             user_id=user_id,
             current_password=current,
@@ -787,7 +774,6 @@ class ProfilePage:
         
         user_id = self._user.get("id")
         
-        # Use service to set password for OAuth user
         result = self.user_service.set_password_for_oauth_user(
             user_id=user_id,
             new_password=new_password

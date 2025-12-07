@@ -38,10 +38,8 @@ class CheckStatusPage:
         # Tab state
         self._tab_index = 0
         
-        # Filter state for adoption requests
         self._adoption_status_filter = "all"
         
-        # Filter state for rescue missions
         self._rescue_status_filter = "all"
         self._rescue_urgency_filter = "all"
 
@@ -66,13 +64,10 @@ class CheckStatusPage:
         if tab is not None and tab in [0, 1]:
             self._tab_index = tab
 
-        # Get user info from centralized state management
         user_name = self._app_state.auth.user_name or "User"
 
-        # Sidebar with navigation (same as user dashboard)
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
-        # Load user data through state managers
         self._app_state.adoptions.load_user_requests(user_id)
         self._app_state.rescues.load_user_missions(user_id)
 
@@ -81,7 +76,6 @@ class CheckStatusPage:
             self._tab_index = e.control.selected_index
             self.build(page, user_id)
 
-        # Create compact tabs (no expand, just fit content)
         tabs = ft.Tabs(
             selected_index=self._tab_index,
             animation_duration=300,
@@ -102,11 +96,9 @@ class CheckStatusPage:
             ],
         )
 
-        # Get data counts for display
         all_adoptions = self._app_state.adoptions.user_requests
         all_rescues = self._app_state.rescues.user_missions
 
-        # Build filter controls based on selected tab (0=Rescues, 1=Adoptions)
         if self._tab_index == 1:
             # Adoption filters
             filtered_count = len([a for a in all_adoptions
@@ -123,6 +115,7 @@ class CheckStatusPage:
                         ft.dropdown.Option(AdoptionStatus.PENDING, "Pending"),
                         ft.dropdown.Option(AdoptionStatus.APPROVED, "Approved"),
                         ft.dropdown.Option(AdoptionStatus.DENIED, "Denied"),
+                        ft.dropdown.Option(AdoptionStatus.CANCELLED, "Cancelled"),
                     ],
                     border_radius=8,
                     on_change=lambda e: self._on_adoption_filter_change(page, user_id, e.control.value),
@@ -156,13 +149,14 @@ class CheckStatusPage:
                         ft.dropdown.Option(RescueStatus.ONGOING, "On-going"),
                         ft.dropdown.Option(RescueStatus.RESCUED, "Rescued"),
                         ft.dropdown.Option(RescueStatus.FAILED, "Failed"),
+                        ft.dropdown.Option(RescueStatus.CANCELLED, "Cancelled"),
                     ],
                     border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, user_id, "status", e.control.value),
                 ),
                 ft.Dropdown(
                     hint_text="Urgency",
-                    width=130,
+                    width=150,
                     value=self._rescue_urgency_filter,
                     options=[
                         ft.dropdown.Option("all", "All Urgency"),
@@ -187,9 +181,7 @@ class CheckStatusPage:
                 ft.VerticalDivider(width=1, color=ft.Colors.GREY_300),
                 # Spacer
                 ft.Container(expand=True),
-                # Filters
                 filter_controls,
-                # Count
                 ft.Text(count_text, size=13, color=ft.Colors.BLACK54),
                 # Refresh button
                 ft.IconButton(
@@ -210,7 +202,6 @@ class CheckStatusPage:
             border_radius=10,
         )
 
-        # Build content based on selected tab (0=Rescues, 1=Adoptions)
         if self._tab_index == 1:
             content = self._build_adoption_requests_content(page, ft, user_id)
         else:
@@ -244,17 +235,13 @@ class CheckStatusPage:
         """Helper to create status badge with appropriate styling."""
         status_lower = (status or "").lower()
         
-        # Check for cancelled state using status constants
         is_cancelled = RescueStatus.is_cancelled(status) if is_rescue else AdoptionStatus.is_cancelled(status)
         
-        # Check for archived state
         is_archived = RescueStatus.is_archived(status) if is_rescue else AdoptionStatus.is_archived(status)
         
-        # Check for removed state
         is_removed = RescueStatus.is_removed(status) if is_rescue else AdoptionStatus.is_removed(status)
         
         if is_cancelled:
-            # Show user-cancelled status in grey
             return ft.Container(
                 ft.Row([
                     ft.Icon(ft.Icons.CANCEL, color=ft.Colors.WHITE, size=14),
@@ -266,7 +253,6 @@ class CheckStatusPage:
                 margin=ft.margin.symmetric(vertical=4),
             )
         elif is_removed:
-            # Show removed status with reason
             reason_text = removal_reason or "Administrative action"
             return ft.Container(
                 ft.Row([
@@ -284,7 +270,6 @@ class CheckStatusPage:
             base_status = RescueStatus.get_base_status(status) if is_rescue else AdoptionStatus.get_base_status(status)
             return self._make_status_badge(ft, base_status, admin_message, is_rescue)
         elif is_rescue:
-            # Use RescueStatus for rescue missions (matching admin styling)
             normalized = RescueStatus.normalize(status)
             if normalized == RescueStatus.RESCUED:
                 bg_color = ft.Colors.GREEN_700
@@ -313,7 +298,6 @@ class CheckStatusPage:
                 margin=ft.margin.symmetric(vertical=4),
             )
         else:
-            # Use AdoptionStatus for adoption requests (match admin badge style with icons)
             normalized = AdoptionStatus.normalize(status)
             if normalized == AdoptionStatus.PENDING:
                 bg_color = ft.Colors.ORANGE_700
@@ -368,7 +352,6 @@ class CheckStatusPage:
         
         all_adoptions = self._app_state.adoptions.user_requests
         
-        # Apply status filter
         if self._adoption_status_filter == "all":
             adoptions = all_adoptions
         else:
@@ -382,7 +365,7 @@ class CheckStatusPage:
             return handler
 
         # Helper function to handle cancel button click
-        def on_cancel_click(request_id: int, animal_name: str):
+        def on_cancel_click(request_id: int, animal_name: str, animal_breed: str):
             def handler(e):
                 def on_confirm():
                     try:
@@ -397,17 +380,19 @@ class CheckStatusPage:
                     except Exception as exc:
                         show_snackbar(page, f"Error: {exc}", error=True)
                 
+                animal_label = animal_name
+                if animal_breed:
+                    animal_label = f"{animal_name} ({animal_breed})"
                 create_confirmation_dialog(
                     page,
                     title="Cancel Adoption Request",
-                    message=f"Are you sure you want to cancel your adoption request for '{animal_name}'?",
+                    message=f"Are you sure you want to cancel your adoption request for '{animal_label}'?",
                     on_confirm=on_confirm,
                     confirm_text="Cancel Request",
                     cancel_text="Keep Request",
                 )
             return handler
 
-        # Build adoption requests table content
         adoption_rows = []
         for a in adoptions:
             animal_id = a.get("animal_id")
@@ -415,13 +400,14 @@ class CheckStatusPage:
             stored_animal_name = a.get("animal_name")
             stored_animal_species = a.get("animal_species")
             
-            # Handle case where animal was removed
             animal_was_deleted = False
+            animal_breed = (a.get("animal_breed") or "")
             if animal_id and animal_id > 0:
                 animal = self._app_state.animals.get_animal_by_id(animal_id)
                 if animal:
                     animal_name = animal.get("name", "Unknown")
                     animal_type = animal.get("species", "Unknown")
+                    animal_breed = (animal.get("breed") or animal_breed or "").strip()
                 else:
                     animal_name = stored_animal_name or "Unknown"
                     animal_type = stored_animal_species or "-"
@@ -430,6 +416,7 @@ class CheckStatusPage:
                 animal_name = stored_animal_name or "Unknown"
                 animal_type = stored_animal_species or "-"
                 animal_was_deleted = True
+            animal_breed = animal_breed.strip()
             
             status = a.get("status", "pending")
             status_lower = (status or "").lower()
@@ -437,7 +424,6 @@ class CheckStatusPage:
             archive_note = a.get("archive_note", "")
             admin_message = a.get("admin_message", "")
             
-            # Create action buttons for pending requests (only if animal still exists)
             if status_lower == "pending" and animal_id and animal_id > 0:
                 actions = ft.Row([
                     ft.TextButton(
@@ -452,19 +438,17 @@ class CheckStatusPage:
                         icon=ft.Icons.CANCEL,
                         icon_color=ft.Colors.RED_600,
                         style=ft.ButtonStyle(color=ft.Colors.RED_600),
-                        on_click=on_cancel_click(request_id, animal_name),
+                        on_click=on_cancel_click(request_id, animal_name, animal_breed),
                     ),
                 ], spacing=5)
             else:
                 actions = ft.Container()
             
-            # Build animal name display
             if animal_was_deleted:
                 animal_name_display = ft.Text(animal_name, size=12, color=ft.Colors.GREY_500, italic=True)
             else:
                 animal_name_display = ft.Text(animal_name, size=12, color=ft.Colors.BLACK87)
             
-            # Build status display
             if animal_was_deleted:
                 status_display = ft.Container(
                     ft.Column([
@@ -477,14 +461,19 @@ class CheckStatusPage:
                 status_display = self._make_status_badge(ft, status, admin_message, is_rescue=False,
                                                         removal_reason=removal_reason, archive_note=archive_note)
             
-            # Get reason for adoption
             reason = a.get("reason", "")
             reason_display = reason[:30] + "..." if len(reason) > 30 else reason
             
-            # Build row data
+            breed = animal_breed or "Not Specified"
+            breed_display = breed[:15] + "..." if len(breed) > 15 else breed
+            
             adoption_rows.append([
                 animal_name_display,
                 ft.Text(animal_type, size=12, color=ft.Colors.GREY_500 if animal_was_deleted else ft.Colors.BLACK87),
+                ft.Container(
+                    ft.Text(breed_display, size=12, color=ft.Colors.GREY_500 if animal_was_deleted else ft.Colors.BLACK87),
+                    tooltip=breed if len(breed) > 15 else None,
+                ),
                 ft.Container(
                     ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
                     tooltip=reason if len(reason) > 30 else None,
@@ -493,16 +482,15 @@ class CheckStatusPage:
                 actions,
             ])
 
-        # Define adoption table columns
         adoption_columns = [
             {"label": "Animal Name", "expand": 2},
             {"label": "Type", "expand": 1},
+            {"label": "Breed", "expand": 2},
             {"label": "Reason", "expand": 3},
             {"label": "Status", "expand": 2},
             {"label": "Actions", "expand": 2},
         ]
 
-        # Create scrollable DataTable for adoptions
         adoption_table = create_scrollable_data_table(
             columns=adoption_columns,
             rows=adoption_rows,
@@ -522,14 +510,12 @@ class CheckStatusPage:
         
         all_rescues = self._app_state.rescues.user_missions
         
-        # Apply status filter
         if self._rescue_status_filter == "all":
             rescues = all_rescues
         else:
             rescues = [r for r in all_rescues
                       if RescueStatus.normalize(r.get("status", "")) == self._rescue_status_filter]
         
-        # Apply urgency filter
         if self._rescue_urgency_filter != "all":
             rescues = [r for r in rescues
                       if (r.get("urgency") or "medium").lower() == self._rescue_urgency_filter]
@@ -558,11 +544,12 @@ class CheckStatusPage:
                 )
             return handler
 
-        # Build rescue missions table
         rescue_rows = []
         for r in rescues:
             mission_id = r.get("id")
             animal_type = r.get("animal_type") or "Unknown"
+            breed = r.get("breed") or "Not Specified"
+            breed_display = breed[:15] + "..." if len(breed) > 15 else breed
             location = r.get("location") or "Unknown"
             details = r.get("notes", "")
             details_display = details[:25] + "..." if len(details) > 25 else details
@@ -573,7 +560,6 @@ class CheckStatusPage:
             archive_note = r.get("archive_note", "")
             status_lower = (status or "").lower()
             
-            # Create action buttons for pending rescue missions
             if status_lower == "pending":
                 rescue_actions = ft.Row([
                     ft.TextButton(
@@ -587,9 +573,12 @@ class CheckStatusPage:
             else:
                 rescue_actions = ft.Container()
             
-            # Build row data
             rescue_rows.append([
                 ft.Text(animal_type, size=12, color=ft.Colors.BLACK87),
+                ft.Container(
+                    ft.Text(breed_display, size=12, color=ft.Colors.BLACK87),
+                    tooltip=breed if len(breed) > 15 else None,
+                ),
                 ft.Container(
                     ft.Text(location[:20] + "..." if len(location) > 20 else location, size=12, color=ft.Colors.BLACK87),
                     tooltip=location if len(location) > 20 else None,
@@ -604,9 +593,9 @@ class CheckStatusPage:
                 rescue_actions,
             ])
 
-        # Define rescue table columns
         rescue_columns = [
             {"label": "Type", "expand": 1},
+            {"label": "Breed", "expand": 1},
             {"label": "Location", "expand": 2},
             {"label": "Urgency", "expand": 1},
             {"label": "Details", "expand": 2},
@@ -614,7 +603,6 @@ class CheckStatusPage:
             {"label": "Actions", "expand": 2},
         ]
 
-        # Create scrollable DataTable for rescues
         rescue_table = create_scrollable_data_table(
             columns=rescue_columns,
             rows=rescue_rows,
@@ -631,11 +619,9 @@ class CheckStatusPage:
             if not RescueStatus.is_cancelled(r.get("status") or "")
             and not RescueStatus.is_removed(r.get("status") or "")
         ]
-        # Check internet connectivity before creating map
         is_online = self.map_service.check_map_tiles_available()
         
         if is_online:
-            # Use the interactive map wrapper with lock/unlock toggle
             map_container = create_interactive_map(
                 map_service=self.map_service,
                 missions=rescues_for_map,
@@ -647,7 +633,6 @@ class CheckStatusPage:
                 initially_locked=True,
             )
         else:
-            # Use offline fallback with mission list when no internet
             offline_widget = self.map_service.create_offline_map_fallback(rescues_for_map, is_admin=False)
             if offline_widget:
                 map_container = ft.Container(
@@ -710,12 +695,12 @@ class CheckStatusPage:
             filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
-            fieldnames = ["id", "animal_name", "animal_type", "reason", "status", "created_at"]
+            fieldnames = ["request_id", "animal_name", "animal_species", "contact", "reason", 
+                          "status", "my_notes", "admin_response", "submitted_date", "last_updated"]
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for a in adoptions:
-                    # Get animal info
                     animal_id = a.get("animal_id")
                     animal_name = a.get("animal_name") or "Unknown"
                     animal_type = a.get("animal_species") or "Unknown"
@@ -726,12 +711,16 @@ class CheckStatusPage:
                             animal_type = animal.get("species", animal_type)
                     
                     writer.writerow({
-                        "id": a.get("id", ""),
+                        "request_id": a.get("id", ""),
                         "animal_name": animal_name,
-                        "animal_type": animal_type,
+                        "animal_species": animal_type,
+                        "contact": a.get("contact", ""),
                         "reason": a.get("reason", ""),
                         "status": AdoptionStatus.get_label(a.get("status", "")),
-                        "created_at": a.get("created_at", ""),
+                        "my_notes": a.get("notes", ""),
+                        "admin_response": a.get("admin_message", ""),
+                        "submitted_date": a.get("request_date", ""),
+                        "last_updated": a.get("updated_at", ""),
                     })
             
             show_snackbar(self._page, f"Exported {len(adoptions)} request(s) to {filename}")
@@ -750,19 +739,29 @@ class CheckStatusPage:
             filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
-            fieldnames = ["id", "animal_type", "location", "urgency", "status", "notes", "created_at"]
+            fieldnames = ["mission_id", "animal_type", "animal_name", "breed", "location", "latitude", "longitude", 
+                          "urgency", "status", "my_notes", "reporter_name", "reporter_phone", "admin_response", 
+                          "reported_date", "last_updated"]
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for r in rescues:
                     writer.writerow({
-                        "id": r.get("id", ""),
+                        "mission_id": r.get("id", ""),
                         "animal_type": r.get("animal_type", ""),
+                        "animal_name": r.get("animal_name", ""),
+                        "breed": r.get("breed", ""),
                         "location": r.get("location", ""),
+                        "latitude": r.get("latitude", ""),
+                        "longitude": r.get("longitude", ""),
                         "urgency": r.get("urgency", ""),
                         "status": RescueStatus.get_label(r.get("status", "")),
-                        "notes": r.get("notes", ""),
-                        "created_at": r.get("created_at", ""),
+                        "my_notes": r.get("notes", ""),
+                        "reporter_name": r.get("reporter_name", ""),
+                        "reporter_phone": r.get("reporter_phone", ""),
+                        "admin_response": r.get("admin_message", ""),
+                        "reported_date": r.get("mission_date", ""),
+                        "last_updated": r.get("updated_at", ""),
                     })
             
             show_snackbar(self._page, f"Exported {len(rescues)} mission(s) to {filename}")

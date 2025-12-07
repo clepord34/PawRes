@@ -74,7 +74,6 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
     # Normalize current route (remove query params for comparison)
     route_path = current_route.split("?")[0] if current_route else ""
     
-    # Get user info from app state
     try:
         from state import get_app_state
         app_state = get_app_state()
@@ -87,7 +86,6 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
     # Fetch profile photo
     profile_photo = _get_user_profile_photo(user_id)
     
-    # Define nav items with their routes for matching (removed My Profile - now clickable in profile section)
     nav_items = [
         ("Admin Dashboard", "/admin", ["/admin"]),
         ("View Animal List", "/animals_list?admin=1", ["/animals_list", "/edit_animal", "/add_animal"]),
@@ -97,7 +95,6 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
         ("Audit Logs", "/audit_logs", ["/audit_logs"]),
     ]
     
-    # Create navigation buttons with active state
     nav_buttons = []
     for label, nav_route, match_routes in nav_items:
         is_active = route_path in match_routes
@@ -107,7 +104,6 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))
     
-    # Create clickable profile section
     profile = create_profile_section(
         user_name, 
         is_admin=True,
@@ -150,12 +146,10 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
     # Normalize current route (remove query params for comparison)
     route_path = current_route.split("?")[0] if current_route else ""
     
-    # Get user ID from app state for fetching profile photo
     try:
         from state import get_app_state
         app_state = get_app_state()
         user_id = app_state.auth.user_id
-        # Use state name if not provided
         if user_name == "User":
             user_name = app_state.auth.user_name or "User"
     except Exception:
@@ -164,7 +158,6 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
     # Fetch profile photo
     profile_photo = _get_user_profile_photo(user_id)
     
-    # Define nav items with their routes for matching (removed My Profile - now clickable in profile section)
     nav_items = [
         ("User Dashboard", "/user", ["/user"]),
         ("Apply for Adoption", "/available_adoption", ["/available_adoption", "/adoption_form"]),
@@ -174,7 +167,6 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
         ("Your Analytics", "/user_analytics", ["/user_analytics"]),
     ]
     
-    # Create navigation buttons with active state
     nav_buttons = []
     for label, nav_route, match_routes in nav_items:
         is_active = route_path in match_routes
@@ -184,7 +176,6 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
     
     logout_btn = create_logout_button(lambda e: _handle_logout(page))
     
-    # Create clickable profile section
     profile = create_profile_section(
         user_name, 
         is_admin=False,

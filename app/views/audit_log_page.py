@@ -50,7 +50,6 @@ class AuditLogPage:
         self._page = page
         page.title = "Audit Logs"
         
-        # Create sidebar
         sidebar = create_admin_sidebar(page, current_route="/audit_logs")
         
         # Log type tabs
@@ -106,7 +105,6 @@ class AuditLogPage:
             padding=ft.padding.symmetric(vertical=10),
         )
         
-        # Build log table
         self._build_table()
         
         # Log location info
@@ -172,20 +170,17 @@ class AuditLogPage:
             level=level_filter
         )
         
-        # Build table rows
         table_rows = []
         for entry in self._entries:
             row_data = self._create_log_row_data(entry)
             table_rows.append(row_data)
         
-        # Define columns
         table_columns = [
             {"label": "Timestamp", "expand": 2},
             {"label": "Level", "expand": 1},
             {"label": "Event", "expand": 4},
         ]
         
-        # Create scrollable data table
         self._log_table = create_scrollable_data_table(
             columns=table_columns,
             rows=table_rows,
@@ -220,7 +215,6 @@ class AuditLogPage:
         # Parse message for better display
         message = entry.get("message", "")
         
-        # Extract event type if present
         parts = message.split(" | ", 1)
         if len(parts) >= 1:
             event_type = parts[0]

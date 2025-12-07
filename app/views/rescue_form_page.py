@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 import asyncio
 import concurrent.futures
+import threading
 
 import app_config
 from app_config import Urgency, RescueStatus
@@ -11,8 +12,10 @@ from services.map_service import MapService
 from state import get_app_state
 from components import (
     create_page_header, create_gradient_background,
-    create_form_text_field, create_form_dropdown, show_snackbar, validate_contact
+    create_form_text_field, create_form_dropdown, show_snackbar, validate_contact,
+    create_ai_suggestion_card, create_ai_loading_card, create_ai_analyze_button,
 )
+from components.photo_upload import create_photo_upload_widget
 
 # Try to import the new flet_geolocator package
 try:
@@ -35,6 +38,7 @@ class RescueFormPage:
         self.map_service = MapService()
         self._type_dropdown: Optional[object] = None
         self._urgency_dropdown: Optional[object] = None
+        self._breed_field: Optional[object] = None
         self._name_field: Optional[object] = None
         self._location_field: Optional[object] = None
         self._details_field: Optional[object] = None
@@ -46,6 +50,12 @@ class RescueFormPage:
         self._location_loading: Optional[object] = None
         self._geolocator: Optional[object] = None
         self._current_coords: Optional[tuple] = None  # Store (lat, lng) for submission
+        
+        # Photo and AI classification
+        self._photo_widget: Optional[object] = None
+        self._ai_suggestion_container: Optional[object] = None
+        self._ai_loading: bool = False
+        self._page: Optional[object] = None
 
     def build(self, page) -> None:
         try:
@@ -53,10 +63,23 @@ class RescueFormPage:
         except Exception as exc:
             raise RuntimeError("Flet must be installed to build the UI") from exc
 
+        self._page = page
         page.title = "Report Rescue Mission"
 
         # Header with logo
         header = create_page_header("Paw Rescue")
+        
+        # Photo upload with AI classification
+        self._photo_widget = create_photo_upload_widget(
+            page,
+            on_ai_analyze=self._handle_ai_analyze,
+            show_ai_button=True,
+            width=120,
+            height=120,
+        )
+        
+        # AI suggestion container (initially hidden)
+        self._ai_suggestion_container = ft.Container(content=None, visible=False)
         
         # Animal type dropdown (matches edit animal page options)
         self._type_dropdown = create_form_dropdown(
@@ -69,6 +92,13 @@ class RescueFormPage:
         self._urgency_dropdown = create_form_dropdown(
             label="Urgency Level",
             options=[Urgency.get_label(Urgency.LOW), Urgency.get_label(Urgency.MEDIUM), Urgency.get_label(Urgency.HIGH)],
+            width=400,
+        )
+        
+        # Breed field (optional - can help with rescue identification)
+        self._breed_field = create_form_text_field(
+            label="Breed (Optional)",
+            hint_text="Enter breed if known or use AI to detect from photo",
             width=400,
         )
 
@@ -106,14 +136,11 @@ class RescueFormPage:
             tooltip="Location verified",
         )
         
-        # Loading indicator for location
         self._location_loading = ft.Container(
             content=ft.ProgressRing(width=20, height=20, stroke_width=2, color=ft.Colors.TEAL_600),
             visible=False,
         )
         
-        # Create geolocator control for getting current location
-        # Use the new flet_geolocator package (more stable than deprecated ft.Geolocator)
         if GEOLOCATOR_AVAILABLE:
             self._geolocator = Geolocator(
                 on_error=lambda e: self._handle_geolocator_error(page, e),
@@ -204,12 +231,29 @@ class RescueFormPage:
         )
         
         # Form sections for better organization
+        # Photo section with AI detection
+        photo_section = ft.Column([
+            ft.Row([
+                ft.Icon(ft.Icons.PHOTO_CAMERA, color=ft.Colors.TEAL_700, size=20),
+                ft.Text("Animal Photo (Optional)", size=14, weight="w600", color=ft.Colors.TEAL_700),
+            ], spacing=8),
+            ft.Text(
+                "Upload a photo to help identify the animal. AI can detect the species automatically.",
+                size=11,
+                color=ft.Colors.GREY_600,
+                italic=True,
+            ),
+            ft.Container(self._photo_widget.build(), alignment=ft.alignment.center),
+            self._ai_suggestion_container,
+        ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        
         animal_section = ft.Column([
             ft.Row([
                 ft.Icon(ft.Icons.PETS, color=ft.Colors.TEAL_700, size=20),
                 ft.Text("Animal Information", size=14, weight="w600", color=ft.Colors.TEAL_700),
             ], spacing=8),
             self._type_dropdown,
+            self._breed_field,
             self._urgency_dropdown,
         ], spacing=12)
         
@@ -257,6 +301,8 @@ class RescueFormPage:
                 ft.Container(height=10),  # Spacer
                 
                 # Form sections
+                photo_section,
+                ft.Container(height=8),
                 animal_section,
                 ft.Container(height=8),
                 reporter_section,
@@ -318,7 +364,6 @@ class RescueFormPage:
         if not phone:
             return False, "Please enter contact information so we can reach you."
         
-        # Validate contact is email or phone
         is_valid, error_msg = validate_contact(phone)
         if not is_valid:
             return False, error_msg
@@ -337,7 +382,6 @@ class RescueFormPage:
         except Exception:
             raise RuntimeError("Flet is required for UI actions")
         
-        # Show loading state
         self._location_btn.visible = False
         self._location_loading.visible = True
         self._location_status.visible = False
@@ -365,12 +409,9 @@ class RescueFormPage:
             except Exception as e:
                 position = None
         
-        # Process the result
         if position:
-            # Store coordinates for submission
             self._current_coords = (position[0], position[1])
             
-            # Check if we're online before attempting reverse geocode
             is_online = self.map_service.check_geocoding_available()
             
             if is_online and not used_fallback:
@@ -395,14 +436,12 @@ class RescueFormPage:
                 self._location_field.value = f"{position[0]:.6f}, {position[1]:.6f}"
                 show_snackbar(page, "📡 Offline - GPS coordinates captured. Address will resolve when online.")
             
-            # Show success indicator
             self._location_status.content = ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN_600, size=20)
             self._location_status.tooltip = "Location captured" + (" (approximate)" if used_fallback else "")
             self._location_status.visible = True
         else:
             self._show_location_error(page, "Could not detect location. Please enter address manually.")
         
-        # Restore button state
         self._location_btn.visible = True
         self._location_loading.visible = False
         page.update()
@@ -415,12 +454,12 @@ class RescueFormPage:
             return None
         
         try:
-            # Check if location service is enabled
             try:
                 location_enabled = await self._geolocator.is_location_service_enabled_async()
                 if not location_enabled:
                     return None
             except Exception as e:
+                return None
             
             # Request permission
             try:
@@ -429,8 +468,8 @@ class RescueFormPage:
                                  GeolocatorPermissionStatus.DENIED_FOREVER):
                     return None
             except Exception as e:
+                return None
             
-            # Get current position with shorter timeout
             position = await asyncio.wait_for(
                 self._geolocator.get_current_position_async(
                     accuracy=GeolocatorPositionAccuracy.BEST
@@ -447,7 +486,7 @@ class RescueFormPage:
         except Exception as e:
             error_str = str(e).lower()
             if "pipe" in error_str or "closed" in error_str or "connection" in error_str:
-            else:
+                pass  # Known issue with Windows desktop, fall back silently
             return None
 
     def _get_ip_based_location(self) -> Optional[tuple]:
@@ -460,7 +499,6 @@ class RescueFormPage:
             return None
         
         try:
-            # Use IP-based geolocation
             g = geocoder.ip('me')
             if g.ok and g.latlng:
                 return (g.latlng[0], g.latlng[1])
@@ -494,28 +532,25 @@ class RescueFormPage:
         except Exception:
             raise RuntimeError("Flet is required for UI actions")
         
-        # Validate form first
         is_valid, error_msg = self._validate_form()
         if not is_valid:
             self._error_text.value = error_msg
             page.update()
             return
         
-        # Extract form data for confirmation
         animal_type = (self._type_dropdown.value or "").strip()
+        breed = (self._breed_field.value or "").strip() or "Not specified"
         urgency_label = (self._urgency_dropdown.value or "").strip()
         reporter_name = (self._name_field.value or "").strip()
         reporter_phone = (self._phone_field.value or "").strip() or "Not provided"
         location = (self._location_field.value or "").strip()
         details = (self._details_field.value or "").strip()
         
-        # Show confirmation dialog
         def close_dialog(e):
             page.close(dialog)
         
         def confirm_submit(e):
             page.close(dialog)
-            # Run the async submit
             page.run_task(self._on_submit_async, page)
         
         dialog = ft.AlertDialog(
@@ -537,6 +572,7 @@ class RescueFormPage:
                     ft.Container(height=10),
                     # Summary of inputs
                     ft.Row([ft.Text("Animal Type:", weight="w600", size=12, width=100), ft.Text(animal_type, size=12)]),
+                    ft.Row([ft.Text("Breed:", weight="w600", size=12, width=100), ft.Text(breed, size=12)]),
                     ft.Row([ft.Text("Urgency:", weight="w600", size=12, width=100), ft.Text(urgency_label, size=12)]),
                     ft.Row([ft.Text("Your Name:", weight="w600", size=12, width=100), ft.Text(reporter_name, size=12)]),
                     ft.Row([ft.Text("Phone:", weight="w600", size=12, width=100), ft.Text(reporter_phone, size=12)]),
@@ -585,7 +621,6 @@ class RescueFormPage:
         self._error_text.value = ""
         page.update()
 
-        # Validate form
         is_valid, error_msg = self._validate_form()
         if not is_valid:
             self._error_text.value = error_msg
@@ -599,8 +634,8 @@ class RescueFormPage:
             return
 
         try:
-            # Extract form data
             animal_type = (self._type_dropdown.value or "").strip()
+            breed = (self._breed_field.value or "").strip() or None
             urgency_label = (self._urgency_dropdown.value or "").strip()
             reporter_name = (self._name_field.value or "").strip()
             reporter_phone = (self._phone_field.value or "").strip()
@@ -610,7 +645,14 @@ class RescueFormPage:
             # Convert urgency label to code
             urgency = Urgency.from_label(urgency_label)
 
-            # Get user_id from centralized state management
+            animal_photo = None
+            if self._photo_widget and self._photo_widget.has_photo():
+                from datetime import datetime
+                photo_name = f"{animal_type.lower()}_rescue_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                animal_photo = self._photo_widget.save_with_name(photo_name)
+                if animal_photo:
+                    print(f"[INFO] Saved rescue photo: {animal_photo}")
+
             app_state = get_app_state()
             user_id = app_state.auth.user_id
             if not user_id:
@@ -619,10 +661,8 @@ class RescueFormPage:
                 return
 
 
-            # Check online status
             is_online = self.map_service.check_geocoding_available()
             
-            # Use stored coordinates from geolocator if available, otherwise try to geocode
             if self._current_coords:
                 latitude, longitude = self._current_coords
                 
@@ -640,6 +680,7 @@ class RescueFormPage:
                         if address:
                             location = address
                     except Exception as e:
+                        pass  # Keep the coordinates as location if reverse geocode fails
                 
                 # If offline, use placeholder for location text
                 if not is_online:
@@ -681,6 +722,7 @@ class RescueFormPage:
                 user_id=user_id,
                 location=location,
                 animal_type=animal_type,
+                breed=breed,
                 name="",  # Legacy - now using reporter_name
                 details=details,  # Just the situation description
                 status=RescueStatus.PENDING,
@@ -689,13 +731,12 @@ class RescueFormPage:
                 reporter_name=reporter_name,
                 reporter_phone=reporter_phone,
                 urgency=urgency,
+                animal_photo=animal_photo,
             )
 
 
-            # Reset stored coordinates after successful submission
             self._current_coords = None
 
-            # Show success
             show_snackbar(page, "✅ Rescue mission submitted successfully!")
 
             # Navigate to check status
@@ -718,6 +759,115 @@ class RescueFormPage:
             spacing=8,
             alignment=ft.MainAxisAlignment.CENTER,
         )
+        page.update()
+    
+    def _handle_ai_analyze(self, photo_base64: str) -> None:
+        """Handle AI analyze button click - runs classification in background thread with progress."""
+        if self._ai_loading or not self._page:
+            return
+        
+        page = self._page
+        
+        from services.ai_classification_service import get_ai_classification_service
+        service = get_ai_classification_service()
+        status = service.get_download_status()
+        
+        all_downloaded = all(status.values())
+        if not all_downloaded:
+            # Models not downloaded, show download dialog
+            from components.ai_download_dialog import create_ai_download_dialog
+            def on_download_complete(success: bool):
+                if success:
+                    # Proceed with classification after download
+                    self._start_classification(photo_base64)
+            
+            create_ai_download_dialog(page, on_complete=on_download_complete)
+            return
+        
+        # Models already downloaded, proceed with classification
+        self._start_classification(photo_base64)
+    
+    def _start_classification(self, photo_base64: str) -> None:
+        """Start the classification process after models are confirmed downloaded."""
+        if self._ai_loading or not self._page:
+            return
+        
+        self._ai_loading = True
+        page = self._page
+        
+        self._ai_suggestion_container.content = create_ai_loading_card()
+        self._ai_suggestion_container.visible = True
+        page.update()
+        
+        def classify():
+            try:
+                from services.ai_classification_service import get_ai_classification_service
+                service = get_ai_classification_service()
+                result = service.classify_image(photo_base64)
+                
+                page.run_thread(lambda: self._on_ai_result(result))
+            except Exception as e:
+                print(f"[AI] Classification error: {e}")
+                from models.classification_result import ClassificationResult
+                error_result = ClassificationResult.from_error(str(e))
+                page.run_thread(lambda: self._on_ai_result(error_result))
+        
+        thread = threading.Thread(target=classify, daemon=True)
+        thread.start()
+    
+    def _on_ai_result(self, result) -> None:
+        """Handle AI classification result - called on main thread."""
+        import flet as ft
+        
+        self._ai_loading = False
+        page = self._page
+        
+        if not page:
+            return
+        
+        self._ai_suggestion_container.content = create_ai_suggestion_card(
+            result=result,
+            on_accept=self._accept_ai_suggestion,
+            on_dismiss=self._dismiss_ai_suggestion,
+        )
+        self._ai_suggestion_container.visible = True
+        page.update()
+    
+    def _accept_ai_suggestion(self, species: str, breed: str) -> None:
+        """Accept the AI suggestion and fill in the animal type and breed fields."""
+        import flet as ft
+        
+        page = self._page
+        if not page:
+            return
+        
+        # Map species to dropdown value
+        species_map = {"Dog": "Dog", "Cat": "Cat", "Other": "Other"}
+        dropdown_value = species_map.get(species, "Other")
+        
+        if self._type_dropdown:
+            self._type_dropdown.value = dropdown_value
+        
+        if self._breed_field and breed and breed != "Not Applicable":
+            self._breed_field.value = breed
+        
+        # Hide the suggestion card
+        self._ai_suggestion_container.visible = False
+        self._ai_suggestion_container.content = None
+        
+        breed_text = f" - {breed}" if breed and breed != "Not Applicable" else ""
+        show_snackbar(page, f"✅ Set animal type to {species}{breed_text}")
+        
+        page.update()
+    
+    def _dismiss_ai_suggestion(self) -> None:
+        """Dismiss the AI suggestion and allow manual entry."""
+        page = self._page
+        if not page:
+            return
+        
+        self._ai_suggestion_container.visible = False
+        self._ai_suggestion_container.content = None
         page.update()
 
 

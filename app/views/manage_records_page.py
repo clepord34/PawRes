@@ -27,11 +27,9 @@ class ManageRecordsPage:
         self._tab_index = 0
         self._hidden_tab_index = 0  # Sub-tab for hidden items
         
-        # Filter state for rescue missions
         self._rescue_status_filter = "all"
         self._rescue_urgency_filter = "all"
         
-        # Filter state for adoption requests
         self._adoption_status_filter = "all"
     
     def build(self, page, tab: int = None) -> None:
@@ -67,7 +65,6 @@ class ManageRecordsPage:
             page.go("/login")
             return
         
-        # Sidebar
         sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Tab change handler
@@ -75,7 +72,6 @@ class ManageRecordsPage:
             self._tab_index = e.control.selected_index
             self.build(page)
         
-        # Create compact tabs
         tabs = ft.Tabs(
             selected_index=self._tab_index,
             animation_duration=300,
@@ -103,13 +99,11 @@ class ManageRecordsPage:
         # Import create_action_button for export
         from components import create_action_button
         
-        # Load data and build filter controls based on selected tab
         if self._tab_index == 0:
             # Rescue Missions tab
             self._app_state.rescues.load_active_missions()
             all_missions = self._app_state.rescues.missions
             
-            # Apply filters to get count
             filtered_missions = all_missions
             if self._rescue_status_filter != "all":
                 filtered_missions = [m for m in filtered_missions 
@@ -157,9 +151,7 @@ class ManageRecordsPage:
             # Adoption Requests tab
             self._app_state.adoptions.load_active_requests()
             all_requests = self._app_state.adoptions.requests
-            all_requests = [r for r in all_requests if not AdoptionStatus.is_cancelled(r.get("status") or "")]
             
-            # Apply filter to get count
             if self._adoption_status_filter == "all":
                 filtered_requests = all_requests
             else:
@@ -194,7 +186,6 @@ class ManageRecordsPage:
             export_action = None
             show_export = False
         
-        # Build the right side of control bar (count, refresh, export)
         right_controls = []
 
         if count_text:
@@ -226,7 +217,6 @@ class ManageRecordsPage:
                 ft.VerticalDivider(width=1, color=ft.Colors.GREY_300),
                 # Spacer
                 ft.Container(expand=True),
-                # Filters
                 filter_controls,
                 # Right side controls
                 *right_controls,
@@ -235,7 +225,6 @@ class ManageRecordsPage:
             border_radius=10,
         )
         
-        # Build content based on selected tab (without filter rows)
         if self._tab_index == 0:
             content = self._build_rescue_missions_content(page, ft, show_snackbar, create_section_card, 
                                                           create_scrollable_data_table, create_archive_dialog, 
@@ -276,17 +265,14 @@ class ManageRecordsPage:
                                         create_remove_dialog, create_interactive_map):
         """Build the rescue missions tab content."""
         
-        # Get already loaded missions from state manager
         all_missions = self._app_state.rescues.missions
         
-        # Apply status filter (including cancelled when selected)
         if self._rescue_status_filter == "all":
             missions = all_missions
         else:
             missions = [m for m in all_missions 
                        if RescueStatus.normalize(m.get("status", "")) == self._rescue_status_filter]
         
-        # Apply urgency filter
         if self._rescue_urgency_filter != "all":
             missions = [m for m in missions 
                        if (m.get("urgency") or "medium").lower() == self._rescue_urgency_filter]
@@ -295,7 +281,6 @@ class ManageRecordsPage:
         def make_status_badge(status: str, mission_id: int):
             normalized = RescueStatus.normalize(status)
             
-            # Check if status is cancelled
             if RescueStatus.is_cancelled(status):
                 return ft.Container(
                     ft.Row([
@@ -385,7 +370,6 @@ class ManageRecordsPage:
                              icon_size=15, tooltip="Remove", on_click=handle_remove),
             ], spacing=0, tight=True)
         
-        # Build table rows
         table_rows = []
         for m in missions:
             mid = m.get("id")
@@ -399,6 +383,9 @@ class ManageRecordsPage:
             
             location_display = location[:30] + "..." if len(location) > 30 else location
             details_display = details[:40] + "..." if len(details) > 40 else details
+            
+            breed = m.get('breed') or ''
+            breed_display = (breed[:15] + "...") if len(breed) > 15 else (breed if breed else 'Not Specified')
             
             urgency = (m.get("urgency") or "medium").lower()
             urgency_colors = {
@@ -429,6 +416,8 @@ class ManageRecordsPage:
                 ft.Text(f"#{mid}", size=11, color=ft.Colors.TEAL_700, weight="w600"),
                 ft.Text(name, size=11, color=ft.Colors.BLACK87, weight="w500"),
                 ft.Text(animal_type, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                ft.Container(ft.Text(breed_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
+                            tooltip=breed if breed and len(breed) > 15 else None),
                 ft.Text(reporter_phone, size=11, color=ft.Colors.BLACK87, weight="w500"),
                 ft.Container(ft.Text(location_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
                             tooltip=location if len(location) > 30 else None),
@@ -445,6 +434,7 @@ class ManageRecordsPage:
             {"label": "#", "expand": 0},
             {"label": "Reporter", "expand": 2},
             {"label": "Animal", "expand": 1},
+            {"label": "Breed", "expand": 2},
             {"label": "Contact", "expand": 1},
             {"label": "Location", "expand": 2},
             {"label": "Details", "expand": 2},
@@ -460,11 +450,9 @@ class ManageRecordsPage:
             heading_row_height=45, data_row_height=50)
         
         # Map with rescue mission markers
-        # Check internet connectivity before creating map
         is_online = self.map_service.check_map_tiles_available()
         
         if is_online:
-            # Use the interactive map wrapper with lock/unlock toggle
             map_container = create_interactive_map(
                 map_service=self.map_service,
                 missions=missions,
@@ -476,7 +464,6 @@ class ManageRecordsPage:
                 initially_locked=True,
             )
         else:
-            # Use offline fallback with mission details when map creation fails
             offline_widget = self.map_service.create_offline_map_fallback(missions, is_admin=True)
             if offline_widget:
                 map_container = ft.Container(
@@ -527,20 +514,33 @@ class ManageRecordsPage:
             filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
-            fieldnames = ["id", "reporter_name", "animal_type", "location", "urgency", "status", "notes", "created_at"]
+            fieldnames = ["id", "user_id", "animal_id", "reporter_name", "reporter_phone", "animal_type", 
+                          "animal_name", "breed", "location", "latitude", "longitude", "urgency", "status", 
+                          "notes", "admin_message", "is_closed", "mission_date", "updated_at", "animal_photo"]
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for m in missions:
                     writer.writerow({
                         "id": m.get("id", ""),
+                        "user_id": m.get("user_id", ""),
+                        "animal_id": m.get("animal_id", ""),
                         "reporter_name": m.get("reporter_name", ""),
+                        "reporter_phone": m.get("reporter_phone", ""),
                         "animal_type": m.get("animal_type", ""),
+                        "animal_name": m.get("animal_name", ""),
+                        "breed": m.get("breed", ""),
                         "location": m.get("location", ""),
+                        "latitude": m.get("latitude", ""),
+                        "longitude": m.get("longitude", ""),
                         "urgency": m.get("urgency", ""),
                         "status": m.get("status", ""),
                         "notes": m.get("notes", ""),
-                        "created_at": m.get("created_at", ""),
+                        "admin_message": m.get("admin_message", ""),
+                        "is_closed": m.get("is_closed", ""),
+                        "mission_date": m.get("mission_date", ""),
+                        "updated_at": m.get("updated_at", ""),
+                        "animal_photo": m.get("animal_photo", ""),
                     })
             
             show_snackbar(self._page, f"Exported {len(missions)} missions to {filename}")
@@ -552,14 +552,8 @@ class ManageRecordsPage:
                                           create_remove_dialog):
         """Build the adoption requests tab content."""
         
-        # Get already loaded requests from state manager
         all_requests = self._app_state.adoptions.requests
         
-        # Filter out user-cancelled requests by default, unless specifically filtering by cancelled
-        if self._adoption_status_filter != AdoptionStatus.CANCELLED:
-            all_requests = [r for r in all_requests if not AdoptionStatus.is_cancelled(r.get("status") or "")]
-        
-        # Apply status filter
         if self._adoption_status_filter == "all":
             requests = all_requests
         else:
@@ -576,11 +570,15 @@ class ManageRecordsPage:
             elif normalized == AdoptionStatus.DENIED:
                 bg_color = ft.Colors.RED_700
                 icon = ft.Icons.CANCEL
+            elif normalized == AdoptionStatus.CANCELLED:
+                bg_color = ft.Colors.GREY_600
+                icon = ft.Icons.CANCEL
             else:
                 bg_color = ft.Colors.ORANGE_700
                 icon = ft.Icons.PENDING
             
             if is_frozen:
+                tooltip_text = "Status locked - cancelled by user" if normalized == AdoptionStatus.CANCELLED else "Status locked - animal was removed from system"
                 return ft.Container(
                     ft.Row([
                         ft.Icon(icon, color=ft.Colors.WHITE, size=14),
@@ -589,7 +587,7 @@ class ManageRecordsPage:
                     ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
                     padding=ft.padding.symmetric(horizontal=10, vertical=8),
                     bgcolor=bg_color, border_radius=15,
-                    tooltip="Status locked - animal was removed from system")
+                    tooltip=tooltip_text)
             
             def change_status(e, new_status):
                 self._on_adoption_status_change(page, request_id, new_status, show_snackbar)
@@ -646,7 +644,6 @@ class ManageRecordsPage:
                              icon_size=20, tooltip="Remove", on_click=handle_remove),
             ], spacing=0, tight=True)
         
-        # Build table rows
         table_rows = []
         for req in requests:
             request_id = req.get("id")
@@ -654,6 +651,9 @@ class ManageRecordsPage:
             contact = req.get("contact", "N/A")
             reason = req.get("reason", "N/A")
             status = req.get("status") or "pending"
+            
+            breed = req.get('animal_breed') or ''
+            breed_display = (breed[:15] + "...") if len(breed) > 15 else (breed if breed else 'Not Specified')
             
             animal_id = req.get("animal_id")
             animal_name = req.get("animal_name")
@@ -666,7 +666,8 @@ class ManageRecordsPage:
                 animal_name = "N/A"
             
             animal_was_removed = animal_id is None or (animal_id and not req.get("animal_species"))
-            is_frozen = animal_was_removed
+            is_cancelled = AdoptionStatus.is_cancelled(status)
+            is_frozen = animal_was_removed or is_cancelled
             
             status_widget = make_status_badge(status, request_id, is_frozen)
             
@@ -685,6 +686,8 @@ class ManageRecordsPage:
             row_data = [
                 ft.Text(user_name, size=12, color=ft.Colors.BLACK87),
                 animal_name_widget,
+                ft.Container(ft.Text(breed_display, size=12, color=ft.Colors.BLACK87),
+                            tooltip=breed if breed and len(breed) > 15 else None),
                 ft.Text(contact, size=12, color=ft.Colors.BLACK87),
                 ft.Container(ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
                             tooltip=reason if len(reason) > 40 else None),
@@ -696,6 +699,7 @@ class ManageRecordsPage:
         table_columns = [
             {"label": "User Name", "expand": 2},
             {"label": "Animal", "expand": 2},
+            {"label": "Breed", "expand": 2},
             {"label": "Contact", "expand": 2},
             {"label": "Reason", "expand": 3},
             {"label": "Status", "expand": 2},
@@ -730,19 +734,29 @@ class ManageRecordsPage:
             filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
-            fieldnames = ["id", "user_name", "animal_name", "contact", "reason", "status", "created_at"]
+            fieldnames = ["id", "user_id", "user_name", "animal_id", "animal_name", "animal_species", 
+                          "animal_breed", "contact", "reason", "status", "notes", "admin_message", "was_approved", 
+                          "request_date", "updated_at"]
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for r in requests:
                     writer.writerow({
                         "id": r.get("id", ""),
+                        "user_id": r.get("user_id", ""),
                         "user_name": r.get("user_name", ""),
+                        "animal_id": r.get("animal_id", ""),
                         "animal_name": r.get("animal_name", ""),
+                        "animal_species": r.get("animal_species", ""),
+                        "animal_breed": r.get("animal_breed", ""),
                         "contact": r.get("contact", ""),
                         "reason": r.get("reason", ""),
                         "status": r.get("status", ""),
-                        "created_at": r.get("created_at", ""),
+                        "notes": r.get("notes", ""),
+                        "admin_message": r.get("admin_message", ""),
+                        "was_approved": r.get("was_approved", ""),
+                        "request_date": r.get("request_date", ""),
+                        "updated_at": r.get("updated_at", ""),
                     })
             
             show_snackbar(self._page, f"Exported {len(requests)} requests to {filename}")
@@ -758,7 +772,6 @@ class ManageRecordsPage:
             self._hidden_tab_index = e.control.selected_index
             self.build(page)
         
-        # Create compact sub-tabs for hidden items (smaller text, no icons)
         hidden_tabs = ft.Tabs(
             selected_index=self._hidden_tab_index,
             animation_duration=300,
@@ -774,7 +787,6 @@ class ManageRecordsPage:
             ],
         )
         
-        # Build sub-content based on selected hidden tab
         if self._hidden_tab_index == 0:
             sub_content = self._build_hidden_rescues(page, ft, show_snackbar, create_empty_state,
                                                       create_restore_dialog, create_permanent_delete_dialog)
@@ -950,12 +962,16 @@ class ManageRecordsPage:
             actions.append(ft.IconButton(icon=ft.Icons.DELETE_FOREVER, icon_color=ft.Colors.RED_600,
                                         tooltip="Delete Forever", on_click=handle_permanent_delete))
         
+        breed = mission.get('breed') or ''
+        breed_display = breed if breed else 'Not Specified'
+        
         return ft.Container(
             content=ft.Row([
                 ft.Column([
                     ft.Text(f"Mission #{mission_id}", weight=ft.FontWeight.BOLD),
                     ft.Text(f"Location: {mission.get('location', 'N/A')}", size=13, color=ft.Colors.GREY_700),
                     ft.Text(f"Animal: {mission.get('animal_type', 'N/A')}", size=13, color=ft.Colors.GREY_700),
+                    ft.Text(f"Breed: {breed_display}", size=13, color=ft.Colors.GREY_700),
                     ft.Container(
                         content=ft.Text(badge_text, size=12, color=badge_text_color),
                         bgcolor=badge_color, border_radius=4,
@@ -1018,11 +1034,15 @@ class ManageRecordsPage:
             actions.append(ft.IconButton(icon=ft.Icons.DELETE_FOREVER, icon_color=ft.Colors.RED_600,
                                         tooltip="Delete Forever", on_click=handle_permanent_delete))
         
+        breed = request.get('animal_breed') or ''
+        breed_display = breed if breed else 'Not Specified'
+        
         return ft.Container(
             content=ft.Row([
                 ft.Column([
                     ft.Text(f"Request #{request_id}", weight=ft.FontWeight.BOLD),
                     ft.Text(f"Animal: {animal_name}", size=13, color=ft.Colors.GREY_700),
+                    ft.Text(f"Breed: {breed_display}", size=13, color=ft.Colors.GREY_700),
                     ft.Text(f"Applicant: {user_name}", size=13, color=ft.Colors.GREY_700),
                     ft.Container(
                         content=ft.Text(badge_text, size=12, color=badge_text_color),
@@ -1097,6 +1117,9 @@ class ManageRecordsPage:
             actions.append(ft.IconButton(icon=ft.Icons.DELETE_FOREVER, icon_color=ft.Colors.RED_600,
                                         tooltip="Delete Forever", on_click=handle_permanent_delete))
         
+        breed = animal.get('breed') or ''
+        breed_display = breed if breed else 'Not Specified'
+        
         return ft.Container(
             content=ft.Row([
                 photo_element,
@@ -1104,6 +1127,7 @@ class ManageRecordsPage:
                 ft.Column([
                     ft.Text(name, weight=ft.FontWeight.BOLD),
                     ft.Text(f"Species: {species}", size=13, color=ft.Colors.GREY_700),
+                    ft.Text(f"Breed: {breed_display}", size=13, color=ft.Colors.GREY_700),
                     ft.Container(
                         content=ft.Text(badge_text, size=12, color=badge_text_color),
                         bgcolor=badge_color, border_radius=4,

@@ -77,11 +77,9 @@ def normalize_phone_number(phone: str, region: str = DEFAULT_PHONE_REGION) -> Op
         # Parse the phone number
         parsed = phonenumbers.parse(phone.strip(), region)
         
-        # Validate the number
         if not phonenumbers.is_valid_number(parsed):
             return None
         
-        # Format to E.164 (international format with +)
         return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
     except NumberParseException:
         return None
@@ -226,7 +224,6 @@ def parse_date(date_str: Optional[str], default: Optional[date] = None) -> Optio
     if not date_str:
         return default
     try:
-        # Handle both date-only and datetime strings
         dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
         return dt.date()
     except (ValueError, AttributeError):
@@ -291,9 +288,7 @@ def is_matplotlib_available() -> bool:
     return MATPLOTLIB_AVAILABLE
 
 
-# ============================================================================
 # Location/Coordinates Utilities
-# ============================================================================
 
 # Pattern to detect if a string looks like coordinates
 COORDS_PATTERN = re.compile(
@@ -321,7 +316,6 @@ def is_coordinate_string(location: str) -> bool:
     if not location:
         return False
     
-    # Remove degree symbols and direction letters for checking
     cleaned = re.sub(r'[°NSEW]', '', location.strip())
     return bool(COORDS_PATTERN.match(cleaned))
 
@@ -339,7 +333,6 @@ def parse_coordinates_from_string(location: str) -> Optional[Tuple[float, float]
         return None
     
     try:
-        # Remove degree symbols and direction letters
         cleaned = re.sub(r'[°NSEW]', '', location.strip())
         
         # Split by comma or whitespace
@@ -348,7 +341,6 @@ def parse_coordinates_from_string(location: str) -> Optional[Tuple[float, float]
             lat = float(parts[0].strip())
             lng = float(parts[1].strip())
             
-            # Validate ranges
             if -90 <= lat <= 90 and -180 <= lng <= 180:
                 return (lat, lng)
     except (ValueError, IndexError):

@@ -32,52 +32,48 @@ class ChartsPage:
 
         page.title = "Data Analytics"
 
-        # Sidebar with navigation
         sidebar = create_admin_sidebar(page, current_route=page.route)
 
-        # Fetch data using analytics service
         (months, rescued_counts, adopted_counts), type_dist, status_counts = self.analytics_service.get_chart_data()
 
-        # Calculate statistics
         total_rescued = sum(rescued_counts)
         total_adopted = sum(adopted_counts)
         pending_requests = self.adoption_service.get_all_requests() or []
         total_pending = len([r for r in pending_requests if (r.get("status") or "").lower() == "pending"])
         total_requests = len([r for r in pending_requests if (r.get("status") or "").lower() in ["pending", "approved", "denied"]])
         
-        # Get pending rescue missions count
         pending_rescues = self.analytics_service.get_pending_rescue_missions()
         
-        # Get actual percentage changes
         changes = self.analytics_service.get_monthly_changes()
         rescues_change = changes["rescues_change"]
         adoptions_change = changes["adoptions_change"]
         pending_change = changes["pending_change"]
         pending_rescues_change = changes["rescues_change"]  # Use rescues change for pending rescues
 
-        # Get additional analytics data
         rescue_status_dist = self.analytics_service.get_rescue_status_distribution()
         adoption_status_dist = self.analytics_service.get_adoption_status_distribution()
         urgency_dist = self.analytics_service.get_urgency_distribution()
         species_ranking = self.analytics_service.get_species_adoption_ranking(limit=5)
         insights = self.analytics_service.get_chart_insights()
+        
+        breed_distribution = self.analytics_service.get_breed_distribution()  # All animals, no limit
 
         # Line chart: rescued vs adopted trend (last 1 month / 30 days)
         has_line_data = any(c > 0 for c in rescued_counts) or any(c > 0 for c in adopted_counts)
         
+        line_refs = {}  # For legend-line sync
         if has_line_data:
-            # Build data series for line chart
             line_data = [
                 {"label": "Rescued", "color": CHART_COLORS["primary"], "values": list(zip(range(len(months)), rescued_counts))},
                 {"label": "Adopted", "color": CHART_COLORS["secondary"], "values": list(zip(range(len(months)), adopted_counts))},
             ]
-            line_chart = create_line_chart(line_data, width=600, height=220, x_labels=months)
+            line_chart = create_line_chart(line_data, width=450, height=270, x_labels=months, legend_refs=line_refs)
             line_legend = create_chart_legend([
                 {"label": "Rescued", "color": CHART_COLORS["primary"], "value": sum(rescued_counts)},
                 {"label": "Adopted", "color": CHART_COLORS["secondary"], "value": sum(adopted_counts)},
-            ], horizontal=False)
+            ], horizontal=False, line_refs=line_refs)
         else:
-            line_chart = create_empty_chart_message("No rescue/adoption data available yet", width=600, height=220)
+            line_chart = create_empty_chart_message("No rescue/adoption data available yet", width=450, height=270)
             line_legend = ft.Container()
 
         # Pie chart: type distribution
@@ -208,38 +204,12 @@ class ChartsPage:
             urgency_bar_chart = create_empty_chart_message("No urgency data", width=280, height=200)
             urgency_legend = ft.Container()
 
-        # Top Species for Adoption (Horizontal Bar Chart)
-        species_bar_refs = {}  # For legend-bar sync
-        if species_ranking:
-            species_bar_groups = []
-            for idx, (species, count) in enumerate(species_ranking):
-                species_bar_groups.append({
-                    "x": idx,
-                    "rods": [{"value": count, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)], "width": 40}]
-                })
-            species_bar_chart = create_bar_chart(
-                species_bar_groups,
-                bottom_labels={idx: species for idx, (species, _) in enumerate(species_ranking)},
-                width=200, height=200,
-                legend_refs=species_bar_refs,
-            )
-            species_legend = create_chart_legend([
-                {"label": species, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)], "value": count}
-                for idx, (species, count) in enumerate(species_ranking)
-            ], horizontal=False, bar_refs=species_bar_refs)
-        else:
-            species_bar_chart = create_empty_chart_message("No species data", width=200, height=200)
-            species_legend = ft.Container()
-
-        # Get real rescue mission data for map
         from services.map_service import MapService
         map_service = MapService()
         missions = self.rescue_service.get_all_missions() or []
         
-        # Check internet connectivity before creating map
         is_online = map_service.check_map_tiles_available()
 
-        # Build clickable stat cards - routes go to /manage_records with tab parameter (tab=0: Rescues, tab=1: Adoptions)
         stats_row = ft.Row([
             create_clickable_stat_card(
                 title="Animals Rescued",
@@ -286,14 +256,112 @@ class ChartsPage:
                 ft.Row([
                     ft.Container(line_chart, padding=ft.padding.only(top=10)),
                     ft.Container(line_legend, padding=ft.padding.only(left=15, top=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=8, horizontal_alignment="center"),
+            padding=ft.padding.only(top=25, bottom=50, left=25, right=25),
+            bgcolor=ft.Colors.WHITE,
+            border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
+            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+            expand=True,
+        )
+        
+        # Breed trend chart with toggle (adoption vs rescue)
+        breed_trend_mode = ft.Ref[ft.Tabs]()
+        breed_chart_content = ft.Ref[ft.Container]()
+        
+        def build_breed_trend_chart(mode: str) -> tuple:
+            """Build breed trend chart for given mode (adoption or rescue)."""
+            day_labels, breed_series = self.analytics_service.get_breed_trends(mode=mode)
+            
+            if mode == "adoption":
+                breed_colors = ["#9C27B0", "#E91E63", "#26C6DA"]  # Purple, Pink, Cyan
+            else:
+                breed_colors = [CHART_COLORS["primary"], CHART_COLORS["secondary"], "#AB47BC"]  # Teal, Orange, Purple
+            line_data = []
+            legend_data = []
+            
+            # Always build legend for top 3 breeds, even if no data in 30-day window
+            if not breed_series:
+                # If no breed data at all, show empty state with no legend
+                return create_empty_chart_message(f"No {mode} breed data available yet", width=600, height=220), ft.Container()
+            
+            for idx, (breed_name, counts) in enumerate(breed_series[:3]):
+                color = breed_colors[idx] if idx < len(breed_colors) else PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]
+                line_data.append({
+                    "label": breed_name,
+                    "color": color,
+                    "values": list(zip(range(len(day_labels)), counts))
+                })
+                legend_data.append({
+                    "label": breed_name,
+                    "color": color,
+                    "value": sum(counts)
+                })
+            
+            breed_line_refs = {}  # For legend-line sync
+            if line_data:
+                chart = create_line_chart(line_data, width=400, height=220, x_labels=day_labels, legend_refs=breed_line_refs)
+                legend = create_chart_legend(legend_data, horizontal=False, line_refs=breed_line_refs) if legend_data else ft.Container()
+            else:
+                chart = create_empty_chart_message(f"No {mode} breed data available yet", width=400, height=220)
+                legend = ft.Container()
+            return chart, legend
+        
+        def on_breed_tab_change(e):
+            """Handle tab change for breed trends."""
+            mode = "adoption" if breed_trend_mode.current.selected_index == 0 else "rescue"
+            chart, legend = build_breed_trend_chart(mode)
+            breed_chart_content.current.content = ft.Row([
+                ft.Container(chart, padding=ft.padding.only(top=10)),
+                ft.Container(legend, padding=ft.padding.only(left=20, top=10)),
+            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            page.update()
+        
+        # Initial breed trend chart (adoption mode)
+        initial_breed_chart, initial_breed_legend = build_breed_trend_chart("adoption")
+        
+        breed_trend_container = ft.Container(
+            ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.TRENDING_UP, size=20, color=ft.Colors.TEAL_600),
+                    ft.Text("Top 3 Breed Trends (Last 30 Days)", size=16, weight="w600", color=ft.Colors.BLACK87),
+                ], spacing=10),
+                ft.Divider(height=8, color=ft.Colors.GREY_200),
+                ft.Tabs(
+                    ref=breed_trend_mode,
+                    selected_index=0,
+                    animation_duration=300,
+                    on_change=on_breed_tab_change,
+                    tabs=[
+                        ft.Tab(text="Adoption Trends", icon=ft.Icons.FAVORITE),
+                        ft.Tab(text="Rescue Trends", icon=ft.Icons.PETS),
+                    ],
+                    indicator_color=ft.Colors.TEAL_600,
+                    label_color=ft.Colors.TEAL_600,
+                    unselected_label_color=ft.Colors.GREY_600,
+                ),
+                ft.Container(
+                    ref=breed_chart_content,
+                    content=ft.Row([
+                        ft.Container(initial_breed_chart, padding=ft.padding.only(top=10)),
+                        ft.Container(initial_breed_legend, padding=ft.padding.only(left=20, top=10)),
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ),
             ], spacing=8, horizontal_alignment="center"),
             padding=25,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
             border=ft.border.all(1, ft.Colors.GREY_200),
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+            expand=True,
         )
+        
+        # Combined chart row (rescued vs adopted + breed trends)
+        charts_row_1 = ft.Row([
+            chart1_container,
+            breed_trend_container,
+        ], spacing=15, expand=True)
 
         # Helper to create consistent chart cards with legend beside (clickable expand icon only)
         def create_chart_card_container(title: str, chart: Any, legend: Any, icon: Any = None, data_for_dialog: List = None) -> Any:
@@ -334,7 +402,6 @@ class ChartsPage:
                 expand=True,
             )
         
-        # Build data arrays for click dialogs
         type_data = [{"label": label, "value": value, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]}
                      for idx, (label, value) in enumerate(type_dist.items())] if type_dist else []
         
@@ -395,7 +462,6 @@ class ChartsPage:
                 expand=True,
             )
         
-        # Build data arrays for bar chart dialogs
         health_data = [{"label": s.capitalize(), "value": status_counts.get(s, 0), "color": STATUS_COLORS.get(s, STATUS_COLORS["default"])}
                        for s in ["healthy", "recovering", "injured"]]
         
@@ -404,20 +470,41 @@ class ChartsPage:
                                   "high": STATUS_COLORS["recovering"], "critical": STATUS_COLORS["failed"]}.get(level)}
                         for level in ["low", "medium", "high", "critical"] if level in urgency_dist] if urgency_dist else []
         
-        species_data = [{"label": species, "value": count, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]}
-                        for idx, (species, count) in enumerate(species_ranking)] if species_ranking else []
+        # Breed Distribution Pie Chart (replacing Top Species for Adoption)
+        breed_pie_refs = {}  # For legend-pie sync
+        if breed_distribution and sum(count for _, count in breed_distribution) > 0:
+            breed_sections = []
+            total = sum(count for _, count in breed_distribution)
+            for idx, (breed, count) in enumerate(breed_distribution):
+                pct = (count / total * 100) if total > 0 else 0
+                breed_sections.append({
+                    "value": count,
+                    "title": f"{pct:.0f}%",  # Only show percentage (no decimals), no breed name
+                    "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)],
+                })
+            breed_pie_chart = create_pie_chart(breed_sections, width=200, height=200, legend_refs=breed_pie_refs, title_font_size=9)
+            breed_legend = create_chart_legend([
+                {"label": breed, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)], "value": count}
+                for idx, (breed, count) in enumerate(breed_distribution)
+            ], horizontal=False, pie_refs=breed_pie_refs)
+        else:
+            breed_pie_chart = create_empty_chart_message("No breed data", width=200, height=200)
+            breed_legend = ft.Container()
+        
+        breed_data = [{"label": breed, "value": count, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]}
+                      for idx, (breed, count) in enumerate(breed_distribution)] if breed_distribution else []
 
-        # Bar charts row
+        # Bar charts row (replaced "Top Species for Adoption" with "Breed Distribution")
         bar_charts_row = ft.Row([
             create_bar_chart_card("Health Status Breakdown", health_bar_chart, health_legend, ft.Icons.HEALTH_AND_SAFETY, health_data),
             create_bar_chart_card("Rescue Urgency Distribution", urgency_bar_chart, urgency_legend, ft.Icons.WARNING_AMBER, urgency_data),
-            create_bar_chart_card("Top Species for Adoption", species_bar_chart, species_legend, ft.Icons.TRENDING_UP, species_data),
+            create_chart_card_container("Breed Distribution", breed_pie_chart, breed_legend, ft.Icons.PETS, breed_data),
         ], spacing=15, expand=True)
 
-        # Get structured insight data
         rescue_insight_data = insights.get("rescue_insight", {"headline": "No data", "detail": "", "action": ""})
         adoption_insight_data = insights.get("adoption_insight", {"headline": "No data", "detail": "", "action": ""})
         health_insight_data = insights.get("health_insight", {"headline": "No data", "detail": "", "action": ""})
+        breed_insight_data = insights.get("breed_insight", {"headline": "No data", "detail": "", "action": ""})
         
         insights_row = ft.Container(
             ft.Column([
@@ -461,6 +548,14 @@ class ChartsPage:
                         ft.Colors.GREEN_50,
                         ft.Colors.GREEN_100,
                     ),
+                    create_insight_box(
+                        "Breed Popularity",
+                        breed_insight_data,
+                        ft.Icons.PETS,
+                        ft.Colors.PURPLE_600,
+                        ft.Colors.PURPLE_50,
+                        ft.Colors.PURPLE_100,
+                    ),
                 ], spacing=15, expand=True),
             ], spacing=0),
             padding=25,
@@ -469,7 +564,6 @@ class ChartsPage:
             shadow=ft.BoxShadow(blur_radius=10, spread_radius=2, color=ft.Colors.BLACK12, offset=(0, 3)),
         )
 
-        # Create map container with interactive wrapper or offline fallback
         if is_online:
             map_container = create_interactive_map(
                 map_service=map_service,
@@ -482,7 +576,6 @@ class ChartsPage:
                 initially_locked=True,
             )
         else:
-            # Use offline fallback with mission list when no internet
             offline_widget = map_service.create_offline_map_fallback(missions, is_admin=True)
             if offline_widget:
                 map_container = ft.Container(
@@ -557,7 +650,7 @@ class ChartsPage:
                 ft.Container(height=15),
                 stats_row,
                 ft.Container(height=20),
-                chart1_container,
+                charts_row_1,  # Rescued vs Adopted + Breed Trends
                 ft.Container(height=20),
                 pie_charts_row,
                 ft.Container(height=20),

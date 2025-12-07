@@ -72,7 +72,6 @@ class SignupPage:
                         self._pending_photo_bytes = f.read()
                     self._pending_photo_name = file_info.name
                     
-                    # Update preview
                     photo_b64 = base64.b64encode(self._pending_photo_bytes).decode()
                     self._photo_widget.content = ft.Image(
                         src_base64=photo_b64,
@@ -158,7 +157,6 @@ class SignupPage:
             alignment=ft.alignment.center_left,
         )
 
-        # Create Account button - teal
         submit_btn = create_action_button(
             "Create Account",
             on_click=lambda e: self._on_submit(page, e),
@@ -258,7 +256,6 @@ class SignupPage:
             show_snackbar(page, "All fields are required")
             return
 
-        # Validate email or phone format
         if not is_valid_contact(email_or_phone):
             show_snackbar(page, "Please enter a valid email or phone number (e.g., email@example.com or 09XXXXXXXXX)")
             return
@@ -267,7 +264,6 @@ class SignupPage:
             show_snackbar(page, "Passwords do not match")
             return
 
-        # Validate password against policy
         is_valid, errors = validate_password(password)
         if not is_valid:
             show_snackbar(page, errors[0])  # Show first validation error
@@ -287,15 +283,12 @@ class SignupPage:
                 show_snackbar(page, "Invalid phone number format. Please use 09XXXXXXXXX or +63XXXXXXXXXX")
                 return
 
-        # Save profile picture if one was selected
         profile_picture_filename = None
         if self._pending_photo_bytes and self._pending_photo_name:
             try:
-                # Use email/phone prefix as custom name
                 if email:
                     username = email.split("@")[0]
                 else:
-                    # Use last 4 digits of phone for uniqueness
                     username = f"phone_{phone[-4:]}" if phone else "user"
                 profile_picture_filename = self.file_store.save_bytes(
                     data=self._pending_photo_bytes,

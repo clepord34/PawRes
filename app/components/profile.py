@@ -28,7 +28,6 @@ def create_profile_section(
     # Truncate long names with ellipsis for display
     display_name = user_name if len(user_name) <= 18 else user_name[:16] + "..."
     
-    # Create profile avatar - either photo or default icon
     if profile_photo:
         avatar_content = ft.Image(
             src_base64=profile_photo,
@@ -74,7 +73,6 @@ def create_profile_section(
                     ft.Text("Online", size=10, color=ft.Colors.GREEN_600, weight="w500"),
                 ], spacing=4),
             ], spacing=3, expand=True),
-            # Add a subtle arrow indicator to show it's clickable
             ft.Icon(ft.Icons.CHEVRON_RIGHT, size=16, color=ft.Colors.GREY_400) if on_click else ft.Container(),
         ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
         padding=ft.padding.symmetric(horizontal=12, vertical=10),

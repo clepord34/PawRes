@@ -1,6 +1,6 @@
 """Photo upload widget component."""
 from __future__ import annotations
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Callable
 import base64
 import os
 
@@ -25,9 +25,22 @@ class PhotoUploadWidget:
         page: object,
         initial_photo: Optional[str] = None,
         width: int = 100,
-        height: int = 100
+        height: int = 100,
+        on_ai_analyze: Optional[Callable[[str], None]] = None,
+        show_ai_button: bool = True,
+        on_photo_changed: Optional[Callable[[], None]] = None,
     ):
-        """Initialize the photo upload widget."""
+        """Initialize the photo upload widget.
+        
+        Args:
+            page: Flet page instance
+            initial_photo: Initial photo filename or base64 to display
+            width: Photo display width
+            height: Photo display height
+            on_ai_analyze: Callback when AI analyze button is clicked. Receives base64 image data.
+            show_ai_button: Whether to show the AI analyze button
+            on_photo_changed: Callback when a new photo is selected (to clear AI suggestion)
+        """
         if ft is None:
             raise RuntimeError("Flet must be installed to create photo upload widgets")
         
@@ -36,6 +49,9 @@ class PhotoUploadWidget:
         self.height = height
         self.file_store = get_file_store()
         self._photo_service = get_photo_service()
+        self._on_ai_analyze = on_ai_analyze
+        self._show_ai_button = show_ai_button
+        self._on_photo_changed = on_photo_changed
         
         # Track the current photo - can be filename or base64
         self._photo_filename: Optional[str] = None
@@ -43,10 +59,8 @@ class PhotoUploadWidget:
         self._original_filename: Optional[str] = None  # Track original for cleanup
         self._pending_image_bytes: Optional[bytes] = None  # Pending upload (not saved yet)
         
-        # Create display container
         self.photo_display = self._create_photo_display(initial_photo)
         
-        # Create file picker
         self.file_picker = ft.FilePicker(on_result=self._on_file_picked)
         page.overlay.append(self.file_picker)
     
@@ -55,7 +69,6 @@ class PhotoUploadWidget:
         if not photo:
             return None
         
-        # Check if it's already base64 (legacy data)
         if self._photo_service.is_base64(photo):
             self._photo_base64 = photo
             return photo
@@ -115,13 +128,11 @@ class PhotoUploadWidget:
                 with open(file_path, "rb") as image_file:
                     self._pending_image_bytes = image_file.read()
                 
-                # Store base64 for display
                 self._photo_base64 = base64.b64encode(self._pending_image_bytes).decode()
                 
                 # Clear any previously saved filename (new image selected)
                 self._photo_filename = None
                 
-                # Update display with new image
                 self.photo_display.content = ft.Image(
                     src_base64=self._photo_base64,
                     width=self.width,
@@ -130,6 +141,12 @@ class PhotoUploadWidget:
                     border_radius=8,
                 )
                 self.photo_display.update()
+                
+                self.update_ai_button_state()
+                
+                # Notify parent that photo changed (to clear AI suggestion)
+                if self._on_photo_changed:
+                    self._on_photo_changed()
                 
                 self.page.open(ft.SnackBar(ft.Text(f"Photo selected: {self._original_filename}")))
                 self.page.update()
@@ -162,7 +179,6 @@ class PhotoUploadWidget:
             return self._photo_filename
         
         try:
-            # Save to FileStore with custom name
             filename = self.file_store.save_bytes(
                 self._pending_image_bytes,
                 original_name=self._original_filename or "photo.jpg",
@@ -186,35 +202,87 @@ class PhotoUploadWidget:
         """Get the current photo data as base64 string."""
         return self._photo_base64
     
+    def has_photo(self) -> bool:
+        """Check if a photo is currently selected or uploaded."""
+        return self._photo_base64 is not None
+    
+    def _handle_ai_analyze(self, e):
+        """Handle AI analyze button click."""
+        if self._on_ai_analyze and self._photo_base64:
+            self._on_ai_analyze(self._photo_base64)
+    
     def build(self) -> object:
         """Build and return the photo upload widget."""
+        buttons = [
+            ft.ElevatedButton(
+                "+ Add Photo",
+                on_click=lambda e: self.file_picker.pick_files(
+                    allowed_extensions=["jpg", "jpeg", "png", "gif"],
+                    dialog_title="Select Animal Photo"
+                ),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.WHITE,
+                    color=ft.Colors.BLACK54,
+                    shape=ft.RoundedRectangleBorder(radius=20),
+                    side=ft.BorderSide(1, ft.Colors.GREY_400),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=8),
+                )
+            ),
+        ]
+        
+        if self._show_ai_button:
+            from components.ai_suggestion_card import create_ai_analyze_button
+            self._ai_button = create_ai_analyze_button(
+                on_click=lambda: self._handle_ai_analyze(None),
+                disabled=not self.has_photo(),
+            )
+            buttons.append(self._ai_button)
+        
         return ft.Container(
             ft.Column([
                 self.photo_display,
-                ft.ElevatedButton(
-                    "+ Add Photo",
-                    on_click=lambda e: self.file_picker.pick_files(
-                        allowed_extensions=["jpg", "jpeg", "png", "gif"],
-                        dialog_title="Select Animal Photo"
-                    ),
-                    style=ft.ButtonStyle(
-                        bgcolor=ft.Colors.WHITE,
-                        color=ft.Colors.BLACK54,
-                        shape=ft.RoundedRectangleBorder(radius=20),
-                        side=ft.BorderSide(1, ft.Colors.GREY_400),
-                        padding=ft.padding.symmetric(horizontal=20, vertical=8),
-                    )
-                ),
+                ft.Row(buttons, spacing=8, alignment=ft.MainAxisAlignment.CENTER),
             ], horizontal_alignment="center", spacing=10),
             padding=ft.padding.only(bottom=15),
         )
+    
+    def update_ai_button_state(self):
+        """Update the AI button enabled/disabled state based on photo availability."""
+        if hasattr(self, '_ai_button') and self._show_ai_button:
+            has_photo = self.has_photo()
+            self._ai_button.disabled = not has_photo
+            import flet as ft
+            self._ai_button.style = ft.ButtonStyle(
+                bgcolor=ft.Colors.PURPLE_700 if has_photo else ft.Colors.with_opacity(0.4, ft.Colors.PURPLE_700),
+                color=ft.Colors.WHITE if has_photo else ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+            )
+            if hasattr(self.page, 'update'):
+                self.page.update()
 
 
 def create_photo_upload_widget(
     page: object,
     initial_photo: Optional[str] = None,
     width: int = 140,
-    height: int = 140
+    height: int = 140,
+    on_ai_analyze: Optional[Callable[[str], None]] = None,
+    show_ai_button: bool = True,
+    on_photo_changed: Optional[Callable[[], None]] = None,
 ) -> PhotoUploadWidget:
-    """Factory function to create a photo upload widget."""
-    return PhotoUploadWidget(page, initial_photo, width, height)
+    """Factory function to create a photo upload widget.
+    
+    Args:
+        page: Flet page instance
+        initial_photo: Initial photo filename or base64 to display
+        width: Photo display width
+        height: Photo display height
+        on_ai_analyze: Callback when AI analyze button is clicked. Receives base64 image data.
+        show_ai_button: Whether to show the AI analyze button
+        on_photo_changed: Callback when a new photo is selected (to clear AI suggestion)
+    """
+    return PhotoUploadWidget(
+        page, initial_photo, width, height,
+        on_ai_analyze=on_ai_analyze,
+        show_ai_button=show_ai_button,
+        on_photo_changed=on_photo_changed,
+    )

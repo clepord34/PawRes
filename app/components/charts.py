@@ -13,7 +13,6 @@ except ImportError:
     ft = None
 
 
-# Color palettes for charts
 CHART_COLORS = {
     "primary": "#26A69A",     # Teal
     "secondary": "#FFA726",    # Orange
@@ -37,23 +36,18 @@ PIE_CHART_COLORS = [
 ]
 
 STATUS_COLORS = {
-    # Health status
     "healthy": "#4CAF50",
     "recovering": "#FFC107",
     "injured": "#F44336",
-    # Rescue status
     "pending": "#2196F3",
     "on-going": "#FFA726",
     "rescued": "#4CAF50",
     "failed": "#F44336",
-    # Adoption status
     "approved": "#4CAF50",
     "denied": "#F44336",
-    # Urgency
     "low": "#4CAF50",
     "medium": "#FFA726",
     "high": "#F44336",
-    # Default fallback
     "default": "#9E9E9E",
 }
 
@@ -96,6 +90,7 @@ def create_line_chart(
     animate: bool = True,
     x_labels: Optional[List[str]] = None,
     on_point_click: Optional[Callable[[int, int, float], None]] = None,
+    legend_refs: Optional[Dict[str, Any]] = None,
 ) -> Any:
     """Create an interactive line chart using Flet's LineChart control.
     
@@ -110,6 +105,7 @@ def create_line_chart(
         animate: Whether to animate chart
         x_labels: Optional list of labels for x-axis (e.g., dates)
         on_point_click: Callback when a point is clicked (series_idx, x, y)
+        legend_refs: Optional dict to store references for legend sync
         
     Returns:
         A Flet LineChart control or empty state if no data
@@ -117,7 +113,6 @@ def create_line_chart(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
-    # Check if any data exists
     has_data = False
     max_x = 0
     max_y = 0
@@ -133,18 +128,18 @@ def create_line_chart(
     if not has_data:
         return create_empty_chart_message("No Data Available", height, width)
     
-    # Build data series for LineChart
     chart_data_series = []
+    base_colors = []
+    original_data_points = []
     
     for series_idx, series in enumerate(data_series):
         label = series.get("label", "")
         color = series.get("color", CHART_COLORS["primary"])
         values = series.get("values", [])
+        base_colors.append(color)
         
-        # Create data points with tooltips
         data_points = []
         for x, y in values:
-            # Use date label in tooltip if provided
             if x_labels and 0 <= x < len(x_labels):
                 tooltip_text = f"{x_labels[x]}\n{label}: {y}"
             else:
@@ -156,6 +151,8 @@ def create_line_chart(
                 tooltip=tooltip_text,
             )
             data_points.append(point)
+        
+        original_data_points.append([(p.x, p.y) for p in data_points])
         
         chart_data_series.append(
             ft.LineChartData(
@@ -169,16 +166,12 @@ def create_line_chart(
             )
         )
     
-    # Calculate y-axis max with padding
     y_max = max(10, int(max_y * 1.2) + 1)
     
-    # Create x-axis labels (show every 5th for many points)
     step = max(1, (max_x + 1) // 6)
     bottom_labels = []
     for i in range(0, max_x + 1, step):
-        # Use provided labels or default to index
         label_text = x_labels[i] if x_labels and i < len(x_labels) else str(i)
-        # Strip "Date: " prefix for x-axis display
         if label_text.startswith("Date: "):
             label_text = label_text[6:]
         bottom_labels.append(
@@ -188,7 +181,6 @@ def create_line_chart(
             )
         )
     
-    # Create y-axis labels
     y_step = max(1, y_max // 5)
     left_labels = []
     for i in range(0, y_max + 1, y_step):
@@ -211,7 +203,10 @@ def create_line_chart(
         width=width,
         animate=ft.Animation(600, ft.AnimationCurve.EASE_OUT) if animate else None,
         tooltip_bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.GREY_900),
-        tooltip_rounded_radius=10,
+        tooltip_rounded_radius=8,
+        tooltip_padding=8,
+        tooltip_max_content_width=100,
+        border=ft.border.all(1, ft.Colors.with_opacity(0.30, ft.Colors.GREY_400)),
         left_axis=ft.ChartAxis(
             labels=left_labels,
             labels_size=40,
@@ -231,6 +226,12 @@ def create_line_chart(
             dash_pattern=[3, 3],
         ) if show_grid else None,
     )
+    
+    if legend_refs is not None:
+        legend_refs["chart"] = chart
+        legend_refs["data_series"] = chart_data_series
+        legend_refs["base_colors"] = base_colors
+        legend_refs["original_data_points"] = original_data_points
     
     return chart
 
@@ -263,7 +264,6 @@ def create_bar_chart(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
-    # Check if any data exists
     has_data = False
     max_y = 0
     for group in bar_groups:
@@ -276,7 +276,6 @@ def create_bar_chart(
     if not has_data:
         return create_empty_chart_message("No Data Available", height, width)
     
-    # Build bar groups for Flet with hover effects
     flet_bar_groups = []
     for group in bar_groups:
         x = group.get("x", 0)
@@ -295,14 +294,13 @@ def create_bar_chart(
                     color=color,
                     tooltip=f"{label}: {value}" if label else str(value),
                     border_radius=ft.border_radius.only(top_left=6, top_right=6),
+                    border_side=ft.BorderSide(width=0, color=color),
                 )
             )
         flet_bar_groups.append(ft.BarChartGroup(x=x, bar_rods=rods))
     
-    # Calculate y-axis max with padding
     y_max = max(5, int(max_y * 1.2) + 1)
     
-    # Create bottom axis labels
     axis_bottom_labels = []
     if bottom_labels:
         for x_val, label in bottom_labels.items():
@@ -316,7 +314,6 @@ def create_bar_chart(
                 )
             )
     
-    # Create left axis labels
     y_step = max(1, y_max // 5)
     left_labels = [
         ft.ChartAxisLabel(
@@ -342,8 +339,9 @@ def create_bar_chart(
             labels_size=40,
         ),
         bottom_axis=ft.ChartAxis(
-            labels=axis_bottom_labels,
-            labels_size=40,
+            labels=axis_bottom_labels if bottom_labels else [],
+            labels_size=0 if not bottom_labels else 40,
+            show_labels=bool(bottom_labels),
         ),
         horizontal_grid_lines=ft.ChartGridLines(
             color=ft.Colors.GREY_300,
@@ -352,11 +350,13 @@ def create_bar_chart(
         ),
     )
     
-    # Store reference to chart and bar groups for legend sync
     if legend_refs is not None:
         legend_refs["chart"] = chart
         legend_refs["bar_groups"] = flet_bar_groups
-        legend_refs["base_width"] = 25  # Default rod width for scaling
+        if flet_bar_groups and flet_bar_groups[0].bar_rods:
+            legend_refs["base_width"] = flet_bar_groups[0].bar_rods[0].width
+        else:
+            legend_refs["base_width"] = 50
     
     return chart
 
@@ -370,6 +370,7 @@ def create_pie_chart(
     animate: bool = True,
     on_section_click: Optional[Callable[[str, float], None]] = None,
     legend_refs: Optional[Dict[int, Any]] = None,
+    title_font_size: int = 11,
 ) -> Any:
     """Create an interactive pie chart with hover expand effect.
     
@@ -385,6 +386,7 @@ def create_pie_chart(
         animate: Whether to animate chart
         on_section_click: Callback when section is clicked (title, value)
         legend_refs: Optional dict to store references for legend-pie sync
+        title_font_size: Font size for section titles (default 11)
         
     Returns:
         A Flet PieChart control or empty state if no data
@@ -392,16 +394,13 @@ def create_pie_chart(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
-    # Filter out zero/empty values
     filtered_sections = [s for s in sections if s.get("value", 0) > 0]
     
     if not filtered_sections:
         return create_empty_chart_message("No Data Available", height, width)
     
-    # Store the base radius for hover effects
     base_radius = section_radius
     
-    # Build sections for Flet with hover effects
     flet_sections = []
     total_value = sum(s.get("value", 0) for s in filtered_sections)
     
@@ -410,7 +409,6 @@ def create_pie_chart(
         title = section.get("title", "")
         color = section.get("color", PIE_CHART_COLORS[i % len(PIE_CHART_COLORS)])
         
-        # Create the section with styling
         flet_sections.append(
             ft.PieChartSection(
                 value=value,
@@ -418,7 +416,7 @@ def create_pie_chart(
                 radius=section_radius,
                 title=title,
                 title_style=ft.TextStyle(
-                    size=11,
+                    size=title_font_size,
                     color=ft.Colors.WHITE,
                     weight=ft.FontWeight.BOLD,
                 ),
@@ -446,7 +444,6 @@ def create_pie_chart(
         on_chart_event=on_chart_event,
     )
     
-    # Store reference to chart and sections for legend sync
     if legend_refs is not None:
         legend_refs["chart"] = chart
         legend_refs["sections"] = flet_sections
@@ -460,6 +457,8 @@ def create_chart_legend(
     horizontal: bool = True,
     pie_refs: Optional[Dict[str, Any]] = None,
     bar_refs: Optional[Dict[str, Any]] = None,
+    line_refs: Optional[Dict[str, Any]] = None,
+    text_size: int = 11,
 ) -> Any:
     """Create a legend for charts with hover effects that sync with chart sections.
     
@@ -468,6 +467,7 @@ def create_chart_legend(
         horizontal: Whether to layout horizontally
         pie_refs: Optional dict with 'chart', 'sections', 'base_radius' for pie sync
         bar_refs: Optional dict with 'chart', 'bar_groups' for bar sync
+        line_refs: Optional dict with 'chart', 'data_series' for line sync
         
     Returns:
         A Flet control with the legend
@@ -475,7 +475,6 @@ def create_chart_legend(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
-    # Build a mapping from legend index to actual chart section index
     # This handles cases where items with value=0 are filtered out of the chart
     legend_to_section_map = {}
     section_idx = 0
@@ -497,7 +496,6 @@ def create_chart_legend(
         if value is not None:
             text = f"{label} ({value})"
         
-        # Color indicator with subtle border
         color_box = ft.Container(
             width=12,
             height=12,
@@ -506,59 +504,113 @@ def create_chart_legend(
             border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.BLACK)),
         )
         
-        # Create hover handler that syncs with pie or bar chart
         def make_hover_handler(legend_idx: int):
-            # Get the actual section index for this legend item
             actual_section_idx = legend_to_section_map.get(legend_idx, -1)
             
             def on_legend_hover(e):
-                # Apply hover effect to legend item
                 if e.data == "true":
                     e.control.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
                     e.control.scale = 1.03
-                    # Sync with pie chart section (only if this item has a section)
                     if actual_section_idx >= 0 and pie_refs and "sections" in pie_refs and "chart" in pie_refs:
                         sections = pie_refs["sections"]
                         base_radius = pie_refs.get("base_radius", 80)
                         for i, section in enumerate(sections):
                             if i == actual_section_idx:
-                                section.radius = base_radius * 1.1  # Expand radius on hover
+                                section.radius = base_radius * 1.1
                             else:
                                 section.radius = base_radius
                         pie_refs["chart"].update()
-                    # Sync with bar chart (only if this item has a bar)
                     if actual_section_idx >= 0 and bar_refs and "bar_groups" in bar_refs and "chart" in bar_refs:
                         bar_groups = bar_refs["bar_groups"]
+                        base_width = bar_refs.get("base_width", 50)
+                        if "original_widths" not in bar_refs:
+                            bar_refs["original_widths"] = {}
+                            for i, group in enumerate(bar_groups):
+                                bar_refs["original_widths"][i] = [rod.width for rod in group.bar_rods]
+                        
                         for i, group in enumerate(bar_groups):
                             for rod in group.bar_rods:
                                 if i == actual_section_idx:
-                                    rod.width = 50  # Expand width on hover
+                                    rod.width = base_width + 10
                                 else:
-                                    rod.width = 40  # Normal width
+                                    rod.width = base_width
                         bar_refs["chart"].update()
+                    if actual_section_idx >= 0 and line_refs and "data_series" in line_refs and "chart" in line_refs:
+                        data_series = line_refs["data_series"]
+                        base_colors = line_refs.get("base_colors", [])
+                        original_data_points = line_refs.get("original_data_points", [])
+                        chart = line_refs["chart"]
+                        
+                        reordered_series = []
+                        hovered_series = None
+                        
+                        for i, series in enumerate(data_series):
+                            if i == actual_section_idx:
+                                hovered_series = series
+                                if i < len(original_data_points):
+                                    for j, point in enumerate(series.data_points):
+                                        if j < len(original_data_points[i]):
+                                            point.y = original_data_points[i][j][1]
+                                series.stroke_width = 5
+                                if i < len(base_colors):
+                                    series.below_line_bgcolor = ft.Colors.with_opacity(0.3, base_colors[i])
+                            else:
+                                for point in series.data_points:
+                                    point.y = 0
+                                series.stroke_width = 1
+                                if i < len(base_colors):
+                                    series.below_line_bgcolor = ft.Colors.with_opacity(0, base_colors[i])
+                                reordered_series.append(series)
+                        
+                        if hovered_series:
+                            reordered_series.append(hovered_series)
+                        
+                        chart.data_series = reordered_series
+                        chart.update()
                 else:
                     e.control.bgcolor = None
                     e.control.scale = 1.0
-                    # Reset pie chart sections
                     if pie_refs and "sections" in pie_refs and "chart" in pie_refs:
                         sections = pie_refs["sections"]
                         base_radius = pie_refs.get("base_radius", 80)
                         for section in sections:
                             section.radius = base_radius
                         pie_refs["chart"].update()
-                    # Reset bar chart
                     if bar_refs and "bar_groups" in bar_refs and "chart" in bar_refs:
                         bar_groups = bar_refs["bar_groups"]
-                        for group in bar_groups:
-                            for rod in group.bar_rods:
-                                rod.width = 40  # Reset to normal
+                        if "original_widths" in bar_refs:
+                            for i, group in enumerate(bar_groups):
+                                for j, rod in enumerate(group.bar_rods):
+                                    if i in bar_refs["original_widths"] and j < len(bar_refs["original_widths"][i]):
+                                        rod.width = bar_refs["original_widths"][i][j]
+                        else:
+                            base_width = bar_refs.get("base_width", 50)
+                            for group in bar_groups:
+                                for rod in group.bar_rods:
+                                    rod.width = base_width
                         bar_refs["chart"].update()
+                    if line_refs and "data_series" in line_refs and "chart" in line_refs:
+                        data_series = line_refs["data_series"]
+                        base_colors = line_refs.get("base_colors", [])
+                        original_data_points = line_refs.get("original_data_points", [])
+                        chart = line_refs["chart"]
+                        
+                        for i, series in enumerate(data_series):
+                            if i < len(original_data_points):
+                                for j, point in enumerate(series.data_points):
+                                    if j < len(original_data_points[i]):
+                                        point.y = original_data_points[i][j][1]
+                            series.stroke_width = 3
+                            if i < len(base_colors):
+                                series.below_line_bgcolor = ft.Colors.with_opacity(0.1, base_colors[i])
+                        
+                        chart.data_series = data_series
+                        chart.update()
                 e.control.update()
             return on_legend_hover
         
-        # Interactive legend item
         legend_item = ft.Container(
-            content=ft.Row([color_box, ft.Text(text, size=11, color=ft.Colors.GREY_700)], spacing=6),
+            content=ft.Row([color_box, ft.Text(text, size=text_size, color=ft.Colors.GREY_700)], spacing=6),
             padding=ft.padding.symmetric(horizontal=6, vertical=4),
             border_radius=6,
             on_hover=make_hover_handler(idx),
@@ -591,7 +643,6 @@ def create_insight_card(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
-    # Determine icon and border color based on bgcolor
     if bgcolor == ft.Colors.BLUE_50:
         border_color = ft.Colors.BLUE_200
         icon_color = ft.Colors.BLUE_600
@@ -653,7 +704,12 @@ def _get_flet_color(color_name: str) -> str:
         "AMBER_700": ft.Colors.AMBER_700,
         "TEAL_50": ft.Colors.TEAL_50,
         "TEAL_600": ft.Colors.TEAL_600,
+        "PURPLE_50": ft.Colors.PURPLE_50,
+        "PURPLE_600": ft.Colors.PURPLE_600,
+        "PURPLE_700": ft.Colors.PURPLE_700,
+        "PURPLE_800": ft.Colors.PURPLE_800,
         "GREY_700": ft.Colors.GREY_700,
+        "BLACK87": ft.Colors.BLACK87,
     }
     return color_map.get(color_name, color_name)
 
@@ -725,7 +781,6 @@ def _build_rich_text(detail_data: Dict[str, Any]) -> Any:
         color = part.get("color")
         icon_name = part.get("icon")
         
-        # Build text style
         font_weight = ft.FontWeight.BOLD if weight == "bold" else ft.FontWeight.NORMAL
         text_color = _get_flet_color(color) if color else ft.Colors.BLACK54
         
@@ -777,7 +832,6 @@ def create_insight_box(
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
-    # Handle both old format (strings) and new format (structured dicts)
     if isinstance(insight_data, dict):
         headline_data = insight_data.get("headline", {"text": "No data"})
         detail_data = insight_data.get("detail")
@@ -787,7 +841,6 @@ def create_insight_box(
         detail_data = None
         action_data = None
     
-    # Extract headline components
     if isinstance(headline_data, dict):
         headline_text = headline_data.get("text", "No data")
         headline_icon = headline_data.get("icon")
@@ -797,7 +850,6 @@ def create_insight_box(
         headline_icon = None
         headline_color = ft.Colors.BLACK87
     
-    # Build headline row with optional icon
     if headline_icon:
         headline_row = ft.Row([
             ft.Icon(_get_flet_icon(headline_icon), size=18, color=headline_color),
@@ -825,12 +877,10 @@ def create_insight_box(
         headline_row,
     ]
     
-    # Add rich detail text if present
     if detail_data:
         content_items.append(ft.Container(height=6))
         content_items.append(_build_rich_text(detail_data))
     
-    # Add styled action badge if present
     if action_data:
         content_items.append(ft.Container(height=10))
         
@@ -841,11 +891,10 @@ def create_insight_box(
             action_bg = _get_flet_color(action_data.get("bg_color", "GREY_100"))
             severity = action_data.get("severity", "info")
             
-            # Build action row with icon and styled text
             if action_icon:
                 action_row = ft.Row([
                     ft.Icon(_get_flet_icon(action_icon), size=14, color=action_color),
-                    ft.Text(action_text, size=11, color=action_color, weight=ft.FontWeight.W_500),
+                    ft.Text(action_text, size=11, color=action_color, weight=ft.FontWeight.W_500, expand=True),
                 ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER)
             else:
                 action_row = ft.Text(action_text, size=11, color=action_color, weight=ft.FontWeight.W_500)
@@ -979,7 +1028,6 @@ def show_chart_details_dialog(
     
     total = sum(d.get("value", 0) for d in data)
     
-    # Build data rows
     rows = []
     for item in data:
         label = item.get("label", "Unknown")
@@ -1006,7 +1054,6 @@ def show_chart_details_dialog(
             )
         )
     
-    # Add total row
     rows.append(ft.Divider(height=16))
     rows.append(
         ft.Container(
@@ -1129,7 +1176,6 @@ def create_impact_insight_widgets(insight_data: List[Dict[str, Any]]) -> List[An
         bg_color = _get_flet_color(bg_color_name)
         flet_icon = _get_flet_icon(icon_name)
         
-        # Build TextSpan list from parts
         spans = []
         for part in parts:
             text = part.get("text", "")
@@ -1149,10 +1195,8 @@ def create_impact_insight_widgets(insight_data: List[Dict[str, Any]]) -> List[An
                 )
             )
         
-        # Create text control with spans
         text_control = ft.Text(spans=spans, size=12)
         
-        # Create the insight widget
         widget = ft.Container(
             ft.Row([
                 ft.Icon(flet_icon, size=16, color=icon_color),

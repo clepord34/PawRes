@@ -24,6 +24,9 @@ class AvailableAdoptionPage:
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
         self._app_state = get_app_state(self._db_path)
+        self.current_search = ""  # Track search query for filtering
+        self._species_filter = "all"  # Track species filter
+        self._animal_cards_container = None  # Store reference to cards container
 
     def build(self, page) -> None:
         try:
@@ -33,17 +36,22 @@ class AvailableAdoptionPage:
 
         page.title = "Available for Adoption"
 
-        # Get user info from session
         user_name = page.session.get("user_name") or "User"
 
-        # Create sidebar
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
-        # Load adoptable animals through state manager
         self._app_state.animals.load_adoptable_animals()
         animals = self._app_state.animals.animals
 
-        # Create animal cards
+        if self._species_filter != "all":
+            animals = [a for a in animals if (a.get("species", "Unknown") or "Unknown") == self._species_filter]
+
+        search_query = self.current_search.lower().strip()
+        if search_query:
+            animals = [a for a in animals
+                      if search_query in (a.get("name", "Unknown").lower() or "")
+                      or search_query in (a.get("breed", "") or "").lower()]
+
         def create_card_for_animal(animal):
             aid = animal.get("id")
             photo_base64 = load_photo(animal.get("photo"))
@@ -57,9 +65,9 @@ class AvailableAdoptionPage:
                 on_adopt=lambda e, id=aid: self._on_apply(page, id),
                 is_admin=False,
                 show_adopt_button=True,
+                breed=animal.get("breed"),
             )
 
-        # Create grid of animal cards
         animal_cards = []
         if animals:
             for animal in animals:
@@ -70,21 +78,48 @@ class AvailableAdoptionPage:
                 icon=ft.Icons.PETS,
                 padding=40
             ))
+        
+        self._animal_cards_container = ft.Row(
+            animal_cards,
+            wrap=True,
+            spacing=15,
+            run_spacing=15,
+            alignment=ft.MainAxisAlignment.START,
+        )
 
         # Main content area
         main_content = ft.Container(
             ft.Column([
                 # Page title
                 create_page_title("Available for Adoption"),
+                ft.Container(
+                    ft.Row([
+                        # Species filter dropdown
+                        ft.Dropdown(
+                            hint_text="Filter by Species",
+                            width=180,
+                            value=self._species_filter,
+                            options=[
+                                ft.dropdown.Option("all", text="All Species")
+                            ] + [ft.dropdown.Option(s, text=s) for s in sorted(set(a.get("species", "Unknown") for a in self._app_state.animals.animals))],
+                            on_change=lambda e: self._on_species_filter(page, e.control.value),
+                            border_radius=8,
+                        ),
+                        # Search field
+                        ft.TextField(
+                            hint_text="Search by animal name or breed...",
+                            prefix_icon=ft.Icons.SEARCH,
+                            width=300,
+                            value=self.current_search,
+                            on_change=lambda e: self._on_search(page, e.control.value),
+                        ),
+                    ], spacing=10),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    border_radius=12,
+                ),
                 # Animal cards grid
                 ft.Container(
-                    ft.Row(
-                        animal_cards,
-                        wrap=True,
-                        spacing=15,
-                        run_spacing=15,
-                        alignment=ft.MainAxisAlignment.START,
-                    ),
+                    self._animal_cards_container,
                     padding=20,
                     bgcolor=ft.Colors.WHITE,
                     border_radius=12,
@@ -108,6 +143,58 @@ class AvailableAdoptionPage:
     def _on_apply(self, page, animal_id: int) -> None:
         # navigate to adoption form with query param
         page.go(f"/adoption_form?animal_id={animal_id}")
+
+    def _on_species_filter(self, page, species: str) -> None:
+        """Handle species filter change - rebuild page with filter applied."""
+        self._species_filter = species
+        self.build(page)
+
+    def _on_search(self, page, search_query: str) -> None:
+        """Handle search query change - update cards without full rebuild."""
+        import flet as ft
+        self.current_search = search_query
+        
+        # Re-filter animals
+        self._app_state.animals.load_adoptable_animals()
+        animals = self._app_state.animals.animals
+        
+        if self._species_filter != "all":
+            animals = [a for a in animals if (a.get("species", "Unknown") or "Unknown") == self._species_filter]
+        
+        search_lower = search_query.lower().strip()
+        if search_lower:
+            animals = [a for a in animals
+                      if search_lower in (a.get("name", "Unknown").lower() or "")
+                      or search_lower in (a.get("breed", "") or "").lower()]
+        
+        # Rebuild animal cards
+        animal_cards = []
+        if animals:
+            for animal in animals:
+                aid = animal.get("id")
+                photo_base64 = load_photo(animal.get("photo"))
+                animal_cards.append(create_animal_card(
+                    animal_id=aid,
+                    name=animal.get("name", "Unknown"),
+                    species=animal.get("species", "Unknown"),
+                    age=animal.get("age", 0),
+                    status=animal.get("status", "unknown"),
+                    photo_base64=photo_base64,
+                    on_adopt=lambda e, id=aid: self._on_apply(page, id),
+                    is_admin=False,
+                    show_adopt_button=True,
+                    breed=animal.get("breed"),
+                ))
+        else:
+            animal_cards.append(create_empty_state(
+                message="No animals found",
+                icon=ft.Icons.PETS,
+                padding=40
+            ))
+        
+        if self._animal_cards_container:
+            self._animal_cards_container.controls = animal_cards
+            self._animal_cards_container.update()
 
 
 __all__ = ["AvailableAdoptionPage"]

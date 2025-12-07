@@ -83,7 +83,6 @@ class HiddenItemsPage:
             self._tab_index = e.control.selected_index
             self._refresh_content()
         
-        # Create tabs
         self._tabs = ft.Tabs(
             selected_index=self._tab_index,
             animation_duration=300,
@@ -110,10 +109,8 @@ class HiddenItemsPage:
             padding=20,
         )
         
-        # Build initial content
         self._refresh_content()
         
-        # Sidebar
         sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Main layout
@@ -275,7 +272,6 @@ class HiddenItemsPage:
         base_status = RescueStatus.get_base_status(status)
         previous_status = mission.get("previous_status") or base_status
         
-        # Get metadata
         if is_removed:
             hidden_date = mission.get("removed_at", "")
             hidden_reason = mission.get("removal_reason", "")
@@ -345,12 +341,16 @@ class HiddenItemsPage:
                 ),
             )
         
+        breed = mission.get('breed', '')
+        breed_display = breed if breed else 'Not Specified'
+        
         return ft.Container(
             content=ft.Row([
                 ft.Column([
                     ft.Text(f"Mission #{mission_id}", weight=ft.FontWeight.BOLD),
                     ft.Text(f"Location: {mission.get('location', 'N/A')}", size=13, color=ft.Colors.GREY_700),
                     ft.Text(f"Animal: {mission.get('animal_type', 'N/A')}", size=13, color=ft.Colors.GREY_700),
+                    ft.Text(f"Breed: {breed_display}", size=13, color=ft.Colors.GREY_700),
                     ft.Container(
                         content=ft.Text(badge_text, size=12, color=badge_text_color),
                         bgcolor=badge_color,
@@ -379,7 +379,6 @@ class HiddenItemsPage:
         animal_name = request.get("animal_name", "Unknown Animal")
         user_name = request.get("user_name", "Unknown User")
         
-        # Get metadata
         if is_removed:
             hidden_date = request.get("removed_at", "")
             hidden_reason = request.get("removal_reason", "")
@@ -448,11 +447,15 @@ class HiddenItemsPage:
                 ),
             )
         
+        breed = request.get('animal_breed', '')
+        breed_display = breed if breed else 'Not Specified'
+        
         return ft.Container(
             content=ft.Row([
                 ft.Column([
                     ft.Text(f"Request #{request_id}", weight=ft.FontWeight.BOLD),
                     ft.Text(f"Animal: {animal_name}", size=13, color=ft.Colors.GREY_700),
+                    ft.Text(f"Breed: {breed_display}", size=13, color=ft.Colors.GREY_700),
                     ft.Text(f"Applicant: {user_name}", size=13, color=ft.Colors.GREY_700),
                     ft.Container(
                         content=ft.Text(badge_text, size=12, color=badge_text_color),
@@ -482,10 +485,8 @@ class HiddenItemsPage:
         base_status = AnimalStatus.get_base_status(status)
         previous_status = animal.get("previous_status") or base_status
         
-        # Get photo
         photo_b64 = load_photo(animal.get("photo"))
         
-        # Get metadata
         if is_removed:
             hidden_reason = animal.get("removal_reason", "")
             badge_color = ft.Colors.RED_100
@@ -571,6 +572,9 @@ class HiddenItemsPage:
                 ),
             )
         
+        breed = animal.get('breed', '')
+        breed_display = breed if breed else 'Not Specified'
+        
         return ft.Container(
             content=ft.Row([
                 photo_element,
@@ -578,6 +582,7 @@ class HiddenItemsPage:
                 ft.Column([
                     ft.Text(name, weight=ft.FontWeight.BOLD),
                     ft.Text(f"Species: {species}", size=13, color=ft.Colors.GREY_700),
+                    ft.Text(f"Breed: {breed_display}", size=13, color=ft.Colors.GREY_700),
                     ft.Container(
                         content=ft.Text(badge_text, size=12, color=badge_text_color),
                         bgcolor=badge_color,

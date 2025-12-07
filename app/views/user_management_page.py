@@ -61,7 +61,6 @@ class UserManagementPage:
         
         app_state = get_app_state()
         
-        # Create sidebar
         sidebar = create_admin_sidebar(page, current_route="/user_management")
         
         # Stats row
@@ -136,10 +135,8 @@ class UserManagementPage:
             padding=ft.padding.symmetric(vertical=15),
         )
         
-        # Build user table using consistent component
         self._refresh_users()
         
-        # Create a container to hold the table (allows dynamic updates)
         self._table_container = ft.Container(content=self._user_table)
         
         # Main content
@@ -188,13 +185,11 @@ class UserManagementPage:
             search=search
         )
         
-        # Build table rows
         table_rows = []
         for user in self._users:
             row_data = self._create_user_row_data(user)
             table_rows.append(row_data)
         
-        # Define columns
         table_columns = [
             {"label": "User", "expand": 2},
             {"label": "Email", "expand": 2},
@@ -204,7 +199,6 @@ class UserManagementPage:
             {"label": "Actions", "expand": 2},
         ]
         
-        # Create scrollable data table
         self._user_table = create_scrollable_data_table(
             columns=table_columns,
             rows=table_rows,
@@ -215,7 +209,6 @@ class UserManagementPage:
             data_row_height=55,
         )
         
-        # Update the container content if it exists
         if self._table_container:
             self._table_container.content = self._user_table
         
@@ -600,7 +593,9 @@ class UserManagementPage:
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
             # Write CSV
-            fieldnames = ["id", "name", "email", "phone", "role", "is_disabled", "last_login", "created_at"]
+            fieldnames = ["id", "name", "email", "phone", "role", "oauth_provider", "is_disabled", 
+                          "failed_login_attempts", "locked_until", "last_login", "last_password_change", 
+                          "created_at", "updated_at"]
             with open(filepath, "w", newline="", encoding="utf-8") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
@@ -611,9 +606,14 @@ class UserManagementPage:
                         "email": user.get("email", ""),
                         "phone": user.get("phone", ""),
                         "role": user.get("role", ""),
+                        "oauth_provider": user.get("oauth_provider", ""),
                         "is_disabled": user.get("is_disabled", False),
+                        "failed_login_attempts": user.get("failed_login_attempts", 0),
+                        "locked_until": user.get("locked_until", ""),
                         "last_login": user.get("last_login", ""),
+                        "last_password_change": user.get("last_password_change", ""),
                         "created_at": user.get("created_at", ""),
+                        "updated_at": user.get("updated_at", ""),
                     })
             
             show_snackbar(self._page, f"Exported {len(self._users)} users to {filename}")

@@ -36,20 +36,17 @@ class AdoptionRequestListPage:
 
         is_admin = user_role == "admin"
 
-        # Sidebar (for admin only)
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
             sidebar = None
 
-        # Load adoption requests through state manager (active only for admin)
         if is_admin:
             self._app_state.adoptions.load_active_requests()
         else:
             self._app_state.adoptions.load_requests()
         requests = self._app_state.adoptions.requests
         
-        # Filter out user-cancelled requests from admin view (already excluded archived/removed)
         if is_admin:
             requests = [r for r in requests 
                        if not AdoptionStatus.is_cancelled(r.get("status") or "")]
@@ -70,7 +67,6 @@ class AdoptionRequestListPage:
                 icon = ft.Icons.PENDING
             
             if is_frozen:
-                # Show locked static badge (animal was removed)
                 return ft.Container(
                     ft.Row([
                         ft.Icon(icon, color=ft.Colors.WHITE, size=14),
@@ -118,7 +114,6 @@ class AdoptionRequestListPage:
                     border_radius=15,
                 )
             else:
-                # User sees static badge
                 return ft.Container(
                     ft.Row([
                         ft.Icon(icon, color=ft.Colors.WHITE, size=14),
@@ -188,7 +183,6 @@ class AdoptionRequestListPage:
                 ),
             ], spacing=0, tight=True)
 
-        # Build table rows for DataTable
         table_rows = []
         for req in requests:
             request_id = req.get("id")
@@ -197,24 +191,20 @@ class AdoptionRequestListPage:
             reason = req.get("reason", "N/A")
             status = req.get("status") or "pending"
             
-            # Handle animal name - the query uses COALESCE to prefer joined name, fallback to stored name
             animal_id = req.get("animal_id")
             animal_name = req.get("animal_name")
             animal_was_deleted = False
             
-            # Check if animal was deleted (animal_id is NULL or no species from join)
             if animal_id is None or (animal_id and not req.get("animal_species")):
                 animal_name = animal_name or "Unknown Animal"
                 animal_was_deleted = True
             elif not animal_name:
                 animal_name = "N/A"
 
-            # Check if status changes should be disabled:
             # Only lock if animal was removed (animal_id is NULL or no species from join)
             animal_was_removed = animal_id is None or (animal_id and not req.get("animal_species"))
             is_frozen = animal_was_removed
             
-            # Create status badge
             status_widget = make_status_badge(status, request_id, is_frozen)
             
             # Wrap status widget with "Animal Deleted" indicator if needed
@@ -229,16 +219,23 @@ class AdoptionRequestListPage:
             # Animal name display - grey and italic if deleted
             if animal_was_deleted:
                 animal_name_widget = ft.Text(animal_name, size=12, color=ft.Colors.GREY_500, italic=True)
+                breed_widget = ft.Text("Not Specified", size=12, color=ft.Colors.GREY_500, italic=True)
             else:
                 animal_name_widget = ft.Text(animal_name, size=12, color=ft.Colors.BLACK87)
+                breed = req.get("animal_breed") or "Not Specified"
+                breed_display = breed[:20] + "..." if len(breed) > 20 else breed
+                breed_widget = ft.Container(
+                    ft.Text(breed_display, size=12, color=ft.Colors.BLACK87),
+                    tooltip=breed if len(breed) > 20 else None,
+                )
             
             # Truncate long reason text for table display
             reason_display = reason[:40] + "..." if len(reason) > 40 else reason
 
-            # Build row data
             row_data = [
                 ft.Text(user_name, size=12, color=ft.Colors.BLACK87),
                 animal_name_widget,
+                breed_widget,
                 ft.Text(contact, size=12, color=ft.Colors.BLACK87),
                 ft.Container(
                     ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
@@ -247,26 +244,23 @@ class AdoptionRequestListPage:
                 final_status_widget,
             ]
             
-            # Add admin actions column
             if is_admin:
                 row_data.append(make_admin_actions(request_id, user_name))
 
             table_rows.append(row_data)
 
-        # Define table columns with expand values for proper sizing
         table_columns = [
             {"label": "User Name", "expand": 2},
             {"label": "Animal", "expand": 2},
+            {"label": "Breed", "expand": 1},
             {"label": "Contact", "expand": 2},
             {"label": "Reason", "expand": 3},
             {"label": "Status", "expand": 2},
         ]
         
-        # Add Actions column for admin
         if is_admin:
             table_columns.append({"label": "Actions", "expand": 1})
 
-        # Create scrollable DataTable
         data_table = create_scrollable_data_table(
             columns=table_columns,
             rows=table_rows,
@@ -277,7 +271,6 @@ class AdoptionRequestListPage:
             data_row_height=55,
         )
 
-        # Build content items (matching rescue mission list structure)
         content_items = [
             create_page_title("Adoption Requests List"),
             ft.Container(height=20),
