@@ -25,6 +25,7 @@ class RescueService:
         location: str,
         animal_id: Optional[int] = None,
         animal_type: Optional[str] = None,
+        breed: Optional[str] = None,
         name: Optional[str] = None,
         details: Optional[str] = None,
         status: str = RescueStatus.PENDING,
@@ -33,25 +34,27 @@ class RescueService:
         reporter_name: Optional[str] = None,
         reporter_phone: Optional[str] = None,
         urgency: str = Urgency.MEDIUM,
+        animal_photo: Optional[str] = None,
     ) -> int:
         """Create a rescue mission record and return its id.
 
         Uses structured columns for animal_type, reporter info, and urgency.
         The `details` parameter is stored in the `notes` field.
         The `name` parameter is the animal's name (if known).
+        The `breed` parameter stores the animal's breed (if known).
+        The `animal_photo` parameter stores the photo filename (if uploaded).
         """
-        # Extract urgency level from full label if provided
         urgency_level = Urgency.from_label(urgency)
         
         sql = """
             INSERT INTO rescue_missions 
             (user_id, animal_id, location, latitude, longitude, notes, status, 
-             animal_type, animal_name, reporter_name, reporter_phone, urgency, is_closed)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+             animal_type, animal_name, breed, reporter_name, reporter_phone, urgency, animal_photo, is_closed)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
         """
         mid = self.db.execute(sql, (
             user_id, animal_id, location, latitude, longitude, details, status,
-            animal_type, name, reporter_name, reporter_phone, urgency_level
+            animal_type, name, breed, reporter_name, reporter_phone, urgency_level, animal_photo
         ))
         return mid
 
@@ -65,7 +68,7 @@ class RescueService:
         deletes the auto-created animal since the rescue didn't succeed.
         """
         existing = self.db.fetch_one(
-            "SELECT id, animal_id, animal_type, animal_name, location, status FROM rescue_missions WHERE id = ?", 
+            "SELECT id, animal_id, animal_type, animal_name, location, status, breed, animal_photo FROM rescue_missions WHERE id = ?", 
             (mission_id,)
         )
         if not existing:
@@ -74,10 +77,8 @@ class RescueService:
         old_status = RescueStatus.normalize(existing.get('status', ''))
         new_status = RescueStatus.normalize(status)
         
-        # Update the status (also set rescued_at if changing to rescued)
         now = datetime.now()
         if new_status == RescueStatus.RESCUED and old_status != RescueStatus.RESCUED:
-            # Setting rescued_at timestamp when status becomes 'rescued'
             self.db.execute(
                 "UPDATE rescue_missions SET status = ?, updated_at = ?, rescued_at = ? WHERE id = ?",
                 (status, now, now, mission_id)
@@ -88,7 +89,6 @@ class RescueService:
                 (status, now, mission_id)
             )
         
-        # Handle status transitions
         if new_status == RescueStatus.RESCUED and old_status != RescueStatus.RESCUED:
             # Changed TO rescued - create animal if not exists
             if not existing.get('animal_id'):
@@ -105,7 +105,6 @@ class RescueService:
             # Changed FROM rescued to something else - delete the auto-created animal
             animal_id = existing.get('animal_id')
             if animal_id:
-                # Check for adoption requests before deleting
                 adoption_count = self.db.fetch_one(
                     "SELECT COUNT(*) as count FROM adoption_requests WHERE animal_id = ?",
                     (animal_id,)
@@ -154,6 +153,8 @@ class RescueService:
         """
         animal_type = mission.get('animal_type') or 'Other'
         animal_name = mission.get('animal_name') or f"Rescued {animal_type}"
+        breed = mission.get('breed')  # Get breed from mission if available
+        animal_photo = mission.get('animal_photo')  # Get photo from mission if available
         
         # Map common animal types to species (capitalized for consistency)
         species = animal_type.lower()
@@ -161,22 +162,23 @@ class RescueService:
             species = 'Dog'
         elif species in ('cat', 'cats'):
             species = 'Cat'
-        elif species in ('other', 'others', 'unknown'):
+        elif species in ('other', 'others', 'unknown', 'not specified'):
             species = 'Other'
         else:
             species = animal_type.capitalize()
         
-        # Create animal with 'processing' status - admin must set up details first
         from app_config import AnimalStatus
         sql = """
-            INSERT INTO animals (name, species, status, rescue_mission_id)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO animals (name, species, breed, status, photo, rescue_mission_id)
+            VALUES (?, ?, ?, ?, ?, ?)
         """
         try:
             animal_id = self.db.execute(sql, (
                 animal_name,
                 species,
+                breed,
                 AnimalStatus.PROCESSING,
+                animal_photo,
                 mission.get('id')
             ))
             return animal_id
@@ -250,16 +252,13 @@ class RescueService:
             print(f"[WARN] Cannot cancel mission {mission_id} - status is {current_status}, not pending")
             return False
         
-        # Set status to indicate user cancelled
         self.db.execute(
             "UPDATE rescue_missions SET status = 'cancelled', updated_at = ? WHERE id = ?",
             (datetime.now(), mission_id)
         )
         return True
 
-    # =========================================================================
     # Archive/Remove/Restore/Delete methods
-    # =========================================================================
 
     def archive_mission(self, mission_id: int, admin_id: int, note: Optional[str] = None) -> bool:
         """Archive a mission (hide from active list, keep in analytics).
@@ -288,7 +287,6 @@ class RescueService:
             print(f"[WARN] Mission {mission_id} is already archived or removed")
             return False
         
-        # Create archived status (e.g., "rescued|archived")
         archived_status = RescueStatus.make_archived(current_status)
         
         self.db.execute(
@@ -324,7 +322,6 @@ class RescueService:
             print(f"[WARN] Mission {mission_id} is already removed")
             return False
         
-        # Store previous status for potential restore
         previous_status = RescueStatus.get_base_status(current_status)
         
         self.db.execute(
@@ -355,7 +352,6 @@ class RescueService:
             print(f"[WARN] Mission {mission_id} is not archived or removed")
             return False
         
-        # Restore to previous status, or pending if no previous status
         previous_status = existing.get('previous_status') or RescueStatus.PENDING
         
         self.db.execute(
@@ -463,7 +459,6 @@ class RescueService:
         Returns:
             Number of missions updated
         """
-        # Check if we're online first
         if not map_service.check_geocoding_available():
             return 0
         
@@ -502,9 +497,47 @@ class RescueService:
         """Check if text looks like GPS coordinates (e.g., '13.642598, 123.395812')."""
         if not text:
             return False
-        # Remove spaces and check if it's mostly numbers, dots, commas, and minus signs
         cleaned = text.replace(' ', '').replace(',', '').replace('.', '').replace('-', '')
         return cleaned.isdigit() and ',' in text
+
+    def archive_rescue(self, mission_id: int, archived_by: int, reason: Optional[str] = None) -> bool:
+        """Alias for archive_mission() for backward compatibility.
+        
+        Args:
+            mission_id: ID of mission to archive
+            archived_by: ID of admin performing the action
+            reason: Optional note explaining why it was archived
+            
+        Returns True if archived successfully.
+        """
+        return self.archive_mission(mission_id, archived_by, reason)
+
+    def search_missions(self, query: str) -> List[Dict[str, Any]]:
+        """Search rescue missions by location or animal type.
+        
+        Args:
+            query: Search query string
+            
+        Returns:
+            List of matching missions
+        """
+        if not query:
+            return []
+        
+        query_lower = query.lower()
+        
+        # Search in location, animal_type, and animal_name fields
+        sql = """
+            SELECT * FROM rescue_missions
+            WHERE LOWER(location) LIKE ?
+            OR LOWER(animal_type) LIKE ?
+            OR LOWER(animal_name) LIKE ?
+            ORDER BY mission_date DESC
+        """
+        search_pattern = f"%{query_lower}%"
+        
+        results = self.db.fetch_all(sql, (search_pattern, search_pattern, search_pattern))
+        return results or []
 
 
 __all__ = ["RescueService"]

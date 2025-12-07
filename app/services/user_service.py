@@ -173,7 +173,6 @@ class UserService:
         Raises:
             UserServiceError: If validation fails or email exists
         """
-        # Validate inputs
         if not name or len(name) > app_config.MAX_NAME_LENGTH:
             raise UserServiceError(
                 f"Name must be 1-{app_config.MAX_NAME_LENGTH} characters"
@@ -187,14 +186,12 @@ class UserService:
         if role not in ("user", "admin"):
             raise UserServiceError("Role must be 'user' or 'admin'")
         
-        # Check for existing email
         existing = self.db.fetch_one(
             "SELECT id FROM users WHERE email = ?", (email,)
         )
         if existing:
             raise UserServiceError("A user with that email already exists")
         
-        # Validate password
         if validate_password:
             is_valid, errors = self.password_policy.validate(password)
             if not is_valid:
@@ -207,7 +204,6 @@ class UserService:
         ).hex()
         salt_hex = salt.hex()
         
-        # Create user
         user_id = self.db.execute(
             """
             INSERT INTO users (name, email, phone, password_hash, password_salt, role, is_disabled)
@@ -216,7 +212,6 @@ class UserService:
             (name, email, phone, password_hash, salt_hex, role)
         )
         
-        # Add to password history
         self.password_history.add_to_history(
             user_id, password_hash, salt_hex, self.password_policy.history_count
         )
@@ -273,7 +268,6 @@ class UserService:
                 raise UserServiceError(
                     f"Email must be 1-{app_config.MAX_EMAIL_LENGTH} characters"
                 )
-            # Check for duplicate email
             existing = self.db.fetch_one(
                 "SELECT id FROM users WHERE email = ? AND id != ?",
                 (email, user_id)
@@ -339,13 +333,11 @@ class UserService:
         if not user:
             raise UserServiceError("User not found")
         
-        # Validate password
         if validate_password:
             is_valid, errors = self.password_policy.validate(new_password)
             if not is_valid:
                 raise UserServiceError("\n".join(errors))
         
-        # Check password history
         if check_history:
             allowed, error = self.password_history.check_reuse(
                 user_id, new_password, self.password_policy
@@ -360,7 +352,6 @@ class UserService:
         ).hex()
         salt_hex = salt.hex()
         
-        # Update password and clear lockout
         self.db.execute(
             """
             UPDATE users SET 
@@ -374,7 +365,6 @@ class UserService:
             (password_hash, salt_hex, user_id)
         )
         
-        # Add to password history
         self.password_history.add_to_history(
             user_id, password_hash, salt_hex, self.password_policy.history_count
         )
@@ -580,7 +570,6 @@ class UserService:
                 if not normalized:
                     raise UserServiceError("Invalid phone number format")
                 
-                # Check for duplicate phone (excluding current user)
                 existing = self.db.fetch_one(
                     "SELECT id FROM users WHERE phone = ? AND id != ?",
                     (normalized, user_id)
@@ -629,7 +618,6 @@ class UserService:
         """
         import hmac
         
-        # Get user with password fields
         user = self.db.fetch_one(
             "SELECT id, email, password_hash, password_salt, oauth_provider FROM users WHERE id = ?",
             (user_id,)
@@ -638,7 +626,6 @@ class UserService:
         if not user:
             return {"success": False, "error": "User not found"}
         
-        # Check if OAuth user (no password)
         if user.get("oauth_provider"):
             return {"success": False, "error": "Cannot change password for OAuth accounts. Use 'Set Password' instead."}
         
@@ -660,12 +647,10 @@ class UserService:
         except Exception:
             return {"success": False, "error": "Error verifying password"}
         
-        # Validate new password against policy
         is_valid, errors = self.password_policy.validate(new_password)
         if not is_valid:
             return {"success": False, "error": errors[0]}
         
-        # Check password history
         allowed, error = self.password_history.check_reuse(
             user_id, new_password, self.password_policy
         )
@@ -679,7 +664,6 @@ class UserService:
         ).hex()
         new_salt_hex = new_salt.hex()
         
-        # Update password
         self.db.execute(
             """
             UPDATE users SET 
@@ -691,7 +675,6 @@ class UserService:
             (new_hash, new_salt_hex, user_id)
         )
         
-        # Add to password history
         self.password_history.add_to_history(
             user_id, new_hash, new_salt_hex, self.password_policy.history_count
         )
@@ -718,7 +701,6 @@ class UserService:
         Returns:
             Dict with 'success' bool and optional 'error' message
         """
-        # Get user with password fields
         user = self.db.fetch_one(
             "SELECT id, email, password_hash, oauth_provider FROM users WHERE id = ?",
             (user_id,)
@@ -734,7 +716,6 @@ class UserService:
         if user.get("password_hash"):
             return {"success": False, "error": "Password is already set. Use 'Change Password' instead."}
         
-        # Validate new password against policy
         is_valid, errors = self.password_policy.validate(new_password)
         if not is_valid:
             return {"success": False, "error": errors[0]}
@@ -746,7 +727,6 @@ class UserService:
         ).hex()
         new_salt_hex = new_salt.hex()
         
-        # Set password
         self.db.execute(
             """
             UPDATE users SET 
@@ -758,7 +738,6 @@ class UserService:
             (new_hash, new_salt_hex, user_id)
         )
         
-        # Add to password history
         self.password_history.add_to_history(
             user_id, new_hash, new_salt_hex, self.password_policy.history_count
         )

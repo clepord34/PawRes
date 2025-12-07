@@ -52,7 +52,8 @@ class AdoptionService:
                 u.name as user_name,
                 u.email as user_email,
                 COALESCE(a.name, ar.animal_name) as animal_name,
-                COALESCE(a.species, ar.animal_species) as animal_species
+                COALESCE(a.species, ar.animal_species) as animal_species,
+                a.breed as animal_breed
             FROM adoption_requests ar
             LEFT JOIN users u ON ar.user_id = u.id
             LEFT JOIN animals a ON ar.animal_id = a.id
@@ -82,7 +83,8 @@ class AdoptionService:
                 u.name as user_name,
                 u.email as user_email,
                 COALESCE(a.name, ar.animal_name) as animal_name,
-                COALESCE(a.species, ar.animal_species) as animal_species
+                COALESCE(a.species, ar.animal_species) as animal_species,
+                a.breed as animal_breed
             FROM adoption_requests ar
             LEFT JOIN users u ON ar.user_id = u.id
             LEFT JOIN animals a ON ar.animal_id = a.id
@@ -119,7 +121,6 @@ class AdoptionService:
         new_status_lower = status.lower()
         animal_id = existing.get("animal_id")
         
-        # Update the adoption request status with timestamp
         # If approving, also set was_approved flag and approved_at for historical tracking
         now = datetime.now()
         if new_status_lower == "approved" and old_status != "approved":
@@ -138,10 +139,8 @@ class AdoptionService:
                 (status, now, request_id)
             )
         
-        # Handle status transitions
         if new_status_lower == "approved":
             if animal_id:
-                # Update the animal status to 'adopted'
                 self.db.execute(
                     f"UPDATE animals SET status = '{AnimalStatus.ADOPTED}', updated_at = ? WHERE id = ?",
                     (datetime.now(), animal_id)
@@ -162,7 +161,6 @@ class AdoptionService:
         elif new_status_lower == "denied" and old_status == "approved":
             # Changing FROM approved TO denied - may need to revert animal status
             if animal_id:
-                # Check if there's another approved adoption for this animal
                 other_approved = self.db.fetch_one(
                     f"""SELECT id FROM adoption_requests 
                         WHERE animal_id = ? 
@@ -275,7 +273,6 @@ class AdoptionService:
         if AdoptionStatus.is_archived(current_status) or AdoptionStatus.is_removed(current_status):
             return False
         
-        # Create archived status (e.g., "approved|archived")
         archived_status = AdoptionStatus.make_archived(current_status)
         
         self.db.execute(
@@ -308,7 +305,6 @@ class AdoptionService:
         if AdoptionStatus.is_removed(current_status):
             return False
         
-        # Get base status (in case it's archived)
         base_status = AdoptionStatus.get_base_status(current_status)
         
         self.db.execute(
@@ -341,7 +337,6 @@ class AdoptionService:
         if not AdoptionStatus.is_hidden(current_status):
             return False
         
-        # Restore to previous_status if available, otherwise extract from archived status
         previous = existing.get("previous_status")
         if not previous:
             previous = AdoptionStatus.get_base_status(current_status)
@@ -399,7 +394,8 @@ class AdoptionService:
                 u.name as user_name,
                 u.email as user_email,
                 COALESCE(a.name, ar.animal_name) as animal_name,
-                COALESCE(a.species, ar.animal_species) as animal_species
+                COALESCE(a.species, ar.animal_species) as animal_species,
+                a.breed as animal_breed
             FROM adoption_requests ar
             LEFT JOIN users u ON ar.user_id = u.id
             LEFT JOIN animals a ON ar.animal_id = a.id
@@ -436,7 +432,8 @@ class AdoptionService:
                 u.name as user_name,
                 u.email as user_email,
                 COALESCE(a.name, ar.animal_name) as animal_name,
-                COALESCE(a.species, ar.animal_species) as animal_species
+                COALESCE(a.species, ar.animal_species) as animal_species,
+                a.breed as animal_breed
             FROM adoption_requests ar
             LEFT JOIN users u ON ar.user_id = u.id
             LEFT JOIN animals a ON ar.animal_id = a.id
@@ -446,6 +443,18 @@ class AdoptionService:
                 CASE WHEN ar.status = 'removed' THEN ar.removed_at ELSE ar.archived_at END DESC
         """
         return self.db.fetch_all(sql)
+
+    def archive_adoption(self, request_id: int, archived_by: int, reason: Optional[str] = None) -> bool:
+        """Alias for archive_request() for backward compatibility.
+        
+        Args:
+            request_id: ID of adoption request to archive
+            archived_by: ID of admin performing the action
+            reason: Optional note explaining why it was archived
+            
+        Returns True if archived successfully.
+        """
+        return self.archive_request(request_id, archived_by, reason)
 
 
 __all__ = ["AdoptionService"]

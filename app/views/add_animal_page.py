@@ -34,19 +34,18 @@ class AddAnimalPage:
         def handle_submit(form_data):
             """Handle form submission."""
             try:
-                # Save photo with animal name (deferred save)
                 photo_filename = None
                 photo_widget = form_data.get("photo_widget")
                 if photo_widget:
                     photo_filename = photo_widget.save_with_name(form_data["name"])
 
-                # Insert into DB via AnimalService
                 animal_id = self.service.add_animal(
                     name=form_data["name"],
                     type=form_data["type"],
                     age=form_data["age"],
                     health_status=form_data["health_status"],
                     photo=photo_filename,
+                    breed=form_data.get("breed") or None,
                 )
 
                 show_snackbar(page, f"Animal added successfully (ID: {animal_id})")
@@ -58,16 +57,11 @@ class AddAnimalPage:
 
         def handle_cancel():
             """Handle cancel button click."""
-            page.go("/admin")
+            page.go("/animals_list?admin=1")
 
-        # =====================================================================
-        # Bulk Import Dialog
-        # =====================================================================
-        
         def show_bulk_import_dialog():
             """Show the bulk import dialog."""
             
-            # File picker for import
             def on_import_file_selected(e: ft.FilePickerResultEvent):
                 """Handle import file selection."""
                 if not e.files or len(e.files) == 0:
@@ -78,17 +72,13 @@ class AddAnimalPage:
                     show_snackbar(page, "Could not access the selected file", error=True)
                     return
                 
-                # Close the bulk import dialog first
                 page.close(bulk_import_dlg)
                 
-                # Show loading snackbar
                 show_snackbar(page, "Importing animals...")
                 
                 try:
-                    # Run import
                     result = self.import_service.import_from_file(file_path)
                     
-                    # Show result dialog
                     self._show_import_result_dialog(page, result)
                     
                 except Exception as exc:
@@ -111,7 +101,6 @@ class AddAnimalPage:
                 """Download CSV template."""
                 csv_path = ImportService.get_csv_template_path()
                 if not os.path.exists(csv_path):
-                    # Generate template if it doesn't exist
                     if not ImportService.generate_csv_template(csv_path):
                         show_snackbar(page, "Failed to create CSV template", error=True)
                         return
@@ -121,13 +110,11 @@ class AddAnimalPage:
                 """Download Excel template."""
                 excel_path = ImportService.get_excel_template_path()
                 if not os.path.exists(excel_path):
-                    # Generate template if it doesn't exist
                     if not ImportService.generate_excel_template(excel_path):
                         show_snackbar(page, "Failed to create Excel template", error=True)
                         return
                 self._download_template(page, excel_path, "animal_import_template.xlsx")
             
-            # Template download buttons
             csv_btn = ft.TextButton(
                 "CSV",
                 icon=ft.Icons.DOWNLOAD,
@@ -142,7 +129,6 @@ class AddAnimalPage:
                 style=ft.ButtonStyle(color=ft.Colors.TEAL_700),
             )
             
-            # Import button
             import_btn = ft.ElevatedButton(
                 "📁 Select File to Import",
                 on_click=on_import_click,
@@ -155,7 +141,6 @@ class AddAnimalPage:
                 height=40,
             )
             
-            # Dialog content
             content = ft.Column([
                 ft.Text(
                     "Import multiple animals from a CSV or Excel file",
@@ -185,7 +170,6 @@ class AddAnimalPage:
             
             page.open(bulk_import_dlg)
 
-        # Create the animal form using shared component
         animal_form = create_animal_form(
             page=page,
             mode="add",
@@ -194,7 +178,6 @@ class AddAnimalPage:
             on_bulk_import=show_bulk_import_dialog,
         )
 
-        # Build the form card
         card = animal_form.build()
 
         # Main layout
@@ -220,7 +203,6 @@ class AddAnimalPage:
                 except Exception as ex:
                     show_snackbar(page, f"Error saving template: {ex}", error=True)
         
-        # Create file picker for save dialog
         save_picker = ft.FilePicker(on_result=on_save_result)
         page.overlay.append(save_picker)
         page.update()
@@ -237,11 +219,9 @@ class AddAnimalPage:
         import flet as ft
         
         if result.success_count == 0 and not result.errors:
-            # Empty file
             show_snackbar(page, "No animals found in the file", error=True)
             return
         
-        # Build content based on result
         if result.all_failed:
             icon = ft.Icon(ft.Icons.ERROR, color=ft.Colors.RED_600, size=32)
             title = ft.Text("Import Failed", size=16, weight="bold", color=ft.Colors.RED_600)
@@ -258,7 +238,6 @@ class AddAnimalPage:
             title = ft.Text("Import Successful", size=16, weight="bold", color=ft.Colors.GREEN_700)
             summary = ft.Text(f"Successfully imported {result.success_count} animals!", size=12)
         
-        # Error details (if any)
         error_section = None
         if result.errors:
             error_items = []
@@ -281,12 +260,10 @@ class AddAnimalPage:
                 border_radius=6,
             )
         
-        # Build dialog content
         content_items = [icon, title, summary]
         if error_section:
             content_items.append(error_section)
         
-        # Action buttons
         actions = []
         if result.success_count > 0:
             actions.append(

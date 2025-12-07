@@ -75,7 +75,6 @@ class Cache:
         self._cleanup_interval = cleanup_interval
         self._last_cleanup = time.time()
         
-        # Statistics
         self._hits = 0
         self._misses = 0
         self._evictions = 0
@@ -103,7 +102,6 @@ class Cache:
             return
         
         while len(self._data) > self.max_size:
-            # Find oldest entry
             oldest_key = min(
                 self._data.keys(),
                 key=lambda k: self._data[k].created_at
@@ -178,7 +176,6 @@ class Cache:
         if value is not None:
             return value
         
-        # Compute and cache
         value = factory()
         self.set(key, value, ttl_seconds)
         return value
@@ -303,7 +300,6 @@ class LRUCache(Generic[T]):
         self._lock = threading.RLock()
         self.max_size = max(1, max_size)
         
-        # Statistics
         self._hits = 0
         self._misses = 0
     
@@ -315,13 +311,11 @@ class LRUCache(Generic[T]):
             value: Value to cache
         """
         with self._lock:
-            # If key exists, remove it first (to update position)
             if key in self._data:
                 del self._data[key]
             
             self._data[key] = value
             
-            # Evict oldest if over capacity
             while len(self._data) > self.max_size:
                 self._data.popitem(last=False)
     
@@ -342,7 +336,6 @@ class LRUCache(Generic[T]):
                 self._misses += 1
                 return default
             
-            # Move to end (most recently used)
             self._data.move_to_end(key)
             self._hits += 1
             return self._data[key]
@@ -410,24 +403,20 @@ def cached(
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            # Build cache key
             func_key = f"{key_prefix}{func.__module__}.{func.__name__}"
             args_key = _make_cache_key(*args, **kwargs)
             full_key = f"{func_key}:{args_key}"
             
-            # Check cache
             result = _cache.get(full_key)
             if result is not None:
                 return result
             
-            # Call function and cache result
             result = func(*args, **kwargs)
             if result is not None:
                 _cache.set(full_key, result, ttl_seconds)
             
             return result
         
-        # Add cache control methods to wrapper
         wrapper.cache = _cache
         wrapper.cache_clear = lambda: _cache.clear()
         wrapper.cache_stats = lambda: _cache.stats()
@@ -596,7 +585,6 @@ class QueryCache:
         return self._cache.stats()
 
 
-# Module-level cache instances for convenience
 _default_cache: Optional[Cache] = None
 _query_cache: Optional[QueryCache] = None
 

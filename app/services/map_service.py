@@ -36,10 +36,8 @@ class MapService:
             self._geocode = None
             self._reverse = None
         else:
-            # Initialize geocoder with a user agent and longer timeout
             self.geocoder = Nominatim(user_agent="pawres_rescue_app_v1", timeout=30)
             
-            # Use rate limiter to respect Nominatim's 1 request/second policy
             if RateLimiter:
                 self._geocode = RateLimiter(self.geocoder.geocode, min_delay_seconds=1.5)
                 self._reverse = RateLimiter(self.geocoder.reverse, min_delay_seconds=1.5)
@@ -66,7 +64,6 @@ class MapService:
         
         try:
             import socket
-            # Create socket with its own timeout (don't use setdefaulttimeout which affects global state)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(3)
             try:
@@ -124,7 +121,6 @@ class MapService:
             logger.error(f"Geocoding error (network issue) for '{location}': {e}")
             return None
         except Exception as e:
-            # Check if it's a network-related error
             error_str = str(e).lower()
             if any(x in error_str for x in ['network', 'connection', 'timeout', 'unreachable', 'socket']):
                 logger.error(f"Geocoding network error for '{location}': {e}")
@@ -208,7 +204,6 @@ class MapService:
             logger.error("flet or flet-map not installed")
             return None
         
-        # Filter missions that have coordinates AND are not removed (spam/invalid) or cancelled
         # Note: Archived missions SHOULD appear on map (they're closed but legitimate cases)
         missions_with_coords = [
             m for m in missions 
@@ -226,10 +221,8 @@ class MapService:
                 avg_lng = sum(m['longitude'] for m in missions_with_coords) / len(missions_with_coords)
                 center = (avg_lat, avg_lng)
             else:
-                # Use default center
                 center = self.DEFAULT_CENTER
         
-        # Create markers for each mission
         markers = []
         for mission in missions_with_coords:
             lat = mission['latitude']
@@ -239,7 +232,6 @@ class MapService:
             notes = mission.get('notes', '') or ''
             mission_id = mission.get('id', 0)
             
-            # Use new structured columns (fallback to parsing notes for legacy data)
             reporter_name = mission.get('reporter_name') or "Anonymous"
             reporter_phone = mission.get('reporter_phone') or ""
             animal_type = mission.get('animal_type') or "Animal"
@@ -255,7 +247,6 @@ class MapService:
                 for line in notes.split('\n'):
                     line = line.strip()
                     if line.startswith('[Urgency:'):
-                        # Extract urgency from "[Urgency: High - Immediate help needed]"
                         urgency_match = line.replace('[Urgency:', '').replace(']', '').strip()
                         if 'High' in urgency_match:
                             urgency = 'High'
@@ -295,19 +286,22 @@ class MapService:
                 # On-going - Paw icon
                 icon = ft.Icons.PETS
             
-            # Format status for display
             status_display = status.replace('_', ' ').title()
             
-            # Get animal emoji based on type
             animal_emoji = self._get_animal_emoji(animal_type)
             
-            # Build tooltip with all relevant info
+            breed = mission.get("breed")
+            
             tooltip_lines = [
                 f"{animal_emoji} {animal_type}",
+            ]
+            if breed:
+                tooltip_lines.append(f"🐕 Breed: {breed}")
+            tooltip_lines.extend([
                 f"📍 {location[:40]}..." if len(location) > 40 else f"📍 {location}",
                 f"⚡ Urgency: {urgency}",
                 f"📋 Status: {status_display}",
-            ]
+            ])
             if description:
                 tooltip_lines.append(f"📝 {description}")
             
@@ -318,15 +312,14 @@ class MapService:
                 if is_emergency:
                     tooltip_lines.append("🚨 Source: Emergency")
                 else:
-                    tooltip_lines.append(f"👨 Source: User #{user_id}")
+                    tooltip_lines.append(f"👤 Source: User #{user_id}")
                 # Reporter and contact
-                tooltip_lines.append(f"👨 Reporter: {reporter_name}")
+                tooltip_lines.append(f"📢 Reporter: {reporter_name}")
                 if reporter_phone:
                     tooltip_lines.append(f"📞 Contact: {reporter_phone}")
             
             tooltip_text = "\n".join(tooltip_lines)
             
-            # Create marker with styled container
             marker = Marker(
                 content=ft.Container(
                     content=ft.Icon(
@@ -352,10 +345,8 @@ class MapService:
             )
             markers.append(marker)
         
-        # Create marker layer
         marker_layer = MarkerLayer(markers=markers)
         
-        # Create tile layer (base map from OpenStreetMap)
         tile_layer = TileLayer(
             url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
             max_zoom=19,
@@ -375,7 +366,6 @@ class MapService:
             flags=interaction_flags,
         )
         
-        # Create the map with interaction configuration
         map_control = Map(
             initial_center=MapLatitudeLongitude(center[0], center[1]),
             initial_zoom=zoom or self.DEFAULT_ZOOM,
@@ -435,7 +425,6 @@ class MapService:
         except ImportError:
             return None
         
-        # Filter valid missions (same logic as create_map_with_markers)
         valid_missions = [
             m for m in missions 
             if m.get('latitude') is not None 
@@ -459,7 +448,6 @@ class MapService:
                 border_radius=8,
             )
         
-        # Create mission location cards
         location_cards = []
         for mission in valid_missions[:10]:  # Limit to 10 for performance
             mission_id = mission.get('id', 0)
@@ -490,7 +478,6 @@ class MapService:
             # Truncate location
             location_display = location[:45] + "..." if len(location) > 45 else location
             
-            # Build card content
             card_content = [
                 ft.Row([
                     ft.Container(
@@ -513,7 +500,6 @@ class MapService:
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
             ]
             
-            # Add admin-only info
             if is_admin:
                 user_id = mission.get('user_id')
                 source_text = "Emergency" if user_id is None else f"User #{user_id}"
@@ -534,7 +520,6 @@ class MapService:
                 )
             )
         
-        # Show count if more missions exist
         remaining = len(valid_missions) - 10
         if remaining > 0:
             location_cards.append(
@@ -566,5 +551,6 @@ class MapService:
             padding=15,
             bgcolor=ft.Colors.GREY_100,
             border_radius=8,
+            expand=True,
             border=ft.border.all(1, ft.Colors.AMBER_200),
         )

@@ -39,6 +39,7 @@ class AnimalService:
         age: Optional[int] = None,
         health_status: str = "unknown",
         photo: Optional[str] = None,
+        breed: Optional[str] = None,
     ) -> int:
         """Insert a new animal and return its id.
 
@@ -46,10 +47,10 @@ class AnimalService:
         maps to `status`. `photo` should be a filename from FileStore.
         """
         sql = (
-            "INSERT INTO animals (name, species, age, status, photo) "
-            "VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO animals (name, species, breed, age, status, photo) "
+            "VALUES (?, ?, ?, ?, ?, ?)"
         )
-        last_id = self.db.execute(sql, (name, type, age, health_status, photo))
+        last_id = self.db.execute(sql, (name, type, breed, age, health_status, photo))
         return last_id
 
     def get_all_animals(self) -> List[Dict[str, Any]]:
@@ -85,18 +86,18 @@ class AnimalService:
         """Update allowed fields for an animal. Returns True if updated.
 
         Allowed fields: `name`, `type` (mapped to `species`),
-        `age`, `health_status` (mapped to `status`), `photo`.
+        `age`, `health_status` (mapped to `status`), `photo`, `breed`.
         """
         if not fields:
             return False
 
-        # map input field names to DB column names
         mapping = {
             "type": "species",
             "health_status": "status",
             "name": "name",
             "age": "age",
             "photo": "photo",
+            "breed": "breed",
         }
 
         set_clauses = []
@@ -104,7 +105,6 @@ class AnimalService:
         for key, value in fields.items():
             col = mapping.get(key)
             if not col:
-                # ignore unknown fields
                 continue
             set_clauses.append(f"{col} = ?")
             params.append(value)
@@ -121,11 +121,11 @@ class AnimalService:
         """Return animals considered adoptable.
 
         Uses ADOPTABLE_STATUSES from app_config to determine which
-        animals are available for adoption.
+        animals are available for adoption. Case-insensitive comparison.
         """
         adoptable_states = app_config.ADOPTABLE_STATUSES
         placeholders = ",".join(["?" for _ in adoptable_states])
-        sql = f"SELECT * FROM animals WHERE status IN ({placeholders}) ORDER BY id"
+        sql = f"SELECT * FROM animals WHERE LOWER(status) IN ({placeholders}) ORDER BY id"
         rows = self.db.fetch_all(sql, adoptable_states)
         return rows
 
@@ -142,7 +142,6 @@ class AnimalService:
         if not new_photo:
             return False
         
-        # Get existing animal to check for old photo
         existing = self.db.fetch_one("SELECT id, photo FROM animals WHERE id = ?", (animal_id,))
         if not existing:
             return False
@@ -225,7 +224,6 @@ class AnimalService:
         if AnimalStatus.is_archived(current_status) or AnimalStatus.is_removed(current_status):
             return False
         
-        # Create archived status (e.g., "adopted|archived")
         archived_status = AnimalStatus.make_archived(current_status)
         
         self.db.execute(
@@ -267,13 +265,10 @@ class AnimalService:
         if AnimalStatus.is_removed(current_status):
             return {"success": False, "adoptions_affected": 0}
         
-        # Get base status (in case it's archived)
         base_status = AnimalStatus.get_base_status(current_status)
         
-        # Handle cascade: auto-deny pending adoption requests for this animal
         adoptions_affected = 0
         if cascade_adoptions:
-            # Count pending requests
             pending_result = self.db.fetch_one(
                 f"""SELECT COUNT(*) as count FROM adoption_requests 
                     WHERE animal_id = ? AND LOWER(status) = '{AdoptionStatus.PENDING}'""",
@@ -293,7 +288,6 @@ class AnimalService:
                     (datetime.now(), animal_id)
                 )
         
-        # Remove the animal
         self.db.execute(
             """UPDATE animals
                SET status = ?, previous_status = ?,
@@ -324,7 +318,6 @@ class AnimalService:
         if not AnimalStatus.is_hidden(current_status):
             return False
         
-        # Restore to previous_status if available, otherwise extract from archived status
         previous = existing.get("previous_status")
         if not previous:
             previous = AnimalStatus.get_base_status(current_status)

@@ -54,6 +54,10 @@ class PasswordPolicy:
         self.min_length = min_length or getattr(
             app_config, 'PASSWORD_MIN_LENGTH', 8
         )
+        # Ensure min_length is an integer
+        if isinstance(self.min_length, str):
+            self.min_length = int(self.min_length)
+        
         self.require_uppercase = require_uppercase if require_uppercase is not None else getattr(
             app_config, 'PASSWORD_REQUIRE_UPPERCASE', True
         )
@@ -179,7 +183,6 @@ class PasswordHistoryManager:
         """
         self.db.execute(sql)
         
-        # Create index for faster lookups
         self.db.execute(
             "CREATE INDEX IF NOT EXISTS idx_password_history_user "
             "ON password_history(user_id)"
@@ -200,7 +203,6 @@ class PasswordHistoryManager:
             password_salt: Salt used for hashing
             max_history: Maximum history entries to keep
         """
-        # Add new entry
         self.db.execute(
             "INSERT INTO password_history (user_id, password_hash, password_salt) "
             "VALUES (?, ?, ?)",

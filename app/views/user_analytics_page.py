@@ -12,10 +12,10 @@ from state import get_app_state
 from components import (
     create_user_sidebar, create_gradient_background,
     create_clickable_stat_card,
-    create_line_chart, create_pie_chart,
+    create_line_chart, create_pie_chart, create_bar_chart,
     create_chart_legend, create_empty_chart_message,
     create_insight_box, show_chart_details_dialog,
-    CHART_COLORS, STATUS_COLORS,
+    CHART_COLORS, STATUS_COLORS, PIE_CHART_COLORS,
     create_interactive_map,
 )
 
@@ -41,7 +41,6 @@ class UserAnalyticsPage:
 
         page.title = "Your Analytics"
 
-        # Get user info from centralized state management
         app_state = get_app_state()
         user_name = app_state.auth.user_name or "User"
         user_id = app_state.auth.user_id
@@ -50,29 +49,23 @@ class UserAnalyticsPage:
             page.go("/")
             return
 
-        # Sidebar with navigation
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
-        # Fetch user-specific data
         user_activity_stats = self.analytics_service.get_user_activity_stats(user_id)
         user_rescue_status_dist = self.analytics_service.get_user_rescue_status_distribution(user_id)
         user_adoption_status_dist = self.analytics_service.get_user_adoption_status_distribution(user_id)
         user_insights = self.analytics_service.get_user_insights(user_id)
         
-        # Get user's chart data (30-day trend)
         day_labels, rescues_reported, adoptions_approved = self.analytics_service.get_user_chart_data(user_id)
         
-        # Get user's rescue missions for map
         app_state.rescues.load_user_missions(user_id)
         user_missions = app_state.rescues.user_missions or []
 
-        # Calculate stats - use actual approved count from distribution, not total_adoptions
         total_rescues = user_activity_stats.get("rescue_reports_filed", 0)
         rescued_successfully = user_rescue_status_dist.get("rescued", 0)
         total_adoptions = user_adoption_status_dist.get("approved", 0)  # Actual adopted count
         pending_adoptions = user_adoption_status_dist.get("pending", 0)  # Pending from distribution
         
-        # Calculate success rate
         if total_rescues > 0:
             success_rate = f"{(rescued_successfully / total_rescues * 100):.0f}% success"
         else:
@@ -114,11 +107,10 @@ class UserAnalyticsPage:
             ),
         ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
 
-        # ========================================
         # Chart 1: Your Activity Line Chart (30 Days)
-        # ========================================
         has_line_data = any(c > 0 for c in rescues_reported) or any(c > 0 for c in adoptions_approved)
         
+        user_line_refs = {}  # For legend-line sync
         if has_line_data:
             formatted_labels = [f"Date: {label}" for label in day_labels]
             line_chart = create_line_chart(
@@ -129,11 +121,12 @@ class UserAnalyticsPage:
                 width=600,
                 height=220,
                 x_labels=formatted_labels,
+                legend_refs=user_line_refs,
             )
             line_legend = create_chart_legend([
                 {"label": "Rescues Reported", "color": CHART_COLORS["primary"], "value": sum(rescues_reported)},
                 {"label": "Adoptions Approved", "color": CHART_COLORS["secondary"], "value": sum(adoptions_approved)},
-            ], horizontal=False)
+            ], horizontal=False, line_refs=user_line_refs)
         else:
             line_chart = create_empty_chart_message("No activity in the last 30 days", width=600, height=220)
             line_legend = ft.Container()
@@ -157,9 +150,7 @@ class UserAnalyticsPage:
             shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
         )
 
-        # ========================================
         # Chart 2: Your Rescue Status Pie Chart
-        # ========================================
         rescue_pie_refs = {}
         if user_rescue_status_dist and sum(user_rescue_status_dist.values()) > 0:
             rescue_sections = []
@@ -225,9 +216,7 @@ class UserAnalyticsPage:
             expand=True,
         )
 
-        # ========================================
         # Chart 3: Your Adoption Status Pie Chart
-        # ========================================
         adoption_pie_refs = {}
         if user_adoption_status_dist and sum(user_adoption_status_dist.values()) > 0:
             adoption_sections = []
@@ -299,10 +288,89 @@ class UserAnalyticsPage:
             adoption_chart_container,
         ], spacing=15, expand=True)
 
-        # ========================================
+        # Chart 4: Your Breed Preferences Bar Chart (Top 5)
+        user_breed_prefs = self.analytics_service.get_user_breed_preferences(user_id, limit=5)
+        breed_bar_refs = {}
+        
+        if user_breed_prefs and sum(count for _, count in user_breed_prefs) > 0:
+            breed_bar_groups = []
+            for idx, (breed, count) in enumerate(user_breed_prefs):
+                breed_bar_groups.append({
+                    "x": idx,
+                    "rods": [{"value": count, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)], "width": 50}]
+                })
+            
+            breed_bar_chart = create_bar_chart(
+                breed_bar_groups,
+                bottom_labels=None,  # No x-axis labels
+                height=180,
+                width=200,
+                legend_refs=breed_bar_refs,
+            )
+            
+            breed_legend = create_chart_legend([
+                {"label": breed, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)], "value": count}
+                for idx, (breed, count) in enumerate(user_breed_prefs)
+            ], horizontal=False, bar_refs=breed_bar_refs, text_size=10)
+            
+            breed_data_for_dialog = [
+                {"label": breed, "value": count, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]}
+                for idx, (breed, count) in enumerate(user_breed_prefs)
+            ]
+        else:
+            breed_bar_chart = create_empty_chart_message(
+                "Start adopting to build your preferences!",
+                width=200,
+                height=180
+            )
+            breed_legend = ft.Container()
+            breed_data_for_dialog = []
+        
+        def show_breed_details(e):
+            if breed_data_for_dialog:
+                show_chart_details_dialog(page, "Your Breed Preferences Details", breed_data_for_dialog, "bar")
+        
+        breed_chart_container = ft.Container(
+            ft.Column([
+                ft.Row([
+                    ft.Icon(ft.Icons.PARK, size=18, color=ft.Colors.TEAL_600),
+                    ft.Text("Your Breed Preferences", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87, expand=True),
+                    ft.Container(
+                        ft.IconButton(
+                            icon=ft.Icons.OPEN_IN_NEW,
+                            icon_size=16,
+                            icon_color=ft.Colors.TEAL_600,
+                            tooltip="View detailed breakdown",
+                            on_click=show_breed_details,
+                        ),
+                        bgcolor=ft.Colors.TEAL_50,
+                        border_radius=8,
+                        border=ft.border.all(1, ft.Colors.TEAL_200),
+                    ) if breed_data_for_dialog else ft.Container(),
+                ], spacing=8),
+                ft.Divider(height=12, color=ft.Colors.GREY_200),
+                ft.Row([
+                    ft.Container(breed_bar_chart, alignment=ft.alignment.center),
+                    ft.Container(breed_legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
+                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+            ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+            padding=20,
+            height=280,
+            bgcolor=ft.Colors.WHITE,
+            border_radius=12,
+            border=ft.border.all(1, ft.Colors.GREY_200),
+            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+            expand=True,
+        )
+        
+        # Breed chart row - add to existing pie charts row
+        charts_row = ft.Row([
+            rescue_chart_container,
+            adoption_chart_container,
+            breed_chart_container,
+        ], spacing=15, expand=True)
+
         # Map: Your Rescue Mission Locations
-        # ========================================
-        # Filter out cancelled/removed missions
         from app_config import RescueStatus
         missions_for_map = [
             m for m in user_missions
@@ -310,11 +378,9 @@ class UserAnalyticsPage:
             and not RescueStatus.is_removed(m.get("status") or "")
         ]
         
-        # Check internet connectivity before creating map
         is_online = self.map_service.check_map_tiles_available()
 
         if is_online:
-            # Use the interactive map wrapper with lock/unlock toggle
             map_container = create_interactive_map(
                 map_service=self.map_service,
                 missions=missions_for_map,
@@ -326,7 +392,6 @@ class UserAnalyticsPage:
                 initially_locked=True,
             )
         else:
-            # Use offline fallback with mission list when no internet
             offline_widget = self.map_service.create_offline_map_fallback(missions_for_map, is_admin=False)
             if offline_widget:
                 map_container = ft.Container(
@@ -366,9 +431,7 @@ class UserAnalyticsPage:
                     shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
                 )
 
-        # ========================================
         # Insights Section
-        # ========================================
         rescue_insight_data = user_insights.get("rescue_insight", {"headline": "No data", "detail": "", "action": ""})
         adoption_insight_data = user_insights.get("adoption_insight", {"headline": "No data", "detail": "", "action": ""})
         activity_insight_data = user_insights.get("activity_insight", {"headline": "No data", "detail": "", "action": ""})
@@ -460,7 +523,7 @@ class UserAnalyticsPage:
                 ft.Container(height=20),
                 activity_chart_container,
                 ft.Container(height=20),
-                pie_charts_row,
+                charts_row,
                 ft.Container(height=20),
                 insights_container,
                 ft.Container(height=20),

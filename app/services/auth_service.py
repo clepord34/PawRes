@@ -73,9 +73,7 @@ def _download_and_save_profile_picture(picture_url: str, user_email: str) -> Opt
             else:
                 ext = "jpg"
         
-        # Save using FileStore with user identifier
         file_store = FileStore()
-        # Use email prefix as custom name for the profile picture
         username = user_email.split("@")[0] if user_email else "user"
         filename = file_store.save_bytes(
             data=image_data,
@@ -206,7 +204,6 @@ class AuthService:
         return secrets.token_bytes(app_config.SALT_LENGTH)
 
     def _hash_password(self, password: str, salt: bytes) -> str:
-        # Use PBKDF2-HMAC-SHA256 with configurable iterations
         dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, app_config.PBKDF2_ITERATIONS)
         return dk.hex()
 
@@ -239,7 +236,6 @@ class AuthService:
             ValueError: If email/phone already exists or validation fails
             AuthServiceError: If database operation fails
         """
-        # Validate inputs
         if not name or len(name) > app_config.MAX_NAME_LENGTH:
             raise ValueError(f"Name must be 1-{app_config.MAX_NAME_LENGTH} characters")
         
@@ -257,7 +253,6 @@ class AuthService:
             if not normalized_phone:
                 raise ValueError("Invalid phone number format")
         
-        # Validate password against policy (unless explicitly skipped for testing)
         if not skip_policy:
             from services.password_policy import validate_password
             is_valid, errors = validate_password(password)
@@ -271,7 +266,6 @@ class AuthService:
         if len(password) > app_config.MAX_PASSWORD_LENGTH:
             raise ValueError(f"Password must be at most {app_config.MAX_PASSWORD_LENGTH} characters")
         
-        # Check for existing email/phone using the new method
         try:
             is_available, error_msg = self.check_contact_availability(email, normalized_phone)
             if not is_available:
@@ -325,13 +319,11 @@ class AuthService:
         
         email = row.get("email")  # Get the actual email for logging
         
-        # Check if account is disabled
         if row.get("is_disabled"):
             if self.auth_logger:
                 self.auth_logger.log_login_failure(email, "account_disabled")
             return None, AuthResult.ACCOUNT_DISABLED
         
-        # Check if account is locked
         locked_until = row.get("locked_until")
         if locked_until:
             try:
@@ -427,7 +419,6 @@ class AuthService:
         Returns:
             AuthResult indicating the outcome
         """
-        # Get current attempt count
         user = self.db.fetch_one(
             "SELECT failed_login_attempts FROM users WHERE id = ?",
             (user_id,)
@@ -573,25 +564,43 @@ class AuthService:
             raise AuthServiceError("Email is required for OAuth login", AuthResult.INVALID_INPUT)
         
         try:
-            # Download and save the profile picture if provided as URL
+            existing = self.db.fetch_one("SELECT * FROM users WHERE email = ?", (email,))
+            
+            # Only download profile picture if user doesn't exist or doesn't have a picture file
             saved_picture = None
-            if profile_picture and profile_picture.startswith(("http://", "https://")):
+            should_download = False
+            
+            if existing:
+                existing_picture = existing.get("profile_picture")
+                if existing_picture:
+                    from storage.file_store import FileStore
+                    file_store = FileStore()
+                    if not file_store.file_exists(existing_picture):
+                        # File was deleted, need to re-download
+                        should_download = True
+            else:
+                # New user, download picture
+                should_download = True
+            
+            if should_download and profile_picture and profile_picture.startswith(("http://", "https://")):
                 saved_picture = _download_and_save_profile_picture(profile_picture, email)
-            elif profile_picture:
+            elif profile_picture and not profile_picture.startswith(("http://", "https://")):
                 # Already a filename, keep it
                 saved_picture = profile_picture
             
-            # Check if user already exists
-            existing = self.db.fetch_one("SELECT * FROM users WHERE email = ?", (email,))
-            
             if existing:
-                # User exists - check if they already have this OAuth provider linked
                 existing_oauth = existing.get("oauth_provider")
                 has_password = bool(existing.get("password_hash"))
                 
                 if existing_oauth == oauth_provider:
                     # Same OAuth provider - just update and log in
-                    update_picture = saved_picture or existing.get("profile_picture")
+                    if saved_picture:
+                        # We downloaded because file was missing or user is new
+                        update_picture = saved_picture
+                    else:
+                        # Keep existing picture (file still exists)
+                        update_picture = existing.get("profile_picture")
+                    
                     local_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     self.db.execute(
                         """UPDATE users SET profile_picture = ?, last_login = ? 
@@ -609,7 +618,6 @@ class AuthService:
                     return safe, AuthResult.SUCCESS
                 
                 elif has_password and not existing_oauth:
-                    # User has password account but no OAuth linked
                     # Return conflict - let UI handle whether to link
                     safe = dict(existing)
                     safe.pop("password_hash", None)
@@ -617,8 +625,6 @@ class AuthService:
                     return safe, AuthResult.OAUTH_CONFLICT
                 
                 else:
-                    # User has different OAuth provider or OAuth already set
-                    # Update to new OAuth provider and log in
                     update_picture = saved_picture or existing.get("profile_picture")
                     local_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     self.db.execute(
@@ -637,7 +643,6 @@ class AuthService:
                     safe["profile_picture"] = update_picture
                     return safe, AuthResult.SUCCESS
             
-            # Create new OAuth user (no password) with last_login set
             local_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             sql = """INSERT INTO users (name, email, oauth_provider, profile_picture, role, last_login) 
                      VALUES (?, ?, ?, ?, ?, ?)"""
@@ -710,7 +715,6 @@ class AuthService:
             if not user.get("oauth_provider"):
                 return False, "No Google account is linked"
             
-            # Check if user has a password - if not, they can't unlink
             if not user.get("password_hash"):
                 return False, "Cannot unlink Google account - no password set. Please set a password first."
             
@@ -755,7 +759,6 @@ class AuthService:
             existing = self.db.fetch_one("SELECT id FROM users WHERE email = ?", (app_config.DEFAULT_ADMIN_EMAIL,))
             
             if existing is None:
-                # Create the new admin account
                 self.register_user(
                     name=app_config.DEFAULT_ADMIN_NAME,
                     email=app_config.DEFAULT_ADMIN_EMAIL,
@@ -764,7 +767,6 @@ class AuthService:
                     role="admin",
                 )
             
-            # Remove any other admin accounts that don't match the configured email
             # This ensures old admin emails no longer work after changing .env
             self.db.execute(
                 "DELETE FROM users WHERE role = 'admin' AND email != ?",

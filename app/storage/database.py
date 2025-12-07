@@ -81,7 +81,6 @@ class Database:
 			if column not in columns:
 				cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
 				conn.commit()
-				print(f"[INFO] Added {column} column to {table} table")
 				return True
 			return False
 		finally:
@@ -108,7 +107,6 @@ class Database:
 				if column not in existing:
 					cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
 					added.append(column)
-					print(f"[INFO] Added {column} column to {table} table")
 			
 			if added:
 				conn.commit()
@@ -144,6 +142,7 @@ class Database:
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT,
 			species TEXT,
+			breed TEXT,
 			age INTEGER,
 			status TEXT,
 			intake_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -170,6 +169,7 @@ class Database:
 			admin_message TEXT,
 			animal_type TEXT,
 			animal_name TEXT,
+			animal_photo TEXT,
 			reporter_name TEXT,
 			reporter_phone TEXT,
 			urgency TEXT DEFAULT 'Medium',
@@ -198,9 +198,7 @@ class Database:
 		);
 		"""
 
-		# First, create all tables
 		for stmt in (users_sql, animals_sql, rescue_sql, adoption_sql):
-			# Use execute without params; commit after each to ensure persistence
 			self.execute(stmt)
 
 		# Then, handle any schema migrations for existing tables
@@ -222,23 +220,18 @@ class Database:
 			if 'is_disabled' not in user_columns:
 				cur.execute("ALTER TABLE users ADD COLUMN is_disabled INTEGER DEFAULT 0")
 				conn.commit()
-				print("[INFO] Added is_disabled column to users table")
 			if 'failed_login_attempts' not in user_columns:
 				cur.execute("ALTER TABLE users ADD COLUMN failed_login_attempts INTEGER DEFAULT 0")
 				conn.commit()
-				print("[INFO] Added failed_login_attempts column to users table")
 			if 'locked_until' not in user_columns:
 				cur.execute("ALTER TABLE users ADD COLUMN locked_until TEXT")
 				conn.commit()
-				print("[INFO] Added locked_until column to users table")
 			if 'last_login' not in user_columns:
 				cur.execute("ALTER TABLE users ADD COLUMN last_login TEXT")
 				conn.commit()
-				print("[INFO] Added last_login column to users table")
 			if 'last_password_change' not in user_columns:
 				cur.execute("ALTER TABLE users ADD COLUMN last_password_change TEXT")
 				conn.commit()
-				print("[INFO] Added last_password_change column to users table")
 			
 			# Check if photo column exists in animals table (for legacy databases)
 			cur.execute("PRAGMA table_info(animals)")
@@ -249,7 +242,9 @@ class Database:
 			if 'rescue_mission_id' not in columns:
 				cur.execute("ALTER TABLE animals ADD COLUMN rescue_mission_id INTEGER")
 				conn.commit()
-				print("[INFO] Added rescue_mission_id column to animals table")
+			if 'breed' not in columns:
+				cur.execute("ALTER TABLE animals ADD COLUMN breed TEXT")
+				conn.commit()
 			
 			# Check if admin_message column exists in rescue_missions table
 			cur.execute("PRAGMA table_info(rescue_missions)")
@@ -257,37 +252,35 @@ class Database:
 			if 'admin_message' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN admin_message TEXT")
 				conn.commit()
-				print("[INFO] Added admin_message column to rescue_missions table")
 			
 			# Add new structured columns to rescue_missions
 			if 'animal_type' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN animal_type TEXT")
 				conn.commit()
-				print("[INFO] Added animal_type column to rescue_missions table")
 			if 'animal_name' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN animal_name TEXT")
 				conn.commit()
-				print("[INFO] Added animal_name column to rescue_missions table")
 			if 'reporter_name' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN reporter_name TEXT")
 				conn.commit()
-				print("[INFO] Added reporter_name column to rescue_missions table")
 			if 'reporter_phone' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN reporter_phone TEXT")
 				conn.commit()
-				print("[INFO] Added reporter_phone column to rescue_missions table")
 			if 'urgency' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN urgency TEXT DEFAULT 'Medium'")
 				conn.commit()
-				print("[INFO] Added urgency column to rescue_missions table")
 			if 'is_closed' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN is_closed INTEGER DEFAULT 0")
 				conn.commit()
-				print("[INFO] Added is_closed column to rescue_missions table")
 			if 'updated_at' not in rescue_columns:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added updated_at column to rescue_missions table")
+			if 'breed' not in rescue_columns:
+				cur.execute("ALTER TABLE rescue_missions ADD COLUMN breed TEXT")
+				conn.commit()
+			if 'animal_photo' not in rescue_columns:
+				cur.execute("ALTER TABLE rescue_missions ADD COLUMN animal_photo TEXT")
+				conn.commit()
 			
 			# Check if adoption_requests needs migration (animal_id should allow NULL)
 			cur.execute("PRAGMA table_info(adoption_requests)")
@@ -302,7 +295,6 @@ class Database:
 				is_not_null = animal_id_info[3] == 1
 				if is_not_null:
 					needs_migration = True
-					print("[INFO] Migrating adoption_requests table to allow NULL animal_id...")
 			
 			# Also check if animal_name column exists
 			if 'animal_name' not in adoption_columns:
@@ -362,7 +354,6 @@ class Database:
 				
 				conn.commit()
 				cur.execute("PRAGMA foreign_keys = ON")
-				print("[INFO] Successfully migrated adoption_requests table")
 			
 			# Check if admin_message column exists in adoption_requests table (simple ADD COLUMN)
 			cur.execute("PRAGMA table_info(adoption_requests)")
@@ -370,18 +361,15 @@ class Database:
 			if 'admin_message' not in adoption_cols_check:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN admin_message TEXT")
 				conn.commit()
-				print("[INFO] Added admin_message column to adoption_requests table")
 			if 'updated_at' not in adoption_cols_check:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added updated_at column to adoption_requests table")
 			if 'was_approved' not in adoption_cols_check:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN was_approved INTEGER DEFAULT 0")
 				conn.commit()
 				# Backfill: mark existing approved requests
 				cur.execute("UPDATE adoption_requests SET was_approved = 1 WHERE LOWER(status) = 'approved'")
 				conn.commit()
-				print("[INFO] Added was_approved column to adoption_requests table")
 			
 			# Add updated_at to animals table
 			cur.execute("PRAGMA table_info(animals)")
@@ -409,35 +397,27 @@ class Database:
 			if 'archived_at' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN archived_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added archived_at column to rescue_missions table")
 			if 'archived_by' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN archived_by INTEGER")
 				conn.commit()
-				print("[INFO] Added archived_by column to rescue_missions table")
 			if 'archive_note' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN archive_note TEXT")
 				conn.commit()
-				print("[INFO] Added archive_note column to rescue_missions table")
 			if 'removed_at' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN removed_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added removed_at column to rescue_missions table")
 			if 'removed_by' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN removed_by INTEGER")
 				conn.commit()
-				print("[INFO] Added removed_by column to rescue_missions table")
 			if 'removal_reason' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN removal_reason TEXT")
 				conn.commit()
-				print("[INFO] Added removal_reason column to rescue_missions table")
 			if 'previous_status' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN previous_status TEXT")
 				conn.commit()
-				print("[INFO] Added previous_status column to rescue_missions table")
 			if 'rescued_at' not in rescue_cols_final:
 				cur.execute("ALTER TABLE rescue_missions ADD COLUMN rescued_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added rescued_at column to rescue_missions table")
 			
 			# Add archive/remove columns to adoption_requests
 			cur.execute("PRAGMA table_info(adoption_requests)")
@@ -445,39 +425,30 @@ class Database:
 			if 'archived_at' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN archived_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added archived_at column to adoption_requests table")
 			if 'archived_by' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN archived_by INTEGER")
 				conn.commit()
-				print("[INFO] Added archived_by column to adoption_requests table")
 			if 'archive_note' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN archive_note TEXT")
 				conn.commit()
-				print("[INFO] Added archive_note column to adoption_requests table")
 			if 'removed_at' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN removed_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added removed_at column to adoption_requests table")
 			if 'removed_by' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN removed_by INTEGER")
 				conn.commit()
-				print("[INFO] Added removed_by column to adoption_requests table")
 			if 'removal_reason' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN removal_reason TEXT")
 				conn.commit()
-				print("[INFO] Added removal_reason column to adoption_requests table")
 			if 'previous_status' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN previous_status TEXT")
 				conn.commit()
-				print("[INFO] Added previous_status column to adoption_requests table")
 			if 'denial_reason' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN denial_reason TEXT")
 				conn.commit()
-				print("[INFO] Added denial_reason column to adoption_requests table")
 			if 'approved_at' not in adopt_cols_final:
 				cur.execute("ALTER TABLE adoption_requests ADD COLUMN approved_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added approved_at column to adoption_requests table")
 			
 			# Add archive/remove columns to animals
 			cur.execute("PRAGMA table_info(animals)")
@@ -485,31 +456,24 @@ class Database:
 			if 'archived_at' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN archived_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added archived_at column to animals table")
 			if 'archived_by' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN archived_by INTEGER")
 				conn.commit()
-				print("[INFO] Added archived_by column to animals table")
 			if 'archive_note' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN archive_note TEXT")
 				conn.commit()
-				print("[INFO] Added archive_note column to animals table")
 			if 'removed_at' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN removed_at TIMESTAMP")
 				conn.commit()
-				print("[INFO] Added removed_at column to animals table")
 			if 'removed_by' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN removed_by INTEGER")
 				conn.commit()
-				print("[INFO] Added removed_by column to animals table")
 			if 'removal_reason' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN removal_reason TEXT")
 				conn.commit()
-				print("[INFO] Added removal_reason column to animals table")
 			if 'previous_status' not in animal_cols_final:
 				cur.execute("ALTER TABLE animals ADD COLUMN previous_status TEXT")
 				conn.commit()
-				print("[INFO] Added previous_status column to animals table")
 			
 			# Migrate existing rescue mission data: extract animal_type and name from notes field
 			cur.execute("SELECT id, notes FROM rescue_missions WHERE animal_type IS NULL AND notes IS NOT NULL")

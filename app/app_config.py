@@ -91,15 +91,15 @@ MIN_PASSWORD_LENGTH = 6
 MAX_PASSWORD_LENGTH = 128
 
 # Status values
-ANIMAL_STATUS_VALUES = ("available", "adoptable", "healthy", "recovering", "injured", "adopted", "unknown")
+ANIMAL_STATUS_VALUES = ("healthy", "recovering", "injured", "adopted", "unknown")
 RESCUE_STATUS_VALUES = ("pending", "in_progress", "completed", "cancelled")
 ADOPTION_STATUS_VALUES = ("pending", "approved", "rejected", "completed")
 
 # Adoptable status values (animals that can be adopted)
-ADOPTABLE_STATUSES = ("available", "adoptable", "healthy", "ready")
+ADOPTABLE_STATUSES = ("healthy",)
 
 # Healthy status values for filtering
-HEALTHY_STATUSES = ("healthy", "available", "adoptable", "ready")
+HEALTHY_STATUSES = ("healthy",)
 
 # Approved adoption statuses
 APPROVED_ADOPTION_STATUSES = ("approved", "adopted", "completed")
@@ -316,7 +316,6 @@ class AdoptionStatus:
 
 class AnimalStatus:
     """Standardized animal status values."""
-    AVAILABLE = "available"
     HEALTHY = "healthy"
     RECOVERING = "recovering"
     INJURED = "injured"
@@ -334,7 +333,6 @@ class AnimalStatus:
         # Handle archived suffix
         if cls.ARCHIVED_SUFFIX in s:
             s = s.replace(cls.ARCHIVED_SUFFIX, "")
-        if s in ("available", "adoptable", "ready"): return cls.AVAILABLE
         if s in ("healthy",): return cls.HEALTHY
         if s in ("recovering",): return cls.RECOVERING
         if s in ("injured",): return cls.INJURED
@@ -347,7 +345,7 @@ class AnimalStatus:
     def is_adoptable(cls, status: str) -> bool:
         """Check if an animal can be adopted."""
         base = cls.get_base_status(status)
-        return base.lower() in (cls.AVAILABLE, cls.HEALTHY, "adoptable", "ready")
+        return base.lower() == cls.HEALTHY
     
     @classmethod
     def needs_setup(cls, status: str) -> bool:
@@ -389,7 +387,6 @@ class AnimalStatus:
         base = cls.get_base_status(status)
         normalized = cls.normalize(base)
         labels = {
-            cls.AVAILABLE: "Available",
             cls.HEALTHY: "Healthy",
             cls.RECOVERING: "Recovering",
             cls.INJURED: "Injured",

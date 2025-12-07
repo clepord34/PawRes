@@ -38,15 +38,11 @@ class AnalyticsService:
         else:
             self.db = Database(db if isinstance(db, str) else app_config.DB_PATH)
         
-        # Initialize other services for data access
         self.animal_service = AnimalService(self.db)
         self.rescue_service = RescueService(self.db)
         self.adoption_service = AdoptionService(self.db)
         
-        # Use query cache for expensive analytics queries
         self._cache: QueryCache = get_query_cache()
-        
-        # Cache TTL in seconds (2 minutes for analytics)
         self._cache_ttl = 120
 
     def get_chart_data(self) -> Tuple[Tuple[List[str], List[int], List[int]], Dict[str, int], Dict[str, int]]:
@@ -58,7 +54,6 @@ class AnalyticsService:
             - type_dist: Dictionary of animal type distribution (empty dict if no data)
             - status_counts: Dictionary of health status counts (always includes healthy, recovering, injured)
         """
-        # Prepare day labels for last 1 month (30 days)
         now = datetime.utcnow()
         days: List[datetime] = []
         for i in range(29, -1, -1):
@@ -67,24 +62,16 @@ class AnalyticsService:
         day_labels = [d.strftime("%m-%d") for d in days]
         day_dates = [d.strftime("%Y-%m-%d") for d in days]
 
-        # Initialize counts
         rescued_counts = [0 for _ in day_labels]
         adopted_counts = [0 for _ in day_labels]
 
-        # Count rescued missions by day (include archived for historical data)
-        # Only count missions that have "Rescued" in their status (e.g., "Rescued", "rescued|archived")
-        # Excludes "removed" and "cancelled" status items via get_all_missions_for_analytics()
-        # Use rescued_at column (when status changed to rescued) instead of mission_date (when created)
         missions = self.rescue_service.get_all_missions_for_analytics() or []
         for ms in missions:
             status = (ms.get("status") or "").lower()
-            # Check if this mission was rescued (including archived ones)
-            # Get base status to check for "rescued" 
             base_status = RescueStatus.get_base_status(status)
             is_rescued = base_status == RescueStatus.RESCUED
             if not is_rescued:
                 continue
-            # Use rescued_at if available, fallback to mission_date for legacy data
             dt = ms.get("rescued_at") or ms.get("mission_date")
             if not dt:
                 continue
@@ -97,22 +84,16 @@ class AnalyticsService:
                 idx = day_dates.index(date_str)
                 rescued_counts[idx] += 1
 
-        # Count adopted animals by day
-        # Excludes "removed" and "cancelled" status items via get_all_requests_for_analytics()
-        # Use approved_at column (when status changed to approved) instead of request_date (when created)
         requests = self.adoption_service.get_all_requests_for_analytics() or []
         for req in requests:
             # Only count requests with approved status (current or archived)
-            # Get base status to check (handles "approved|archived" format)
             status_lower = (req.get("status") or "").lower()
             base_status = AdoptionStatus.get_base_status(status_lower)
             if base_status not in app_config.APPROVED_ADOPTION_STATUSES:
                 continue
-            # Use approved_at if available, fallback to request_date for legacy data
             dt = req.get("approved_at") or req.get("request_date")
             if not dt:
                 continue
-            # Parse date using shared helper
             d = parse_datetime(dt)
             if d is None:
                 continue
@@ -121,7 +102,6 @@ class AnalyticsService:
                 idx = day_dates.index(date_str)
                 adopted_counts[idx] += 1
 
-        # Calculate type distribution and status counts
         type_dist, status_counts = self.get_animal_statistics()
 
         return (day_labels, rescued_counts, adopted_counts), type_dist, status_counts
@@ -132,7 +112,6 @@ class AnalyticsService:
         Returns:
             Tuple containing (day_labels, rescued_counts, adopted_counts)
         """
-        # Prepare day labels for last 14 days
         now = datetime.utcnow()
         days: List[datetime] = []
         for i in range(13, -1, -1):
@@ -141,12 +120,9 @@ class AnalyticsService:
         day_labels = [d.strftime("%m-%d") for d in days]
         day_dates = [d.strftime("%Y-%m-%d") for d in days]
 
-        # Initialize counts
         rescued_counts = [0 for _ in day_labels]
         adopted_counts = [0 for _ in day_labels]
 
-        # Count rescued missions by day
-        # Use rescued_at column (when status changed to rescued) instead of mission_date (when created)
         missions = self.rescue_service.get_all_missions_for_analytics() or []
         for ms in missions:
             status = (ms.get("status") or "").lower()
@@ -154,7 +130,6 @@ class AnalyticsService:
             is_rescued = base_status == RescueStatus.RESCUED
             if not is_rescued:
                 continue
-            # Use rescued_at if available, fallback to mission_date for legacy data
             dt = ms.get("rescued_at") or ms.get("mission_date")
             if not dt:
                 continue
@@ -166,8 +141,6 @@ class AnalyticsService:
                 idx = day_dates.index(date_str)
                 rescued_counts[idx] += 1
 
-        # Count adopted animals by day
-        # Use approved_at column (when status changed to approved) instead of request_date (when created)
         requests = self.adoption_service.get_all_requests_for_analytics() or []
         for req in requests:
             # Only count requests with approved status (current or archived)
@@ -175,7 +148,6 @@ class AnalyticsService:
             base_status = AdoptionStatus.get_base_status(status_lower)
             if base_status not in app_config.APPROVED_ADOPTION_STATUSES:
                 continue
-            # Use approved_at if available, fallback to request_date for legacy data
             dt = req.get("approved_at") or req.get("request_date")
             if not dt:
                 continue
@@ -201,7 +173,6 @@ class AnalyticsService:
         """
         animals = self.animal_service.get_all_animals_for_analytics() or []
         type_dist: Dict[str, int] = {}
-        # Always include all three health status categories
         status_counts: Dict[str, int] = {
             "healthy": 0,
             "recovering": 0,
@@ -209,21 +180,15 @@ class AnalyticsService:
         }
         
         for a in animals:
-            # Normalize species name to Title Case for consistent grouping
             t = (a.get("species") or "Unknown").strip().capitalize()
             s = (a.get("status") or "unknown").lower()
-            # Get base status (handles "healthy|archived" format)
             base_s = AnimalStatus.get_base_status(s)
             type_dist[t] = type_dist.get(t, 0) + 1
-            # Map status to one of the three health categories
-            # Skip adopted and processing - they're not health statuses
             if base_s in status_counts:
                 status_counts[base_s] += 1
             elif base_s in ("adopted", "processing", "unknown", ""):
-                # Don't count these in health status chart
                 pass
             else:
-                # Any other status goes to 'injured' as fallback
                 status_counts["injured"] += 1
 
         return type_dist, status_counts
@@ -242,8 +207,6 @@ class AnalyticsService:
             all_requests = self.adoption_service.get_all_requests_for_analytics() or []
             
             total_animals = len(animals)
-            # Count only actual approved status (current or archived)
-            # Get base status to handle "approved|archived" format
             total_adoptions = len([r for r in all_requests 
                 if AdoptionStatus.get_base_status((r.get("status") or "").lower()) in app_config.APPROVED_ADOPTION_STATUSES])
             pending_applications = len([r for r in all_requests 
@@ -274,7 +237,6 @@ class AnalyticsService:
         """
         now = datetime.utcnow()
         
-        # Define this month and last month date ranges
         this_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_month_end = this_month_start - timedelta(days=1)
         last_month_start = last_month_end.replace(day=1)
@@ -286,17 +248,13 @@ class AnalyticsService:
                 return False
             return start <= parsed <= end
         
-        # Get all data (use analytics methods to exclude "removed" items)
         animals = self.animal_service.get_all_animals_for_analytics() or []
         missions = self.rescue_service.get_all_missions_for_analytics() or []
         requests = self.adoption_service.get_all_requests_for_analytics() or []
         
-        # Count animals added this month vs last month
         animals_this_month = len([a for a in animals if is_in_range(a.get("intake_date"), this_month_start, now)])
         animals_last_month = len([a for a in animals if is_in_range(a.get("intake_date"), last_month_start, last_month_end)])
         
-        # Count rescued missions this month vs last month (only those with "rescued" in status)
-        # Use get_base_status to handle "rescued|archived" format
         rescues_this_month = len([m for m in missions 
             if is_in_range(m.get("mission_date"), this_month_start, now)
             and RescueStatus.get_base_status((m.get("status") or "").lower()) == RescueStatus.RESCUED])
@@ -304,8 +262,6 @@ class AnalyticsService:
             if is_in_range(m.get("mission_date"), last_month_start, last_month_end)
             and RescueStatus.get_base_status((m.get("status") or "").lower()) == RescueStatus.RESCUED])
         
-        # Count adoptions (only actual approved status) this month vs last month
-        # Use get_base_status to handle "approved|archived" format
         adoptions_this_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), this_month_start, now) 
             and AdoptionStatus.get_base_status((r.get("status") or "").lower()) in app_config.APPROVED_ADOPTION_STATUSES])
@@ -313,7 +269,6 @@ class AnalyticsService:
             if is_in_range(r.get("request_date"), last_month_start, last_month_end)
             and AdoptionStatus.get_base_status((r.get("status") or "").lower()) in app_config.APPROVED_ADOPTION_STATUSES])
         
-        # Count pending applications this month vs last month
         pending_this_month = len([r for r in requests 
             if is_in_range(r.get("request_date"), this_month_start, now)
             and AdoptionStatus.get_base_status((r.get("status") or "").lower()) == "pending"])
@@ -361,8 +316,6 @@ class AnalyticsService:
         user_adoptions = [a for a in all_adoptions if a.get("user_id") == user_id]
         user_rescues = [r for r in all_rescues if r.get("user_id") == user_id]
         
-        # Count only actual approved status (current or archived)
-        # Use get_base_status to handle "approved|archived" format
         total_adoptions = len([a for a in user_adoptions 
                               if AdoptionStatus.get_base_status((a.get("status") or "").lower()) == "approved"])
         rescue_reports_filed = len(user_rescues)
@@ -416,7 +369,6 @@ class AnalyticsService:
         
         for req in requests:
             status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
-            # Use current status - was_approved is only for historical tracking when archived
             if status == "approved":
                 status_counts["approved"] += 1
             elif status == "denied":
@@ -475,12 +427,10 @@ class AnalyticsService:
         
         for req in requests:
             status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
-            # Only count actual approved status
             if status == "approved":
                 species = (req.get("animal_species") or "Unknown").strip().capitalize()
                 species_counts[species] = species_counts.get(species, 0) + 1
         
-        # Sort by count descending
         sorted_species = sorted(species_counts.items(), key=lambda x: x[1], reverse=True)
         return sorted_species[:limit]
 
@@ -530,7 +480,6 @@ class AnalyticsService:
         
         for req in user_requests:
             status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
-            # Use current status - was_approved is only for historical tracking when archived
             if status == "approved":
                 status_counts["approved"] += 1
             elif status == "denied":
@@ -549,7 +498,6 @@ class AnalyticsService:
         Returns:
             Tuple containing (day_labels, rescues_reported_counts, adoptions_approved_counts)
         """
-        # Prepare day labels for last 30 days
         now = datetime.utcnow()
         days: List[datetime] = []
         for i in range(29, -1, -1):
@@ -558,16 +506,13 @@ class AnalyticsService:
         day_labels = [d.strftime("%m-%d") for d in days]
         day_dates = [d.strftime("%Y-%m-%d") for d in days]
 
-        # Initialize counts
         rescues_reported = [0 for _ in day_labels]
         adoptions_approved = [0 for _ in day_labels]
 
-        # Get user's rescue missions
         missions = self.rescue_service.get_all_missions_for_analytics() or []
         user_missions = [m for m in missions if m.get("user_id") == user_id]
         
         for ms in missions:
-            # Only count this user's reported rescues
             if ms.get("user_id") != user_id:
                 continue
             dt = ms.get("mission_date")
@@ -581,7 +526,6 @@ class AnalyticsService:
                 idx = day_dates.index(date_str)
                 rescues_reported[idx] += 1
 
-        # Get user's adoption requests
         requests = self.adoption_service.get_all_requests_for_analytics() or []
         user_requests = [r for r in requests if r.get("user_id") == user_id]
         
@@ -595,7 +539,6 @@ class AnalyticsService:
             date_str = d.strftime("%Y-%m-%d")
             if date_str in day_dates:
                 idx = day_dates.index(date_str)
-                # Only count requests with approved status (current or archived)
                 status_lower = (req.get("status") or "").lower()
                 base_status = AdoptionStatus.get_base_status(status_lower)
                 if base_status in app_config.APPROVED_ADOPTION_STATUSES:
@@ -615,7 +558,6 @@ class AnalyticsService:
         """
         insights = {}
         
-        # Get user activity stats
         stats = self.get_user_activity_stats(user_id)
         rescue_status_dist = self.get_user_rescue_status_distribution(user_id)
         adoption_status_dist = self.get_user_adoption_status_distribution(user_id)
@@ -626,7 +568,6 @@ class AnalyticsService:
         pending_rescues = rescue_status_dist.get("pending", 0)
         ongoing_rescues = rescue_status_dist.get("on-going", 0)
         
-        # Use adoption_status_dist for accurate counts (matches pie chart)
         total_adoptions = adoption_status_dist.get("approved", 0)
         pending_adoptions = adoption_status_dist.get("pending", 0)
         denied_adoptions = adoption_status_dist.get("denied", 0)
@@ -730,32 +671,59 @@ class AnalyticsService:
         
         # ADOPTION INSIGHT - Personalized for user with rich formatting
         if total_adoptions > 0 or pending_adoptions > 0 or denied_adoptions > 0:
+            breed_prefs = self.get_user_breed_preferences(user_id, limit=1)
+            top_breed = breed_prefs[0][0] if breed_prefs else None
+            top_breed_count = breed_prefs[0][1] if breed_prefs else 0
+            
             if total_adoptions > 0:
-                adoption_headline = {
-                    "text": f"You've adopted {total_adoptions} animal{'s' if total_adoptions > 1 else ''}!",
-                    "icon": "HOME",
-                    "color": "TEAL_700",
-                }
-                adoption_detail = {
-                    "parts": [
-                        {"text": "Thank you for giving ", "weight": "normal"},
-                        {"text": "them", "weight": "bold", "color": "TEAL_600"},
-                        {"text": " a forever home.", "weight": "normal"},
-                    ]
-                }
+                if top_breed and top_breed_count > 0:
+                    adoption_headline = {
+                        "text": f"You've adopted {total_adoptions} animal{'s' if total_adoptions > 1 else ''}!",
+                        "icon": "HOME",
+                        "color": "TEAL_700",
+                    }
+                    adoption_detail = {
+                        "parts": [
+                            {"text": "Your preference: ", "weight": "normal"},
+                            {"text": top_breed, "weight": "bold", "color": "TEAL_600"},
+                            {"text": f" ({top_breed_count} request{'s' if top_breed_count > 1 else ''}).", "weight": "normal"},
+                        ]
+                    }
+                else:
+                    adoption_headline = {
+                        "text": f"You've adopted {total_adoptions} animal{'s' if total_adoptions > 1 else ''}!",
+                        "icon": "HOME",
+                        "color": "TEAL_700",
+                    }
+                    adoption_detail = {
+                        "parts": [
+                            {"text": "Thank you for giving ", "weight": "normal"},
+                            {"text": "them", "weight": "bold", "color": "TEAL_600"},
+                            {"text": " a forever home.", "weight": "normal"},
+                        ]
+                    }
             elif pending_adoptions > 0:
                 adoption_headline = {
                     "text": f"{pending_adoptions} adoption{'s' if pending_adoptions > 1 else ''} pending",
                     "icon": "HOURGLASS_BOTTOM",
                     "color": "BLUE_700",
                 }
-                adoption_detail = {
-                    "parts": [
-                        {"text": "Your application is being ", "weight": "normal"},
-                        {"text": "reviewed", "weight": "bold", "color": "BLUE_600"},
-                        {"text": ".", "weight": "normal"},
-                    ]
-                }
+                if top_breed:
+                    adoption_detail = {
+                        "parts": [
+                            {"text": "Interested in ", "weight": "normal"},
+                            {"text": top_breed, "weight": "bold", "color": "TEAL_600"},
+                            {"text": ". Application being reviewed.", "weight": "normal"},
+                        ]
+                    }
+                else:
+                    adoption_detail = {
+                        "parts": [
+                            {"text": "Your application is being ", "weight": "normal"},
+                            {"text": "reviewed", "weight": "bold", "color": "BLUE_600"},
+                            {"text": ".", "weight": "normal"},
+                        ]
+                    }
             else:
                 adoption_headline = {
                     "text": "Keep trying!",
@@ -823,21 +791,35 @@ class AnalyticsService:
         
         # ACTIVITY INSIGHT - Overall encouragement with rich formatting
         total_activity = total_rescues + total_adoptions + pending_adoptions
+        breed_prefs_all = self.get_user_breed_preferences(user_id, limit=10)
+        breed_diversity = len(breed_prefs_all)
+        
         if total_activity >= 5:
             activity_headline = {
                 "text": "You're a PawRes hero!",
                 "icon": "EMOJI_EVENTS",
                 "color": "AMBER_700",
             }
-            activity_detail = {
-                "parts": [
-                    {"text": "With ", "weight": "normal"},
-                    {"text": str(total_activity), "weight": "bold", "color": "AMBER_600"},
-                    {"text": " total contributions, you're making a ", "weight": "normal"},
-                    {"text": "huge impact", "weight": "bold", "color": "GREEN_600"},
-                    {"text": ".", "weight": "normal"},
-                ]
-            }
+            if breed_diversity > 1:
+                activity_detail = {
+                    "parts": [
+                        {"text": str(total_activity), "weight": "bold", "color": "AMBER_600"},
+                        {"text": " contributions across ", "weight": "normal"},
+                        {"text": str(breed_diversity), "weight": "bold", "color": "PURPLE_600"},
+                        {"text": " breed types. ", "weight": "normal"},
+                        {"text": "Amazing diversity!", "weight": "bold", "color": "GREEN_600"},
+                    ]
+                }
+            else:
+                activity_detail = {
+                    "parts": [
+                        {"text": "With ", "weight": "normal"},
+                        {"text": str(total_activity), "weight": "bold", "color": "AMBER_600"},
+                        {"text": " total contributions, you're making a ", "weight": "normal"},
+                        {"text": "huge impact", "weight": "bold", "color": "GREEN_600"},
+                        {"text": ".", "weight": "normal"},
+                    ]
+                }
             activity_action = {
                 "icon": "VERIFIED",
                 "text": "Keep up the amazing work!",
@@ -914,13 +896,120 @@ class AnalyticsService:
             "action": activity_action,
         }
         
-        # Store raw stats for display
         insights["rescued_count"] = rescued_count
         insights["total_rescues"] = total_rescues
         insights["total_adoptions"] = total_adoptions
         insights["pending_adoptions"] = pending_adoptions
         
         return insights
+
+    def get_breed_insights(self) -> Dict[str, Any]:
+        """Generate breed-specific insights with species context.
+        
+        Returns:
+            Dictionary with structured breed insight data including:
+            - headline: Main message about most popular breed
+            - detail: Top 3 adopted breeds with species and breed diversity info
+            - action: Most adopted breed or 30-day trend info
+        """
+        insight = {}
+        
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        
+        breed_species_counts: Dict[str, Tuple[str, int]] = {}  # breed -> (species, count)
+        
+        for req in requests:
+            status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+            if status != "cancelled":
+                breed = self._normalize_breed(req.get("animal_breed"))
+                species = (req.get("animal_species") or "Unknown").strip().capitalize()
+                
+                if breed in breed_species_counts:
+                    # Increment count (keep first species seen for this breed)
+                    existing_species, count = breed_species_counts[breed]
+                    breed_species_counts[breed] = (existing_species, count + 1)
+                else:
+                    breed_species_counts[breed] = (species, 1)
+        
+        sorted_breeds = sorted(breed_species_counts.items(), key=lambda x: x[1][1], reverse=True)
+        
+        if sorted_breeds:
+            top_breed, (top_species, top_count) = sorted_breeds[0]
+            total_breeds = len(sorted_breeds)
+            
+            # HEADLINE: Most popular breed with species
+            breed_headline = {
+                "text": f"{top_breed} ({top_species}) is most popular!",
+                "icon": "EMOJI_EVENTS",
+                "color": "PURPLE_700",
+            }
+            
+            # DETAIL: Top 1 adopted breed with species only
+            detail_parts = []
+            detail_parts.append({"text": "Most adopted: ", "weight": "normal"})
+            detail_parts.append({"text": f"{top_breed} ({top_species})", "weight": "bold", "color": "PURPLE_800"})
+            
+            breed_detail = {"parts": detail_parts}
+            
+            # ACTION: Most adopted breed or 30-day trend
+            now = datetime.utcnow()
+            thirty_days_ago = now - timedelta(days=30)
+            
+            recent_count = 0
+            for req in requests:
+                status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+                if status != "cancelled":
+                    breed = self._normalize_breed(req.get("animal_breed"))
+                    if breed == top_breed:
+                        dt = parse_datetime(req.get("request_date"))
+                        if dt and dt >= thirty_days_ago:
+                            recent_count += 1
+            
+            if recent_count > 0:
+                breed_action = {
+                    "icon": "TRENDING_UP",
+                    "text": f"{top_breed} ({top_species}): {recent_count} request{'s' if recent_count > 1 else ''} in 30 days.",
+                    "color": "PURPLE_600",
+                    "bg_color": "PURPLE_50",
+                    "severity": "info",
+                }
+            else:
+                breed_action = {
+                    "icon": "PETS",
+                    "text": f"{top_breed} ({top_species}) is most adopted overall.",
+                    "color": "PURPLE_600",
+                    "bg_color": "PURPLE_50",
+                    "severity": "info",
+                }
+            
+            insight = {
+                "headline": breed_headline,
+                "detail": breed_detail,
+                "action": breed_action,
+            }
+        else:
+            # No breed data available
+            insight = {
+                "headline": {
+                    "text": "No breed data yet",
+                    "icon": "INFO",
+                    "color": "GREY_700",
+                },
+                "detail": {
+                    "parts": [
+                        {"text": "Track adoption requests to see breed popularity trends.", "weight": "normal"},
+                    ]
+                },
+                "action": {
+                    "icon": "ADD_CIRCLE",
+                    "text": "Start collecting breed information.",
+                    "color": "PURPLE_600",
+                    "bg_color": "PURPLE_50",
+                    "severity": "info",
+                },
+            }
+        
+        return insight
 
     def get_chart_insights(self) -> Dict[str, Any]:
         """Generate insights from chart data.
@@ -930,7 +1019,6 @@ class AnalyticsService:
         """
         insights = {}
         
-        # Get chart data for trend analysis
         (day_labels, rescued_counts, adopted_counts), type_dist, status_counts = self.get_chart_data()
         
         # Busiest rescue day (last 30 days)
@@ -1001,7 +1089,6 @@ class AnalyticsService:
         high_urgency = urgency_dist.get("high", 0)
         insights["high_urgency_count"] = high_urgency
         
-        # Count PENDING high-urgency missions specifically (for accurate insights)
         missions = self.rescue_service.get_all_missions_for_analytics() or []
         pending_high_urgency = len([
             m for m in missions
@@ -1023,14 +1110,23 @@ class AnalyticsService:
         insights["rescued_30d"] = total_rescued_30d
         insights["adopted_30d"] = total_adopted_30d
         
-        # =====================================================
         # Generate intelligent, contextual insight messages
         # Return structured data for rich Flet rendering
-        # =====================================================
         
         # RESCUE INSIGHT - Contextual analysis
         if total_missions > 0:
             success_rate = insights.get("rescue_success_rate", 0)
+            
+            top_rescued_breeds = self.get_top_breeds_for_rescue(limit=1)
+            top_rescued_breed_info = None
+            if top_rescued_breeds:
+                top_breed = top_rescued_breeds[0][0]
+                missions = self.rescue_service.get_all_missions_for_analytics() or []
+                for m in missions:
+                    if self._normalize_breed(m.get("breed")) == top_breed:
+                        species = (m.get("animal_type") or "Unknown").strip().capitalize()
+                        top_rescued_breed_info = (top_breed, species)
+                        break
             
             if success_rate >= 80:
                 rescue_headline = {
@@ -1038,13 +1134,20 @@ class AnalyticsService:
                     "icon": "EMOJI_EVENTS",  # Trophy icon
                     "color": "GREEN_700",
                 }
-                rescue_detail = {
-                    "parts": [
-                        {"text": "Your team has successfully rescued ", "weight": "normal"},
-                        {"text": str(rescued_count), "weight": "bold", "color": "GREEN_600"},
-                        {"text": " animals.", "weight": "normal"},
-                    ]
-                }
+                detail_parts = [
+                    {"text": "Your team has successfully rescued ", "weight": "normal"},
+                    {"text": str(rescued_count), "weight": "bold", "color": "GREEN_600"},
+                    {"text": " animals", "weight": "normal"},
+                ]
+                if top_rescued_breed_info:
+                    breed, species = top_rescued_breed_info
+                    detail_parts.extend([
+                        {"text": ". Most rescued: ", "weight": "normal"},
+                        {"text": f"{breed} ({species})", "weight": "bold", "color": "BLUE_600"},
+                    ])
+                else:
+                    detail_parts.append({"text": ".", "weight": "normal"})
+                rescue_detail = {"parts": detail_parts}
             elif success_rate >= 50:
                 rescue_headline = {
                     "text": f"Good progress with {success_rate:.0f}% success rate.",
@@ -1073,7 +1176,6 @@ class AnalyticsService:
                     ]
                 }
             
-            # Use accurate pending/ongoing high-urgency count
             active_high_urgency = insights.get("active_high_urgency", 0)
             pending_high_urgency = insights.get("pending_high_urgency", 0)
             ongoing_high_urgency = insights.get("ongoing_high_urgency", 0)
@@ -1169,13 +1271,25 @@ class AnalyticsService:
                     "color": "RED_700",
                 }
             
-            if approved_count > 0 and top_species:
+            top_adopted_breeds = self.get_top_breeds_for_adoption(limit=1)
+            top_adopted_breed_info = None
+            if top_adopted_breeds:
+                top_breed = top_adopted_breeds[0][0]
+                requests = self.adoption_service.get_all_requests_for_analytics() or []
+                for req in requests:
+                    if self._normalize_breed(req.get("animal_breed")) == top_breed:
+                        species = (req.get("animal_species") or "Unknown").strip().capitalize()
+                        top_adopted_breed_info = (top_breed, species)
+                        break
+            
+            if approved_count > 0 and top_adopted_breed_info:
+                breed, species = top_adopted_breed_info
                 adoption_detail = {
                     "parts": [
                         {"text": str(approved_count), "weight": "bold", "color": "TEAL_600"},
                         {"text": " animals found homes. ", "weight": "normal"},
-                        {"text": f"{top_species[0][0]}s", "weight": "bold", "color": "ORANGE_600"},
-                        {"text": " are most popular!", "weight": "normal"},
+                        {"text": f"{breed} ({species})", "weight": "bold", "color": "ORANGE_600"},
+                        {"text": " is most popular!", "weight": "normal"},
                     ]
                 }
             else:
@@ -1252,7 +1366,6 @@ class AnalyticsService:
                     "color": "RED_700",
                 }
             
-            # Build species info
             if type_dist:
                 species_parts = []
                 sorted_species = sorted(type_dist.items(), key=lambda x: -x[1])[:3]
@@ -1261,6 +1374,12 @@ class AnalyticsService:
                         species_parts.append({"text": ", ", "weight": "normal"})
                     species_parts.append({"text": str(count), "weight": "bold", "color": "TEAL_600"})
                     species_parts.append({"text": f" {species}{'s' if count > 1 else ''}", "weight": "normal"})
+                
+                breed_dist = self.get_breed_distribution()
+                breed_count = len(breed_dist)
+                if breed_count > 0:
+                    species_parts.append({"text": f". {breed_count} unique breed", "weight": "normal"})
+                    species_parts.append({"text": "s" if breed_count > 1 else "", "weight": "normal"})
                 
                 health_detail = {
                     "parts": [
@@ -1325,6 +1444,9 @@ class AnalyticsService:
                 },
             }
         
+        # BREED INSIGHT - Add breed-specific analysis
+        insights["breed_insight"] = self.get_breed_insights()
+        
         return insights
 
     def get_user_impact_insights(self, user_id: int) -> List[Dict[str, Any]]:
@@ -1345,7 +1467,6 @@ class AnalyticsService:
         """
         insights = []
         
-        # Get user activity data
         stats = self.get_user_activity_stats(user_id)
         rescue_status_dist = self.get_user_rescue_status_distribution(user_id)
         adoption_status_dist = self.get_user_adoption_status_distribution(user_id)
@@ -1354,11 +1475,9 @@ class AnalyticsService:
         pending_rescues = rescue_status_dist.get("pending", 0)
         ongoing_rescues = rescue_status_dist.get("on-going", 0)
         total_rescues = stats.get("rescue_reports_filed", 0)
-        # Use adoption_status_dist for accurate counts (matches pie chart)
         pending_adoptions = adoption_status_dist.get("pending", 0)
         total_adoptions = adoption_status_dist.get("approved", 0)
         
-        # Check for active missions that need attention
         active_missions = pending_rescues + ongoing_rescues
         if active_missions > 0:
             if pending_rescues > 0 and ongoing_rescues > 0:
@@ -1394,7 +1513,6 @@ class AnalyticsService:
                     "bg_color": "BLUE_50",
                 })
         
-        # Check for pending adoption applications
         if pending_adoptions > 0:
             insights.append({
                 "icon": "HOURGLASS_BOTTOM",
@@ -1471,6 +1589,210 @@ class AnalyticsService:
                 })
         
         return insights[:2]  # Show max 2 insights
+
+    def _normalize_breed(self, breed: Optional[str]) -> str:
+        """Normalize breed value for analytics.
+        
+        Args:
+            breed: Raw breed value from database
+            
+        Returns:
+            Normalized breed string
+        """
+        if not breed or breed.strip() == "":
+            return "Not Specified"
+        
+        breed_clean = breed.strip()
+        
+        # Normalize "Unknown" variants to "Not Specified"
+        if breed_clean.lower() in ("unknown", "n/a", "not specified"):
+            return "Not Specified"
+        
+        # Keep "Mixed Breed" as-is (capitalized)
+        if breed_clean.lower() == "mixed breed":
+            return "Mixed Breed"
+        
+        return breed_clean.capitalize()
+
+    def get_breed_distribution(self) -> List[Tuple[str, int]]:
+        """Get breed distribution for all animals regardless of status.
+        
+        Returns:
+            List of (breed, count) tuples sorted by count descending.
+            No limit - returns all breeds.
+        """
+        animals = self.animal_service.get_all_animals() or []
+        
+        breed_counts: Dict[str, int] = {}
+        
+        for animal in animals:
+            breed = self._normalize_breed(animal.get("breed"))
+            breed_counts[breed] = breed_counts.get(breed, 0) + 1
+        
+        sorted_breeds = sorted(breed_counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_breeds
+
+    def get_top_breeds_for_adoption(self, limit: int = 3) -> List[Tuple[str, int]]:
+        """Get top breeds from ALL adoption requests (excluding cancelled).
+        
+        Args:
+            limit: Maximum number of breeds to return (default 3)
+            
+        Returns:
+            List of (breed, count) tuples sorted by count descending
+        """
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        
+        breed_counts: Dict[str, int] = {}
+        
+        for req in requests:
+            status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+            if status != "cancelled":
+                breed = self._normalize_breed(req.get("animal_breed"))
+                breed_counts[breed] = breed_counts.get(breed, 0) + 1
+        
+        sorted_breeds = sorted(breed_counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_breeds[:limit]
+
+    def get_top_breeds_for_rescue(self, limit: int = 3) -> List[Tuple[str, int]]:
+        """Get top breeds from ALL rescue missions (excluding cancelled).
+        
+        Args:
+            limit: Maximum number of breeds to return (default 3)
+            
+        Returns:
+            List of (breed, count) tuples sorted by count descending
+        """
+        missions = self.rescue_service.get_all_missions_for_analytics() or []
+        
+        breed_counts: Dict[str, int] = {}
+        
+        for mission in missions:
+            status = RescueStatus.get_base_status((mission.get("status") or "").lower())
+            if status != RescueStatus.CANCELLED:
+                breed = self._normalize_breed(mission.get("breed"))
+                breed_counts[breed] = breed_counts.get(breed, 0) + 1
+        
+        sorted_breeds = sorted(breed_counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_breeds[:limit]
+
+    def get_adoptable_breed_distribution(self, limit: int = 10) -> List[Tuple[str, int]]:
+        """Get breed distribution for adoptable animals only (status='processing').
+        
+        Args:
+            limit: Maximum number of breeds to return (default 10)
+            
+        Returns:
+            List of (breed_with_species, count) tuples sorted by count descending.
+            Format: "Breed (Species)" e.g., "Golden Retriever (Dog)"
+        """
+        animals = self.animal_service.get_adoptable_animals() or []
+        
+        breed_counts: Dict[str, int] = {}
+        
+        for animal in animals:
+            breed = self._normalize_breed(animal.get("breed"))
+            species = (animal.get("species") or "Unknown").strip().capitalize()
+            breed_with_species = f"{breed} ({species})"
+            breed_counts[breed_with_species] = breed_counts.get(breed_with_species, 0) + 1
+        
+        sorted_breeds = sorted(breed_counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_breeds[:limit]
+
+    def get_user_breed_preferences(self, user_id: int, limit: int = 5) -> List[Tuple[str, int]]:
+        """Get breed preferences from user's adoption requests (all statuses except cancelled).
+        
+        Args:
+            user_id: The user's ID
+            limit: Maximum number of breeds to return (default 5)
+            
+        Returns:
+            List of (breed_with_species, count) tuples sorted by count descending.
+            Format: "Breed (Species)" e.g., "Golden Retriever (Dog)"
+        """
+        requests = self.adoption_service.get_all_requests_for_analytics() or []
+        user_requests = [r for r in requests if r.get("user_id") == user_id]
+        
+        breed_counts: Dict[str, int] = {}
+        
+        for req in user_requests:
+            status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+            if status != "cancelled":
+                breed = self._normalize_breed(req.get("animal_breed"))
+                species = (req.get("animal_species") or "Unknown").strip().capitalize()
+                breed_with_species = f"{breed} ({species})"
+                breed_counts[breed_with_species] = breed_counts.get(breed_with_species, 0) + 1
+        
+        sorted_breeds = sorted(breed_counts.items(), key=lambda x: x[1], reverse=True)
+        return sorted_breeds[:limit]
+
+    def get_breed_trends(self, mode: str = "adoption") -> Tuple[List[str], List[Tuple[str, List[int]]]]:
+        """Get 30-day trend data for top 3 breeds.
+        
+        Args:
+            mode: "adoption" for adoption trends, "rescue" for rescue trends
+            
+        Returns:
+            Tuple containing:
+            - day_labels: List of date labels (MM-DD format)
+            - breed_series: List of (breed_name, counts) tuples for top 3 breeds
+        """
+        now = datetime.utcnow()
+        days: List[datetime] = []
+        for i in range(29, -1, -1):
+            d = now - timedelta(days=i)
+            days.append(d)
+        day_labels = [d.strftime("%m-%d") for d in days]
+        day_dates = [d.strftime("%Y-%m-%d") for d in days]
+
+        if mode == "adoption":
+            top_breeds_data = self.get_top_breeds_for_adoption(limit=3)
+        else:  # rescue
+            top_breeds_data = self.get_top_breeds_for_rescue(limit=3)
+        
+        top_breeds = [breed for breed, _ in top_breeds_data]
+        
+        breed_counts: Dict[str, List[int]] = {breed: [0] * 30 for breed in top_breeds}
+        
+        if mode == "adoption":
+            requests = self.adoption_service.get_all_requests_for_analytics() or []
+            for req in requests:
+                status = AdoptionStatus.get_base_status((req.get("status") or "").lower())
+                if status != "cancelled":
+                    dt = req.get("request_date")
+                    if not dt:
+                        continue
+                    d = parse_datetime(dt)
+                    if d is None:
+                        continue
+                    date_str = d.strftime("%Y-%m-%d")
+                    if date_str in day_dates:
+                        breed = self._normalize_breed(req.get("animal_breed"))
+                        if breed in breed_counts:
+                            idx = day_dates.index(date_str)
+                            breed_counts[breed][idx] += 1
+        else:  # rescue
+            missions = self.rescue_service.get_all_missions_for_analytics() or []
+            for mission in missions:
+                status = RescueStatus.get_base_status((mission.get("status") or "").lower())
+                if status != RescueStatus.CANCELLED:
+                    dt = mission.get("mission_date")
+                    if not dt:
+                        continue
+                    d = parse_datetime(dt)
+                    if d is None:
+                        continue
+                    date_str = d.strftime("%Y-%m-%d")
+                    if date_str in day_dates:
+                        breed = self._normalize_breed(mission.get("breed"))
+                        if breed in breed_counts:
+                            idx = day_dates.index(date_str)
+                            breed_counts[breed][idx] += 1
+        
+        # Convert to list of tuples
+        breed_series = [(breed, counts) for breed, counts in breed_counts.items()]
+        
+        return day_labels, breed_series
 
     def invalidate_cache(self) -> None:
         """Invalidate all cached analytics data.

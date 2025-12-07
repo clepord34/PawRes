@@ -1,6 +1,7 @@
 """Shared animal form component for Add and Edit Animal pages."""
 from __future__ import annotations
 
+import threading
 from typing import Optional, Callable, Dict, Any
 
 try:
@@ -60,11 +61,18 @@ class AnimalFormWidget:
         # Form fields
         self._type_dropdown = None
         self._name_field = None
+        self._breed_field = None
         self._age_dropdown = None
         self._health_dropdown = None
         self._photo_widget = None
         self._error_text = None
         self._submit_btn = None
+        
+        # AI classification
+        self._ai_suggestion_container = None
+        self._ai_result = None
+        self._ai_loading = False
+        self._accepted_breed = None  # Store accepted breed from AI suggestion
         
         # For edit mode photo handling
         self._existing_photo_base64 = None
@@ -72,6 +80,8 @@ class AnimalFormWidget:
         self._photo_display = None
         self._pending_image_bytes = None
         self._pending_original_name = None
+        self._current_photo_base64 = None
+        self._ai_button = None
     
     def build(self) -> object:
         """Build and return the form container."""
@@ -101,6 +111,9 @@ class AnimalFormWidget:
         # Photo section
         photo_section = self._build_photo_section()
         
+        # AI suggestion container (initially empty)
+        self._ai_suggestion_container = ft.Container(content=None, visible=False)
+        
         # Animal details section
         details_section = self._build_details_section()
         
@@ -110,13 +123,13 @@ class AnimalFormWidget:
         # Action buttons
         buttons_section = self._build_buttons_section()
         
-        # Build card content
         card_content = ft.Column([
             title_section,
             ft.Divider(height=1, color=ft.Colors.GREY_300),
             ft.Container(height=15),
             photo_section,
             ft.Container(height=8),
+            self._ai_suggestion_container,
             details_section,
             ft.Container(height=15),
             self._error_text,
@@ -138,7 +151,6 @@ class AnimalFormWidget:
             ),
         )
         
-        # Add rescue info button if available (for edit mode)
         if self.rescue_info:
             rescue_info_btn = self._create_rescue_info_button()
             return ft.Stack([
@@ -206,6 +218,7 @@ class AnimalFormWidget:
                         self._pending_original_name = original_name
                         
                         photo_b64 = base64.b64encode(image_bytes).decode()
+                        self._current_photo_base64 = photo_b64
                         self._photo_display.content = ft.Image(
                             src_base64=photo_b64,
                             width=120,
@@ -213,6 +226,16 @@ class AnimalFormWidget:
                             fit=ft.ImageFit.COVER,
                             border_radius=8,
                         )
+                        
+                        # Clear AI suggestion when new photo is selected
+                        self._clear_ai_suggestion()
+                        
+                        # Enable AI button now that we have a photo
+                        if self._ai_button:
+                            self._ai_button.disabled = False
+                            self._ai_button.bgcolor = ft.Colors.TEAL_600
+                            self._ai_button.color = ft.Colors.WHITE
+                        
                         self.page.update()
                     except Exception:
                         pass
@@ -235,14 +258,29 @@ class AnimalFormWidget:
                 )
             )
             
+            self._current_photo_base64 = self._existing_photo_base64
+            
+            # AI analyze button for edit mode
+            from components.ai_suggestion_card import create_ai_analyze_button
+            self._ai_button = create_ai_analyze_button(
+                on_click=lambda: self._handle_ai_analyze(self._current_photo_base64) if self._current_photo_base64 else None,
+                disabled=not self._current_photo_base64,
+            )
+            ai_button = self._ai_button
+            
             photo_container = ft.Column([
                 self._photo_display,
                 ft.Container(height=8),
-                photo_button,
+                ft.Row([photo_button, ai_button], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0)
         else:
-            # For add mode, use photo upload widget
-            self._photo_widget = create_photo_upload_widget(self.page)
+            # For add mode, use photo upload widget with AI callback
+            self._photo_widget = create_photo_upload_widget(
+                self.page,
+                on_ai_analyze=self._handle_ai_analyze,
+                show_ai_button=True,
+                on_photo_changed=self._clear_ai_suggestion,
+            )
             photo_container = self._photo_widget.build()
         
         return ft.Column([
@@ -253,6 +291,111 @@ class AnimalFormWidget:
             ft.Container(height=8),
             ft.Container(photo_container, alignment=ft.alignment.center),
         ], spacing=0)
+    
+    def _handle_ai_analyze(self, photo_base64: str):
+        """Handle AI analyze button click - runs classification in background thread with progress."""
+        if self._ai_loading:
+            return
+        
+        from services.ai_classification_service import get_ai_classification_service
+        service = get_ai_classification_service()
+        download_status = service.get_download_status()
+        
+        # If models not downloaded, show download dialog
+        if not all(download_status.values()):
+            from components.ai_download_dialog import create_ai_download_dialog
+            
+            def on_download_complete(success: bool):
+                """Called after download completes."""
+                if success:
+                    # Start classification after successful download
+                    self._handle_ai_analyze(photo_base64)
+            
+            create_ai_download_dialog(self.page, on_complete=on_download_complete)
+            return
+        
+        self._ai_loading = True
+        
+        from components.ai_suggestion_card import create_ai_loading_card
+        self._ai_suggestion_container.content = create_ai_loading_card()
+        self._ai_suggestion_container.visible = True
+        self.page.update()
+        
+        def classify():
+            try:
+                result = service.classify_image(photo_base64)
+                
+                self.page.run_thread(lambda: self._on_ai_result(result))
+            except Exception as e:
+                print(f"[AI] Classification error: {e}")
+                from models.classification_result import ClassificationResult
+                error_result = ClassificationResult.from_error(str(e))
+                self.page.run_thread(lambda: self._on_ai_result(error_result))
+        
+        thread = threading.Thread(target=classify, daemon=True)
+        thread.start()
+    
+    def _on_ai_result(self, result):
+        """Handle AI classification result - called on main thread."""
+        self._ai_loading = False
+        self._ai_result = result
+        
+        from components.ai_suggestion_card import create_ai_suggestion_card
+        
+        self._ai_suggestion_container.content = create_ai_suggestion_card(
+            result=result,
+            on_accept=self._accept_ai_suggestion,
+            on_dismiss=self._dismiss_ai_suggestion,
+        )
+        self._ai_suggestion_container.visible = True
+        self.page.update()
+    
+    def _accept_ai_suggestion(self, species: str, breed: str):
+        """Accept the AI suggestion and fill in the form fields."""
+        # Map species to dropdown value
+        species_map = {"Dog": "Dog", "Cat": "Cat", "Other": "Other"}
+        dropdown_value = species_map.get(species, "Other")
+        
+        if self._type_dropdown:
+            self._type_dropdown.value = dropdown_value
+        
+        self._accepted_breed = breed
+        if self._breed_field and breed and breed != "Not Applicable":
+            self._breed_field.value = breed
+        
+        # If breed is a specific name (not mixed breed placeholder), suggest it for the name
+        # Only suggest name if it's empty and breed is specific
+        if self._name_field and not self._name_field.value:
+            # Don't auto-fill name for mixed breeds (Aspin/Puspin)
+            if breed and "Mixed Breed" not in breed and breed != "Not Applicable":
+                # Just leave name empty - user should name their pet
+                pass
+        
+        # Hide the suggestion card
+        self._ai_suggestion_container.visible = False
+        self._ai_suggestion_container.content = None
+        
+        from components.dialogs import show_snackbar
+        breed_text = f" - {breed}" if breed and breed != "Not Applicable" else ""
+        show_snackbar(self.page, f"✅ Set species to {species}{breed_text}")
+        
+        self.page.update()
+    
+    def _dismiss_ai_suggestion(self):
+        """Dismiss the AI suggestion and allow manual entry."""
+        self._ai_suggestion_container.visible = False
+        self._ai_suggestion_container.content = None
+        self._ai_result = None
+        self.page.update()
+    
+    def _clear_ai_suggestion(self):
+        """Clear AI suggestion when new photo is selected."""
+        self._ai_suggestion_container.visible = False
+        self._ai_suggestion_container.content = None
+        self._ai_result = None
+        self._ai_loading = False
+        self._accepted_breed = None  # Clear breed when new photo selected
+        # Don't call page.update() here - caller will update
     
     def _build_details_section(self):
         """Build the animal details section."""
@@ -292,6 +435,15 @@ class AnimalFormWidget:
             value=name_value,
         )
         
+        # Breed field (optional - can be set manually or by AI)
+        breed_value = self.animal_data.get("breed", "") if self.mode == "edit" else ""
+        self._breed_field = create_form_text_field(
+            label="Breed (Optional)",
+            hint_text="Enter breed or use AI to detect",
+            width=400,
+            value=breed_value,
+        )
+        
         # Age dropdown - covers typical lifespan for dogs (10-13 avg, up to 20) and cats (15-20 avg, up to 25+)
         age_options = ["Under 1 year"] + [f"{i} year{'s' if i != 1 else ''}" for i in range(1, 21)] + ["Above 20 years"]
         age_label = "Age" if self.mode == "add" else "Age (Optional)"
@@ -319,6 +471,7 @@ class AnimalFormWidget:
             ft.Container(height=8),
             self._type_dropdown,
             self._name_field,
+            self._breed_field,
             self._age_dropdown,
             self._health_dropdown,
         ], spacing=12)
@@ -368,7 +521,6 @@ class AnimalFormWidget:
             alignment=ft.MainAxisAlignment.CENTER
         )
         
-        # Add bulk import button for add mode if callback is provided
         if not is_edit and self.on_bulk_import_callback:
             bulk_import_btn = ft.OutlinedButton(
                 content=ft.Row(
@@ -487,7 +639,6 @@ class AnimalFormWidget:
             return None
         if age_selection == "Under 1 year":
             return 0
-        # Extract number from "X year" or "X years"
         try:
             return int(age_selection.split()[0])
         except (ValueError, IndexError):
@@ -513,9 +664,9 @@ class AnimalFormWidget:
             "name": (self._name_field.value or "").strip(),
             "age": age,
             "health_status": (self._health_dropdown.value or "").strip(),
+            "breed": (self._breed_field.value or "").strip() or self._accepted_breed,
         }
         
-        # Add photo data based on mode
         if self.mode == "add" and self._photo_widget:
             form_data["photo_widget"] = self._photo_widget
         elif self.mode == "edit":

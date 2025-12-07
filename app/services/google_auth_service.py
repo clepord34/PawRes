@@ -314,7 +314,6 @@ class GoogleAuthService:
         """
         try:
             import socket
-            # Create socket with its own timeout (don't use setdefaulttimeout which affects global state)
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(3)
             try:
@@ -334,7 +333,6 @@ class GoogleAuthService:
         # Generate random 43-128 character verifier
         code_verifier = secrets.token_urlsafe(64)
         
-        # Create SHA256 challenge
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
         
@@ -457,14 +455,12 @@ class GoogleAuthService:
                 on_error(error_msg)
             return None
         
-        # Check internet connectivity before attempting OAuth
         if not self.check_internet_available():
             error_msg = "No internet connection. Google Sign-In requires an active internet connection."
             if on_error:
                 on_error(error_msg)
             return None
         
-        # Reset callback handler state
         OAuthCallbackHandler.auth_code = None
         OAuthCallbackHandler.error = None
         
@@ -490,15 +486,12 @@ class GoogleAuthService:
         
         try:
             while True:
-                # Check if we already have a result
                 if OAuthCallbackHandler.auth_code or OAuthCallbackHandler.error:
                     break
                 
-                # Check for timeout
                 if time.time() - start_time > max_wait:
                     break
                 
-                # Handle one request (with timeout)
                 try:
                     server.handle_request()
                 except Exception:
@@ -507,7 +500,6 @@ class GoogleAuthService:
         finally:
             server.server_close()
         
-        # Check for errors
         if OAuthCallbackHandler.error:
             if on_error:
                 on_error(OAuthCallbackHandler.error)
@@ -527,10 +519,8 @@ class GoogleAuthService:
             if not access_token:
                 raise GoogleAuthError("No access token in response")
             
-            # Get user info
             user_info = self.get_user_info(access_token)
             
-            # Add tokens to user info for potential later use
             user_info["_tokens"] = {
                 "access_token": access_token,
                 "refresh_token": tokens.get("refresh_token"),

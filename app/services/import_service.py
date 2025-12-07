@@ -84,7 +84,6 @@ class ImportService:
         
         try:
             with open(file_path, "r", encoding="utf-8-sig") as f:
-                # Filter out comment lines (starting with #)
                 lines = [line for line in f if not line.strip().startswith("#")]
                 
             if not lines:
@@ -94,14 +93,12 @@ class ImportService:
             # Parse CSV from filtered lines
             reader = csv.DictReader(lines)
             
-            # Validate headers
             headers = reader.fieldnames or []
             header_error = self._validate_headers(headers)
             if header_error:
                 result.errors.append(ImportError(row=1, message=header_error))
                 return result
             
-            # Process each row
             for row_num, row in enumerate(reader, start=2):  # Start at 2 (1 is header)
                 self._process_row(row_num, row, file_dir, result)
                 
@@ -131,7 +128,6 @@ class ImportService:
         try:
             wb = load_workbook(file_path, read_only=True, data_only=True)
             
-            # Use first sheet (or "Animals" sheet if exists)
             if "Animals" in wb.sheetnames:
                 ws = wb["Animals"]
             else:
@@ -154,14 +150,12 @@ class ImportService:
                 result.errors.append(ImportError(row=1, message=header_error))
                 return result
             
-            # Create column index map
             col_map = {name: idx for idx, name in enumerate(headers)}
             
-            # Process data rows
             for row_num, row_data in enumerate(rows[1:], start=2):
                 # Convert row to dict
                 row = {}
-                for col_name in ["name", "animal_type", "age", "health_status", "photo"]:
+                for col_name in ["name", "animal_type", "breed", "age", "health_status", "photo"]:
                     if col_name in col_map:
                         value = row_data[col_map[col_name]]
                         row[col_name] = str(value).strip() if value is not None else ""
@@ -200,20 +194,18 @@ class ImportService:
         # Normalize keys to lowercase
         row = {k.lower().strip(): v for k, v in row.items()}
         
-        # Validate and extract fields
         validation_error = self._validate_row(row)
         if validation_error:
             result.errors.append(ImportError(row=row_num, message=validation_error))
             return
         
-        # Extract validated data
         name = row.get("name", "").strip()
         animal_type = row.get("animal_type", "").strip().capitalize()
+        breed = row.get("breed", "").strip() or None
         age = int(row.get("age", 0))
         health_status = row.get("health_status", "").strip().lower()
         photo_path = row.get("photo", "").strip()
         
-        # Handle photo if provided
         photo_filename = None
         if photo_path:
             photo_result = self._handle_photo(photo_path, file_dir, name)
@@ -223,11 +215,11 @@ class ImportService:
                 result.errors.append(ImportError(row=row_num, message=photo_result[1]))
                 return
         
-        # Add animal to database
         try:
             self.animal_service.add_animal(
                 name=name,
                 type=animal_type,
+                breed=breed,
                 age=age,
                 health_status=health_status,
                 photo=photo_filename,
@@ -238,7 +230,6 @@ class ImportService:
     
     def _validate_row(self, row: Dict[str, Any]) -> Optional[str]:
         """Validate a row's data. Returns error message or None."""
-        # Check required fields
         name = row.get("name", "").strip()
         if not name:
             return "Missing required field 'name'"
@@ -265,6 +256,8 @@ class ImportService:
         if health_status not in self.VALID_HEALTH_STATUSES:
             return f"Invalid health_status '{row.get('health_status')}'. Must be Healthy, Recovering, or Injured (case-insensitive)"
         
+        # Breed is optional, no validation needed
+        
         return None
     
     def _handle_photo(self, photo_path: str, file_dir: str, animal_name: str) -> Tuple[bool, str]:
@@ -273,7 +266,6 @@ class ImportService:
         Returns:
             Tuple of (success, filename_or_error_message)
         """
-        # Check if it's a URL
         if photo_path.startswith(("http://", "https://")):
             return self._download_photo_from_url(photo_path, animal_name)
         else:
@@ -289,17 +281,14 @@ class ImportService:
             import urllib.request
             import ssl
             
-            # Extract filename from URL
             parsed = urlparse(url)
             url_filename = os.path.basename(parsed.path) or "photo.jpg"
             ext = os.path.splitext(url_filename)[1].lower()
             
-            # Validate extension
             if ext not in app_config.ALLOWED_PHOTO_EXTENSIONS:
                 return (False, f"Invalid photo format '{ext}'. Allowed: {', '.join(app_config.ALLOWED_PHOTO_EXTENSIONS)}")
             
             # Download to temp file
-            # Create SSL context that doesn't verify (for self-signed certs)
             ctx = ssl.create_default_context()
             ctx.check_hostname = False
             ctx.verify_mode = ssl.CERT_NONE
@@ -319,11 +308,9 @@ class ImportService:
                 with open(tmp_path, "rb") as f:
                     image_bytes = f.read()
                 
-                # Validate it's actually an image (basic check)
                 if len(image_bytes) < 100:
                     return (False, "Downloaded file is too small to be a valid image")
                 
-                # Save using file store
                 filename = self.file_store.save_bytes(
                     data=image_bytes,
                     original_name=url_filename,
@@ -351,11 +338,9 @@ class ImportService:
         # Normalize path
         photo_path = os.path.normpath(photo_path)
         
-        # Check if file exists
         if not os.path.isfile(photo_path):
             return (False, f"Photo file not found: {photo_path}")
         
-        # Validate extension
         ext = os.path.splitext(photo_path)[1].lower()
         if ext not in app_config.ALLOWED_PHOTO_EXTENSIONS:
             return (False, f"Invalid photo format '{ext}'. Allowed: {', '.join(app_config.ALLOWED_PHOTO_EXTENSIONS)}")
@@ -365,7 +350,6 @@ class ImportService:
             with open(photo_path, "rb") as f:
                 image_bytes = f.read()
             
-            # Save using file store
             original_name = os.path.basename(photo_path)
             filename = self.file_store.save_bytes(
                 data=image_bytes,
@@ -400,27 +384,27 @@ class ImportService:
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
             content = """# ===== PawRes Animal Import Template =====
-# 
+#
 # INSTRUCTIONS:
-# 
+#
 # Column Descriptions:
 #   name          - Required. The animal's name
 #   animal_type   - Required. Must be: Dog, Cat, or Other (case-insensitive)
+#   breed         - Optional. The breed of the animal (e.g., Golden Retriever, Persian)
 #   age           - Required. Number from 0 to 21
 #                   0 = Under 1 year, 1-20 = Age in years, 21 = Above 20 years
-#   health_status - Required. Must be: healthy, recovering, or injured (case-insensitive)
+#   health_status - Required. Must be: Healthy, Recovering, or Injured (case-insensitive)
 #   photo         - Optional. Web URL or local file path
 #
 # Supported Photo Formats: .jpg, .jpeg, .png, .gif, .webp
 # Lines starting with # are comments and will be ignored.
 # Delete the example rows below and add your own data.
 #
-# ================================================
-name,animal_type,age,health_status,photo
-Buddy,Dog,3,healthy,https://example.com/buddy.jpg
-Whiskers,Cat,0,recovering,
-Max,Dog,15,injured,
-Luna,Cat,2,healthy,
+name,animal_type,breed,age,health_status,photo
+Buddy,Dog,Golden Retriever,3,healthy,https://example.com/buddy.jpg
+Whiskers,Cat,Persian,0,recovering,
+Max,Dog,Labrador,15,injured,
+Luna,Cat,,2,healthy,
 """
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -451,7 +435,7 @@ Luna,Cat,2,healthy,
             ws_data = wb.active
             ws_data.title = "Animals"
             
-            headers = ["name", "animal_type", "age", "health_status", "photo"]
+            headers = ["name", "animal_type", "breed", "age", "health_status", "photo"]
             header_fill = PatternFill(start_color="008080", end_color="008080", fill_type="solid")
             header_font = Font(bold=True, color="FFFFFF")
             
@@ -463,10 +447,10 @@ Luna,Cat,2,healthy,
             
             # Example data
             example_data = [
-                ("Buddy", "Dog", 3, "healthy", "https://example.com/buddy.jpg"),
-                ("Whiskers", "Cat", 0, "recovering", "C:\\Photos\\whiskers.png"),
-                ("Max", "Dog", 15, "injured", ""),
-                ("Luna", "Cat", 2, "healthy", "./photos/luna.jpg"),
+                ("Buddy", "Dog", "Golden Retriever", 3, "healthy", "https://example.com/buddy.jpg"),
+                ("Whiskers", "Cat", "Persian", 0, "recovering", "C:\\Photos\\whiskers.png"),
+                ("Max", "Dog", "Labrador", 15, "injured", ""),
+                ("Luna", "Cat", "", 2, "healthy", "./photos/luna.jpg"),
             ]
             
             for row_num, row_data in enumerate(example_data, start=2):
@@ -475,9 +459,10 @@ Luna,Cat,2,healthy,
             
             ws_data.column_dimensions["A"].width = 15
             ws_data.column_dimensions["B"].width = 15
-            ws_data.column_dimensions["C"].width = 10
-            ws_data.column_dimensions["D"].width = 15
-            ws_data.column_dimensions["E"].width = 40
+            ws_data.column_dimensions["C"].width = 18
+            ws_data.column_dimensions["D"].width = 10
+            ws_data.column_dimensions["E"].width = 15
+            ws_data.column_dimensions["F"].width = 40
             
             # Sheet 2: Instructions
             ws_inst = wb.create_sheet(title="Instructions")
@@ -488,8 +473,9 @@ Luna,Cat,2,healthy,
                 ("", False, 11),
                 ("name (Required) - The animal's name", False, 11),
                 ("animal_type (Required) - Must be: Dog, Cat, or Other (case-insensitive)", False, 11),
+                ("breed (Optional) - The breed of the animal (e.g., Golden Retriever, Persian)", False, 11),
                 ("age (Required) - Number 0-21 (0=Under 1 year, 21=Above 20)", False, 11),
-                ("health_status (Required) - Must be: healthy, recovering, or injured (case-insensitive)", False, 11),
+                ("health_status (Required) - Must be: Healthy, Recovering, or Injured (case-insensitive)", False, 11),
                 ("photo (Optional) - Web URL or local file path", False, 11),
                 ("", False, 11),
                 ("Supported photo formats: .jpg, .jpeg, .png, .gif, .webp", False, 11),

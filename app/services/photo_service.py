@@ -57,7 +57,6 @@ class PhotoService:
         if len(data) < 100:
             return False
         
-        # Check if it looks like a filename (has extension at end)
         if data.endswith(self._allowed_extensions):
             return False
         
@@ -84,12 +83,10 @@ class PhotoService:
         except Exception as e:
             return PhotoValidationResult.DECODE_ERROR, f"Invalid base64 data: {e}"
         
-        # Check file size
         size_mb = len(decoded) / (1024 * 1024)
         if size_mb > self._max_size_mb:
             return PhotoValidationResult.INVALID_SIZE, f"Image too large ({size_mb:.2f}MB). Max: {self._max_size_mb}MB"
         
-        # Check MIME type by magic bytes
         mime_type = self._detect_mime_type(decoded)
         if mime_type not in self._allowed_mime_types:
             return PhotoValidationResult.INVALID_TYPE, f"Invalid image type. Allowed: {', '.join(self._allowed_mime_types)}"
@@ -108,7 +105,6 @@ class PhotoService:
         if len(data) < 4:
             return None
         
-        # Check magic bytes for common image formats
         if data[:3] == b'\xff\xd8\xff':
             return "image/jpeg"
         elif data[:8] == b'\x89PNG\r\n\x1a\n':
