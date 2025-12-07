@@ -41,6 +41,10 @@ app/storage/uploads/*
 !app/storage/uploads/.gitkeep
 app/storage/temp/*
 !app/storage/temp/.gitkeep
+app/storage/ai_models/*
+!app/storage/ai_models/.gitkeep
+app/storage/temp/*
+!app/storage/temp/.gitkeep
 
 # Asset directories (keep structure, ignore contents)
 app/assets/icons/*
