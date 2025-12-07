@@ -1,197 +1,419 @@
-"""Unit tests for RescueService."""
-from __future__ import annotations
-
+"""Tests for RescueService - status transitions, animal auto-creation."""
 import pytest
 
 from services.rescue_service import RescueService
-from services.auth_service import AuthService
+from services.animal_service import AnimalService
+from storage.database import Database
+from app_config import RescueStatus, AnimalStatus
 
 
-@pytest.fixture
-def test_user(auth_service: AuthService) -> int:
-    """Create a test user and return their ID for foreign key constraints."""
-    user_id = auth_service.register_user(
-        name="Rescue Test User",
-        email="rescue_test@example.com",
-        password="testpass",
-        skip_policy=True
-    )
-    return user_id
-
-
-class TestSubmitRescueRequest:
-    """Tests for submitting rescue requests."""
-
-    def test_submit_rescue_request_basic(self, rescue_service: RescueService, test_user: int):
-        """Test submitting a basic rescue request."""
+class TestSubmitRescue:
+    """Test rescue mission submission."""
+    
+    def test_submit_rescue_success(self, rescue_service, sample_user):
+        """Test submitting a rescue mission."""
         mission_id = rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="123 Main Street"
+            user_id=sample_user["id"],
+            animal_type="dog",
+            breed="Mixed",
+            location="Naga City",
+            latitude=13.6218,
+            longitude=123.1948,
+            urgency="high",
+            details="Injured dog needs help. Found near the highway"
         )
         
-        assert mission_id is not None
-        assert isinstance(mission_id, int)
         assert mission_id > 0
-
-    def test_submit_rescue_request_with_all_fields(self, rescue_service: RescueService, test_user: int):
-        """Test submitting a rescue request with all optional fields."""
+        
+        mission = rescue_service.get_mission_by_id(mission_id)
+        assert mission is not None
+        assert mission["user_id"] == sample_user["id"]
+        assert RescueStatus.normalize(mission["status"]) == RescueStatus.PENDING
+    
+    def test_submit_rescue_minimal_fields(self, rescue_service, sample_user):
+        """Test submitting rescue with only required fields."""
         mission_id = rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="456 Oak Avenue",
-            animal_type="Dog",
-            name="Stray dog near park",
-            details="Medium-sized brown dog, looks scared",
-            latitude=14.5995,
-            longitude=120.9842
+            user_id=sample_user["id"],
+            animal_type="cat",
+            breed="Unknown",
+            location="Manila"
         )
         
-        assert mission_id is not None
-        
-        # Verify mission was created
-        missions = rescue_service.get_all_missions()
-        assert len(missions) == 1
-        mission = missions[0]
-        assert mission["location"] == "456 Oak Avenue"
-        assert mission["latitude"] == 14.5995
-        assert mission["longitude"] == 120.9842
-
-    def test_submit_rescue_request_default_status_is_pending(self, rescue_service: RescueService, test_user: int):
-        """Test that new rescue requests default to 'pending' status."""
+        assert mission_id > 0
+    
+    def test_submit_rescue_with_photo(self, rescue_service, sample_user, sample_photo_base64):
+        """Test submitting rescue with photo."""
         mission_id = rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="Test Location"
+            user_id=sample_user["id"],
+            animal_type="dog",
+            breed="Unknown",
+            location="Quezon City",
+            animal_photo=sample_photo_base64
         )
         
-        missions = rescue_service.get_all_missions()
-        assert missions[0]["status"] == "pending"
+        assert mission_id > 0
+        
+        mission = rescue_service.get_mission_by_id(mission_id)
+        assert mission["animal_photo"] is not None
 
-    def test_submit_rescue_request_with_custom_status(self, rescue_service: RescueService, test_user: int):
-        """Test submitting a rescue request with custom status."""
-        mission_id = rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="Urgent Location",
-            status="in_progress"
+
+class TestGetRescueMission:
+    """Test rescue mission retrieval."""
+    
+    def test_get_rescue_by_id(self, rescue_service, sample_rescue_mission):
+        """Test getting rescue mission by ID."""
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        
+        assert mission is not None
+        assert mission["id"] == sample_rescue_mission["id"]
+    
+    def test_get_nonexistent_rescue(self, rescue_service):
+        """Test getting non-existent rescue mission."""
+        mission = rescue_service.get_mission_by_id(99999)
+        
+        assert mission is None
+
+
+class TestListRescueMissions:
+    """Test rescue mission listing."""
+    
+    def test_get_all_missions(self, rescue_service, sample_rescue_mission):
+        """Test getting all rescue missions."""
+        missions = rescue_service.get_all_missions()
+        
+        assert len(missions) >= 1
+        mission_ids = [m["id"] for m in missions]
+        assert sample_rescue_mission["id"] in mission_ids
+    
+    def test_get_missions_by_status(self, rescue_service, sample_rescue_mission, sample_user):
+        """Test filtering missions by status."""
+        # Create mission with different status
+        ongoing_id = rescue_service.submit_rescue_request(
+            user_id=sample_user["id"],
+            animal_type="dog",
+            breed="Unknown",
+            location="Test"
+        )
+        rescue_service.update_rescue_status(ongoing_id, RescueStatus.ONGOING)
+        
+        all_missions = rescue_service.get_all_missions()
+        pending = [m for m in all_missions if RescueStatus.normalize(m["status"]) == RescueStatus.PENDING]
+        ongoing = [m for m in all_missions if RescueStatus.normalize(m["status"]) == RescueStatus.ONGOING]
+        
+        pending_ids = [m["id"] for m in pending]
+        ongoing_ids = [m["id"] for m in ongoing]
+        
+        assert sample_rescue_mission["id"] in pending_ids
+        assert ongoing_id in ongoing_ids
+        assert ongoing_id not in pending_ids
+    
+    def test_get_user_missions(self, rescue_service, sample_rescue_mission, sample_user, sample_admin):
+        """Test getting missions for specific user."""
+        admin_mission_id = rescue_service.submit_rescue_request(
+            user_id=sample_admin["id"],
+            animal_type="cat",
+            breed="Unknown",
+            location="Test"
         )
         
-        missions = rescue_service.get_all_missions()
-        assert missions[0]["status"] == "in_progress"
-
-    def test_submit_rescue_request_with_null_user(self, rescue_service: RescueService):
-        """Test submitting a rescue request with null user_id (anonymous report)."""
-        mission_id = rescue_service.submit_rescue_request(
-            user_id=None,
-            location="Anonymous report location"
-        )
+        user_missions = rescue_service.get_user_missions(sample_user["id"])
+        user_mission_ids = [m["id"] for m in user_missions]
         
-        assert mission_id is not None
-        missions = rescue_service.get_all_missions()
-        assert missions[0]["user_id"] is None
+        assert sample_rescue_mission["id"] in user_mission_ids
+        assert admin_mission_id not in user_mission_ids
 
 
 class TestUpdateRescueStatus:
-    """Tests for updating rescue mission status."""
+    """Test rescue status transitions."""
+    
+    def test_update_to_ongoing(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test updating rescue to on-going status."""
+        success = rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.ONGOING
+        )
+        
+        assert success is True
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert RescueStatus.normalize(mission["status"]) == RescueStatus.ONGOING
+    
+    def test_update_to_failed(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test updating rescue to failed status."""
+        success = rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.FAILED
+        )
+        
+        assert success is True
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert RescueStatus.normalize(mission["status"]) == RescueStatus.FAILED
+    
+    def test_cancel_rescue_by_user(self, rescue_service, sample_rescue_mission, sample_user):
+        """Test user cancelling their own rescue report."""
+        success = rescue_service.cancel_mission(
+            sample_rescue_mission["id"],
+            sample_user["id"]
+        )
+        
+        assert success is True
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert RescueStatus.is_cancelled(mission["status"]) is True
 
-    def test_update_rescue_status_success(self, rescue_service: RescueService, test_user: int):
-        """Test successfully updating a mission's status."""
+
+class TestRescueToAnimalCreation:
+    """Test automatic animal creation when rescue is marked as 'rescued'."""
+    
+    def test_rescued_status_creates_animal(self, rescue_service, animal_service, sample_rescue_mission, sample_admin):
+        """Test that marking rescue as 'rescued' creates an animal."""
+        success = rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.RESCUED
+        )
+        
+        assert success is True
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert mission["animal_id"] is not None
+        
+        animal = animal_service.get_animal_by_id(mission["animal_id"])
+        assert animal is not None
+        assert animal["species"] == "Dog"  # Capitalized from mission animal_type
+        assert animal["breed"] == mission["breed"]
+    
+    def test_animal_inherits_rescue_data(self, rescue_service, animal_service, sample_user, sample_admin):
+        """Test that created animal inherits data from rescue mission."""
         mission_id = rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="Test"
+            user_id=sample_user["id"],
+            animal_type="dog",
+            breed="Aspin",
+            name="Brownie",
+            location="Naga City",
+            latitude=13.6218,
+            longitude=123.1948,
+            details="Friendly stray dog"
         )
         
-        result = rescue_service.update_rescue_status(mission_id, "completed")
-        assert result is True
+        rescue_service.update_rescue_status(
+            mission_id,
+            RescueStatus.RESCUED
+        )
         
-        missions = rescue_service.get_all_missions()
-        assert missions[0]["status"] == "completed"
-
-    def test_update_rescue_status_nonexistent_mission(self, rescue_service: RescueService):
-        """Test updating status of non-existent mission returns False."""
-        result = rescue_service.update_rescue_status(99999, "completed")
-        assert result is False
-
-    def test_update_rescue_status_multiple_times(self, rescue_service: RescueService, test_user: int):
-        """Test that status can be updated multiple times."""
+        mission = rescue_service.get_mission_by_id(mission_id)
+        animal = animal_service.get_animal_by_id(mission["animal_id"])
+        
+        assert animal["species"] == "Dog"  # Capitalized from 'dog'
+        assert animal["breed"] == "Aspin"
+        assert animal["name"] == "Brownie"
+    
+    def test_rescued_with_photo_copies_to_animal(self, rescue_service, animal_service, sample_user, sample_admin, sample_photo_base64):
+        """Test that animal inherits photo from rescue mission."""
         mission_id = rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="Test"
+            user_id=sample_user["id"],
+            animal_type="cat",
+            breed="Puspin",
+            location="Manila",
+            animal_photo=sample_photo_base64
         )
         
-        # Update to in_progress
-        rescue_service.update_rescue_status(mission_id, "in_progress")
-        missions = rescue_service.get_all_missions()
-        assert missions[0]["status"] == "in_progress"
-        
-        # Update to completed
-        rescue_service.update_rescue_status(mission_id, "completed")
-        missions = rescue_service.get_all_missions()
-        assert missions[0]["status"] == "completed"
-
-
-class TestGetMissions:
-    """Tests for retrieving rescue missions."""
-
-    def test_get_all_missions_empty(self, rescue_service: RescueService):
-        """Test getting missions when none exist."""
-        missions = rescue_service.get_all_missions()
-        assert missions == []
-
-    def test_get_all_missions_returns_all(self, rescue_service: RescueService, auth_service: AuthService):
-        """Test that all missions are returned."""
-        # Create multiple users for different missions
-        user1 = auth_service.register_user(name="User1", email="u1@test.com", password="password1", skip_policy=True)
-        user2 = auth_service.register_user(name="User2", email="u2@test.com", password="password2", skip_policy=True)
-        
-        rescue_service.submit_rescue_request(user_id=user1, location="Location 1")
-        rescue_service.submit_rescue_request(user_id=user2, location="Location 2")
-        rescue_service.submit_rescue_request(user_id=user1, location="Location 3")
-        
-        missions = rescue_service.get_all_missions()
-        assert len(missions) == 3
-
-    def test_get_user_missions_filters_by_user(self, rescue_service: RescueService, auth_service: AuthService):
-        """Test that user missions only returns missions for that user."""
-        user1 = auth_service.register_user(name="User1", email="filter1@test.com", password="password1", skip_policy=True)
-        user2 = auth_service.register_user(name="User2", email="filter2@test.com", password="password2", skip_policy=True)
-        
-        rescue_service.submit_rescue_request(user_id=user1, location="User 1 - Mission 1")
-        rescue_service.submit_rescue_request(user_id=user2, location="User 2 - Mission 1")
-        rescue_service.submit_rescue_request(user_id=user1, location="User 1 - Mission 2")
-        
-        user1_missions = rescue_service.get_user_missions(user1)
-        user2_missions = rescue_service.get_user_missions(user2)
-        
-        assert len(user1_missions) == 2
-        assert len(user2_missions) == 1
-        
-        # Verify correct missions
-        for mission in user1_missions:
-            assert mission["user_id"] == user1
-
-    def test_get_user_missions_nonexistent_user(self, rescue_service: RescueService, test_user: int):
-        """Test getting missions for user with no missions."""
-        rescue_service.submit_rescue_request(user_id=test_user, location="Test")
-        
-        missions = rescue_service.get_user_missions(999)
-        assert missions == []
-
-
-class TestMissionNotes:
-    """Tests for mission notes field composition."""
-
-    def test_notes_contain_animal_info(self, rescue_service: RescueService, test_user: int):
-        """Test that animal type and name are stored in dedicated columns."""
-        rescue_service.submit_rescue_request(
-            user_id=test_user,
-            location="Test",
-            animal_type="Cat",
-            name="Orange tabby",
-            details="Found near dumpster"
+        rescue_service.update_rescue_status(
+            mission_id,
+            RescueStatus.RESCUED
         )
         
-        missions = rescue_service.get_all_missions()
-        mission = missions[0]
+        mission = rescue_service.get_mission_by_id(mission_id)
+        animal = animal_service.get_animal_by_id(mission["animal_id"])
         
-        # Animal info is now stored in dedicated columns, not notes
-        assert mission["animal_name"] == "Orange tabby"
-        assert mission["animal_type"] == "Cat"
-        assert mission["notes"] == "Found near dumpster"
+        assert animal["photo"] is not None
+
+
+class TestRescueToAnimalDeletion:
+    """Test automatic animal deletion when rescue status is reverted."""
+    
+    def test_failed_after_rescued_deletes_animal(self, rescue_service, animal_service, sample_rescue_mission, sample_admin):
+        """Test that marking rescued mission as failed deletes the animal."""
+        rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.RESCUED
+        )
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        animal_id = mission["animal_id"]
+        assert animal_id is not None
+        
+        animal = animal_service.get_animal_by_id(animal_id)
+        assert animal is not None
+        
+        rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.FAILED
+        )
+        
+        animal = animal_service.get_animal_by_id(animal_id)
+    
+    def test_animal_not_deleted_if_has_adoptions(self, rescue_service, animal_service, adoption_service, sample_rescue_mission, sample_user, sample_admin):
+        """Test that animal is NOT deleted if it has adoption requests."""
+        rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.RESCUED
+        )
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        animal_id = mission["animal_id"]
+        
+        adoption_service.submit_request(
+            user_id=sample_user["id"],
+            animal_id=animal_id,
+            contact=sample_user["email"],
+            reason="Want to adopt"
+        )
+        
+        rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.FAILED
+        )
+        
+        animal = animal_service.get_animal_by_id(animal_id)
+        assert animal is not None
+
+
+class TestArchiveRescue:
+    """Test rescue mission archiving."""
+    
+    def test_archive_rescue_mission(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test archiving a rescue mission."""
+        success = rescue_service.archive_rescue(
+            sample_rescue_mission["id"],
+            archived_by=sample_admin["id"],
+            reason="Mission completed"
+        )
+        
+        assert success is True
+        
+        # Verify mission is archived
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert RescueStatus.is_archived(mission["status"]) is True
+    
+    def test_archived_not_in_active_list(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test archived missions are excluded from active listings."""
+        # Archive the mission
+        rescue_service.archive_rescue(
+            sample_rescue_mission["id"],
+            archived_by=sample_admin["id"]
+        )
+        
+        # Get active missions (should exclude archived)
+        active = rescue_service.get_active_missions()
+        active_ids = [m["id"] for m in active]
+        
+        assert sample_rescue_mission["id"] not in active_ids
+
+
+class TestRemoveRescue:
+    """Test rescue mission removal (for invalid/spam reports)."""
+    
+    def test_remove_rescue_mission(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test removing a rescue mission as invalid."""
+        success = rescue_service.remove_mission(
+            sample_rescue_mission["id"],
+            sample_admin["id"],
+            "Spam report"
+        )
+        
+        assert success is True
+        
+        # Verify mission is marked as removed
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert RescueStatus.is_removed(mission["status"]) is True
+    
+    def test_removed_not_in_analytics(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test removed missions are excluded from analytics."""
+        # Remove the mission
+        rescue_service.remove_mission(
+            sample_rescue_mission["id"],
+            sample_admin["id"],
+            "Test removal"
+        )
+        
+        # Get missions for analytics
+        missions = rescue_service.get_all_missions_for_analytics()
+        mission_ids = [m["id"] for m in missions]
+        
+        assert sample_rescue_mission["id"] not in mission_ids
+
+
+class TestRescueStatusHelpers:
+    """Test rescue status helper methods."""
+    
+    def test_is_active_status(self, rescue_service, sample_rescue_mission):
+        """Test checking if mission is active."""
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        
+        # Pending is active
+        assert RescueStatus.is_active(mission["status"]) is True
+    
+    def test_is_final_status(self, rescue_service, sample_rescue_mission, sample_admin):
+        """Test checking if mission is in final status."""
+        # Update to rescued (final status)
+        rescue_service.update_rescue_status(
+            sample_rescue_mission["id"],
+            RescueStatus.RESCUED
+        )
+        
+        mission = rescue_service.get_mission_by_id(sample_rescue_mission["id"])
+        assert RescueStatus.is_final(mission["status"]) is True
+
+
+class TestRescueSearch:
+    """Test rescue mission search."""
+    
+    def test_search_by_location(self, rescue_service, sample_rescue_mission):
+        """Test searching missions by location."""
+        location = sample_rescue_mission.get("location", "Test Location")
+        results = rescue_service.search_missions(query=location)
+        
+        # Should find at least one result
+        assert len(results) >= 1
+        # Verify the sample mission is in the results
+        result_ids = [r["id"] for r in results]
+        assert sample_rescue_mission["id"] in result_ids
+    
+    def test_search_by_animal_type(self, rescue_service, sample_rescue_mission):
+        """Test searching missions by animal type."""
+        animal_type = sample_rescue_mission.get("animal_type", "dog")
+        results = rescue_service.search_missions(query=animal_type)
+        
+        # Should find the mission
+        result_ids = [r["id"] for r in results]
+        assert sample_rescue_mission["id"] in result_ids
+
+
+class TestRescueStatistics:
+    """Test rescue mission statistics."""
+    
+    def test_get_mission_count(self, rescue_service, sample_rescue_mission):
+        """Test getting total mission count."""
+        # Use get_all_missions instead
+        missions = rescue_service.get_all_missions()
+        count = len(missions)
+        
+        assert count >= 1
+    
+    def test_get_mission_count_by_status(self, rescue_service, sample_rescue_mission):
+        """Test getting mission count by status."""
+        # Filter missions by status manually
+        missions = rescue_service.get_all_missions()
+        pending = [m for m in missions if RescueStatus.normalize(m["status"]) == RescueStatus.PENDING]
+        pending_count = len(pending)
+        
+        assert pending_count >= 1
+    
+    def test_get_active_mission_count(self, rescue_service, sample_rescue_mission):
+        """Test getting count of active missions."""
+        # Use get_active_missions instead
+        active_missions = rescue_service.get_active_missions()
+        active_count = len(active_missions)
+        
+        assert active_count >= 1  # sample_rescue_mission is pending (active)

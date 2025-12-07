@@ -1,0 +1,58 @@
+[coverage:run]
+# What to measure
+source = .
+omit =
+    */tests/*
+    */test_*.py
+    */__pycache__/*
+    */venv/*
+    */env/*
+    */.venv/*
+    */site-packages/*
+    # Exclude UI components and views (Flet-based, hard to unit test)
+    */views/*
+    */components/*
+    */routes/*
+    */main.py
+    # Exclude state management (observable pattern, UI-coupled)
+    */state/*
+    # Include these core modules
+    # */services/*
+    # */storage/*
+    # */models/*
+    # app_config.py
+
+[coverage:report]
+# Reporting options
+precision = 2
+show_missing = True
+skip_covered = False
+sort = Cover
+exclude_lines =
+    # Standard pragma
+    pragma: no cover
+    # Don't complain about missing debug code
+    def __repr__
+    def __str__
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+    # Don't complain if non-runnable code isn't run
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+    # Don't complain about abstract methods
+    @abstractmethod
+    @abc.abstractmethod
+    # Don't complain about overload definitions
+    @overload
+    # Don't complain about ellipsis in protocol/stub files
+    \.\.\.
+
+[coverage:html]
+directory = ../htmlcov
+title = PawRes Test Coverage Report
+
+[coverage:json]
+output = ../coverage.json
+pretty_print = True
