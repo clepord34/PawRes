@@ -61,3 +61,6 @@ app/assets/templates/*
 
 # Ignore GitHub configuration files
 .github/
+
+# Coverage reports
+.coverage

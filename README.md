@@ -12,12 +12,15 @@ Welcome to the comprehensive documentation for **PawRes**, a desktop/web applica
 2. **[Architecture](docs/ARCHITECTURE.md)** - System design, component diagrams, and patterns
 3. **[Database Schema](docs/DATABASE.md)** - ERD, table definitions, and relationships
 4. **[Security Implementation](docs/SECURITY.md)** - Authentication, authorization, and audit logging
-5. **[Emerging Technologies](docs/EMERGING_TECH.md)** - AI, maps, charts, and integration details
-6. **[Setup & Installation](docs/SETUP.md)** - Environment setup and deployment instructions
-7. **[Testing Documentation](docs/TESTING.md)** - Test plan, coverage, and execution guide
-8. **[User Manual](docs/USER_MANUAL.md)** - Feature guides for admins and regular users
-9. **[API Reference](docs/API_REFERENCE.md)** - Service interfaces and code documentation
-10. **[Team & Contributions](docs/TEAM.md)** - Roles, responsibilities, and individual reflections
+5. **[Project Report](docs/PROJECT_REPORT.md)** - Information assurance and security report
+6. **[Emerging Technologies](docs/EMERGING_TECH.md)** - AI, maps, charts, and integration details
+7. **[Setup & Installation](docs/SETUP.md)** - Environment setup and deployment instructions
+8. **[Testing Documentation](docs/TESTING.md)** - Test plan, coverage, and execution guide
+9. **[User Manual](docs/USER_MANUAL.md)** - Feature guides for admins and regular users
+10. **[API Reference](docs/API_REFERENCE.md)** - Service interfaces and code documentation
+11. **[Team & Contributions](docs/TEAM.md)** - Roles, responsibilities, and individual reflections
+12. **[AI Usage](docs/AI_USAGE.md)** - AI model usage, classification flow, and model handling
+
 
 ---
 
@@ -275,6 +278,7 @@ python -m pytest app/tests --cov=app --cov-report=html
 
 ### Test Coverage Summary
 - **14 test modules** covering core services
+- **51.80% overall project coverage** (verified December 8, 2025)
 - **37% overall services coverage** (verified December 8, 2025)
 - **331 total tests**
 - **Fixture-based** temporary databases for isolation
@@ -287,7 +291,7 @@ See **[TESTING.md](docs/TESTING.md)** for complete testing documentation.
 ## 👥 Development Team
 
 | Name | Role | Responsibilities | Contact |
-|------|------|------------------|---------||
+|------|------|------------------|---------|
 | **Nhel Adam S. Benosa** | Product Lead / Vision & Feature Prioritization | Requirements gathering, feature roadmap, stakeholder communication | nhbenosa (nhbenosa@my.cspc.edu.ph) |
 | **Nhel Adam S. Benosa** | UI/UX & Accessibility Designer | Interface design, component library, user experience | nhbenosa (nhbenosa@my.cspc.edu.ph) |
 | **Vince Clifford C. Aguilar** | Lead Developer (Flet Architecture) | Core architecture, routing, state management | clepord34 (viaguilar@my.cspc.edu.ph) |
@@ -313,7 +317,7 @@ All documentation follows these principles:
 
 ## 📄 License
 
-This project is developed as an academic project for CCCS106 (Application Development), Information Assurance, and Software Engineering courses at Camarines Sur Polytechnic Colleges.
+This project is developed as an academic project for Application Development, Information Assurance, and Software Engineering courses at Camarines Sur Polytechnic Colleges.
 
 ---
 
@@ -322,7 +326,9 @@ This project is developed as an academic project for CCCS106 (Application Develo
 - **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Detailed system architecture and component diagrams
 - **[DATABASE.md](docs/DATABASE.md)** - Complete database schema with ERD
 - **[SECURITY.md](docs/SECURITY.md)** - Security implementation and best practices
+- **[PROJECT_REPORT.md](docs/PROJECT_REPORT.md)** - Project report (Information Assurance & Security)
 - **[EMERGING_TECH.md](docs/EMERGING_TECH.md)** - AI, maps, and visualization integration
+- **[AI_USAGE.md](docs/AI_USAGE.md)** - AI model usage, classification flow, and model handling
 - **[SETUP.md](docs/SETUP.md)** - Installation and configuration guide
 - **[TESTING.md](docs/TESTING.md)** - Test plan and execution instructions
 - **[USER_MANUAL.md](docs/USER_MANUAL.md)** - End-user feature documentation
