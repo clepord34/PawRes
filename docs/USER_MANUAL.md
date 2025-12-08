@@ -140,11 +140,8 @@ Report an animal in need of rescue through our emergency rescue system.
    - Or access emergency form (no login required): `/emergency_rescue` route
 
 2. **Fill Animal Information**
-   - **Animal Type**: Select from dropdown (Dog, Cat, Bird, etc.)
+   - **Animal Type**: Select from dropdown (Dog, Cat, and, Others)
    - **Breed**: Enter breed if known (AI can help detect this from photo)
-   - **Name**: Give the animal a temporary name (or leave as "Unknown")
-   - **Age**: Select age range (Puppy/Kitten, Young, Adult, Senior)
-   - **Gender**: Select if known (Male, Female, Unknown)
 
 3. **Upload Photo** (Highly Recommended)
    - Click **"Upload Photo"** or drag-and-drop image
@@ -221,12 +218,9 @@ Explore animals available for adoption and find your perfect companion.
      - Name
      - Species and breed
      - Age
-     - Status badge (Available, Pending, Adopted)
 
-3. **Use Filters** (Left Sidebar)
-   - **Species**: Dog, Cat, Other
-   - **Age Range**: Puppy/Kitten, Young, Adult, Senior
-   - **Gender**: Male, Female, Unknown
+3. **Use Filters**
+   - **Species**: Dog, Cat, Others
 
 4. **Search by Name and Breed**
    - Use search box at top: "Search by animal name or breed..."
@@ -257,7 +251,6 @@ Apply to adopt an animal through our adoption management system.
 
 3. **Enter Contact Information**
    - **Contact**: Pre-filled from profile (email or phone)
-   - Update if you prefer different contact method
 
 4. **Write Your Reason (Optional)**
    - **Why do you want to adopt this animal?**
@@ -299,29 +292,23 @@ Track your rescue missions and adoption applications in one place.
 2. **View Rescue Missions Tab**
    - Lists all your submitted rescue missions
    - Shows current status with colored badges
-   - Displays admin messages (if any)
-   - Click row to expand details
 
 3. **View Adoption Requests Tab**
    - Lists all your adoption applications
    - Shows current status
-   - Displays approval/denial messages
-   - Click row to expand details
+   - Displays denial messages
 
 4. **Filter by Status**
    - Use dropdown filters to show:
      - All statuses
-     - Active only (pending, on-going, under review)
-     - Completed (rescued, approved)
-     - Archived
+     - Active only (pending, on-going)
+     - Completed (rescued, approved, failed, denied)
 
 5. **Search**
    - Use search box to find specific animal name or mission
 
 6. **Action Buttons**
-   - **View Details**: Opens full detail page
    - **Cancel**: Cancel pending request (confirmation required)
-   - **Archive**: Hide completed items from list
 
 ---
 
@@ -338,12 +325,11 @@ Manage your personal information and account settings.
    - Click **"Profile"** in sidebar
 
 2. **Update Personal Information**
-   - **Name**: Click edit icon → Change name → Save
-   - **Phone**: Click edit icon → Change phone → Save (must be unique)
-   - **Email**: Click edit icon → Change email → Save (requires password confirmation)
+   - **Name**: Click textfield → Change name → Save
+   - **Phone**: Click textfield → Change phone → Save (must be unique)
+   - **Email (One-time if logged in using Phone)**: Click textfield → Change email → Save (must be unique)
 
 3. **Change Password**
-   - Click **"Change Password"** button
    - Enter **current password**
    - Enter **new password** (must meet requirements)
    - Enter **confirm new password**
@@ -381,7 +367,7 @@ Manage incoming rescue missions and coordinate rescue operations.
    - Then select **"Rescue Missions"** tab or section
 
 2. **View Pending Approvals**
-   - Unreviewed missions appear with **"!" symbol**
+   - Unreviewed missions appear with **"!" symbol in the map**
    - Filter or search for pending missions
 
    ![Rescue Mission Detail with Photo and Map](screenshots/10_rescue_mission_detail.png)
@@ -397,7 +383,7 @@ Manage incoming rescue missions and coordinate rescue operations.
    - When you mark mission as **"Rescued"**:
      - System automatically creates an animal record
      - Animal inherits details from rescue mission (species, breed, photo, etc.)
-     - Animal status set to "Available"
+     - Animal status set to "Needs Setup"
      - Mission links to new animal record
    - You can then edit animal details in **Animals → Animals List**
 
@@ -440,7 +426,6 @@ Create, edit, and organize animal records in the system.
    - **Species**: Select from dropdown (Dog, Cat, etc.)
    - **Breed**: Enter specific breed (or "Mixed")
    - **Age**: Select age range
-   - **Description**: Detailed description of the animal
 
 5. **Submit**
    - Click **"Add Animal"** button
@@ -463,7 +448,6 @@ Create, edit, and organize animal records in the system.
 
 4. **Save Changes**
    - Click **"Update Animal"** button
-   - Confirmation message displays
 
 #### Archive Animal
 
@@ -500,7 +484,6 @@ Review and process adoption applications from users.
    - Then select **"Adoption Requests"** tab or section
 
 2. **View Pending Approvals**
-   - Unreviewed requests highlighted
    - Filter or search for pending requests
 
 3. **Change Application Status**
@@ -607,19 +590,18 @@ Monitor system activity and security events.
    - Each entry shows:
      - **Timestamp**: Date and time of event
      - **Event Type**: Category of event (see below)
+     - **Level**: Info, Warning, Error
      - **User**: Who performed the action
      - **Details**: Specific action details
      - **IP Address**: Request origin (if applicable)
 
-3. **Filter by Event Type**
-   - Click **"Event Type"** dropdown
+3. **Filter by Level**
+   - Click **"Level"** dropdown
    - Select:
-     - **All Events**: Everything
-     - **Authentication**: Login, logout, failed login, lockout
-     - **Admin Actions**: Approve, deny, status changes, user management
-     - **Security**: Password changes, account disable/enable, suspicious activity
-     - **Data Changes**: Create, update, delete operations
-     - **System**: Startup, shutdown, configuration changes
+     - **All Levels**: Everything
+     - **Info**: Informational messages
+     - **Warning**: Potential issues
+     - **Error**: Critical problems
 
 4. **Export Logs**
    - Click **"Export CSV"** button

@@ -16,7 +16,7 @@
 **Project Name**: PawRes - Animal Rescue and Adoption Management System  
 **Institution**: Camarines Sur Polytechnic Colleges  
 **Courses**: Application Development, Information Assurance, Software Engineering  
-**Development Period**: September 2025 - December 8, 2025  
+**Development Period**: November 23, 2025 - December 8, 2025  
 **Team Size**: 4 members
 
 ### Team Members
@@ -204,23 +204,14 @@ pie title Team Contribution Distribution
 
 ### Git Commit Statistics
 
-**Total Commits**: [To be filled after final commit]
+**Total Commits**: 30
 
 | Contributor | Commits | Lines Added | Lines Deleted | Files Changed |
 |-------------|---------|-------------|---------------|---------------|
-| Vince Clifford C. Aguilar (clepord34) | [TBD] | [TBD] | [TBD] | [TBD] |
-| Nhel Adam S. Benosa (nhbenosa) | [TBD] | [TBD] | [TBD] | [TBD] |
-| Francisco S. Verga (Francisvrg) | [TBD] | [TBD] | [TBD] | [TBD] |
-| John Kenneth M. Bañares (kennethb28) | [TBD] | [TBD] | [TBD] | [TBD] |
-
-**Note**: Run the following commands to populate statistics:
-```powershell
-# Get commit counts
-git shortlog -sn --all --no-merges
-
-# Get detailed stats
-git log --shortstat --author="clepord34" | grep "files changed" | awk '{files+=$1; inserted+=$4; deleted+=$6} END {print "Files changed:", files, "Lines added:", inserted, "Lines deleted:", deleted}'
-```
+| Vince Clifford C. Aguilar (clepord34) | 12 | 31,202 | 4,226 | 254 |
+| Nhel Adam S. Benosa (nhbenosa) | 6 | 8,447 | 1,914 | 87 |
+| Francisco S. Verga (Francisvrg) | 8 | 8,145 | 1,092 | 64 |
+| John Kenneth M. Bañares (kennethb28) | 4 | 10,553 | 2,526 | 45 |
 
 ---
 
@@ -296,42 +287,42 @@ git log --shortstat --author="clepord34" | grep "files changed" | awk '{files+=$
 
 ## Development Timeline
 
-### Phase 1: Planning & Design (Weeks 1-2)
+### Phase 1: Planning & Design (2025-11-23 - 2025-11-28)
 - Requirements gathering
 - Architecture design
 - Database schema design
 - UI/UX mockups
 - Test strategy planning
 
-### Phase 2: Core Development (Weeks 3-6)
+### Phase 2: Core Development (2025-11-29 - 2025-11-30)
 - Authentication and authorization
 - Database implementation
 - Core services (Animal, Rescue, Adoption)
 - Basic UI views
 - Component library
 
-### Phase 3: Feature Development (Weeks 7-10)
+### Phase 3: Feature Development (2025-12-01 - 2025-12-06)
 - AI classification integration
 - Map integration
 - Data visualization (charts)
 - Admin dashboard
 - User profiles
 
-### Phase 4: Enhancement & Polish (Weeks 11-12)
+### Phase 4: Enhancement & Polish (2025-12-04 - 2025-12-07)
 - Import/export functionality
 - Audit logging
 - Archive/removal features
 - Security hardening
 - Performance optimization
 
-### Phase 5: Testing & Documentation (Weeks 13-14)
+### Phase 5: Testing & Documentation (2025-12-05 - 2025-12-08)
 - Comprehensive unit testing
 - Integration testing
 - Manual exploratory testing
 - Bug fixes
 - Documentation completion
 
-### Phase 6: Final Review & Submission (Week 15)
+### Phase 6: Final Review & Submission (2025-12-08)
 - Code review
 - Documentation review
 - Final testing
