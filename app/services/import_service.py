@@ -118,7 +118,7 @@ class ImportService:
         
         try:
             from openpyxl import load_workbook
-        except ImportError:
+        except ModuleNotFoundError:
             result.errors.append(ImportError(
                 row=0,
                 message="Excel support requires openpyxl. Install with: pip install openpyxl"
