@@ -124,7 +124,7 @@ PawRes is an integrated management system that provides:
 | **Workflows** | Rescue → Animal → Adoption pipeline, Status transitions with validation, Archive/restore operations |
 | **Security** | Role-based access control (Admin/User), Password hashing with salt, Login lockout mechanism, Session timeout, Audit logging |
 | **Emerging Tech** | AI breed classification (3 models), Interactive maps with geocoding, Real-time charts and analytics, CSV/Excel data import |
-| **User Experience** | Responsive component-based UI, Form validation and error handling, Confirmation dialogs, Success/error notifications |
+| **User Experience** | Form validation and error handling, Confirmation dialogs, Success/error notifications |
 | **Data Integrity** | Foreign key constraints, Cascading deletes, Status normalization, Duplicate prevention (email/phone) |
 
 ### Out of Scope ❌
@@ -155,29 +155,101 @@ PawRes is an integrated management system that provides:
 
 ## 🏗️ System Architecture (High-Level)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Flet UI Layer                           │
-│  (Views: Login, Dashboard, Animal List, Rescue Form, etc.)     │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────┐
-│                      Routes + Middleware                        │
-│         (Authorization, Session Validation, Routing)            │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────────────┐
-│                      Service Layer                              │
-│  (AuthService, AnimalService, RescueService, AdoptionService)   │
-└─────────┬───────────────┬─────────────────┬─────────────────────┘
-          │               │                 │
-   ┌──────▼──────┐  ┌────▼─────┐   ┌──────▼──────────┐
-   │   Storage   │  │  State   │   │  Emerging Tech  │
-   │   Layer     │  │  Mgmt    │   │  (AI/Maps)      │
-   └─────────────┘  └──────────┘   └─────────────────┘
-   - SQLite DB      - Observable    - AI Models
-   - File Store     - Auth State    - Map Service
-   - Cache          - UI State      - Charts
+```mermaid
+
+flowchart LR
+  %% Client / Presentation
+  subgraph Client["Client / Presentation"]
+    UI["Flet UI\n(Desktop / Web)"]
+    Components["Components Library\n(create_form_*, charts, dialogs)"]
+    Views["Views / Pages"]
+    State["App State\n(observable singleton)"]
+  end
+
+  %% Routing & Middleware
+  subgraph Routing["Routing & Middleware"]
+    Routes["Routes Registry\n(route -> view)"]
+    Middleware["Middleware\n(auth, RBAC, session)"]
+  end
+
+  %% Services
+  subgraph Services["Application Services"]
+    AuthSvc["Auth Service"]
+    AnimalSvc["Animal Service"]
+    RescueSvc["Rescue Service"]
+    AdoptionSvc["Adoption Service"]
+    PhotoSvc["Photo Service"]
+    AIClassSvc["AI Classification Service"]
+    MapSvc["Map / Geocoding Service"]
+    AnalyticsSvc["Analytics Service"]
+    ImportSvc["Import / CSV Service"]
+  end
+
+  %% Storage
+  subgraph Storage["Storage & Persistence"]
+    DB[(SQLite Database)]
+    FileStore[(File Store / uploads/)]
+    Logs[(Rotating Log Files)]
+    Models[(Local Model Files)]
+  end
+
+  %% External
+  subgraph External["External Systems"]
+    GoogleOAuth["Google OAuth / PKCE"]
+    Nominatim["Nominatim / Geocoding API"]
+    ModelHost["Model Hosting / CDN"]
+  end
+
+  %% edges: Presentation
+  UI --> Views
+  UI --> Components
+  Views --> State
+  Views --> Routes
+  Routes --> Middleware
+  Middleware --> Views
+  Middleware --> Services
+
+  %% edges: Views -> Services
+  Views -->|calls| AuthSvc
+  Views -->|calls| AnimalSvc
+  Views -->|calls| RescueSvc
+  Views -->|calls| AdoptionSvc
+  Views -->|calls| PhotoSvc
+  Views -->|calls| AnalyticsSvc
+  Views -->|calls| ImportSvc
+
+  %% Services -> Storage
+  AuthSvc -->|auth data| DB
+  AnimalSvc -->|CRUD| DB
+  RescueSvc -->|missions| DB
+  AdoptionSvc -->|requests| DB
+  PhotoSvc -->|store photos| FileStore
+  PhotoSvc -->|logs| Logs
+  ImportSvc -->|bulk writes| DB
+
+  %% AI & Models
+  PhotoSvc -->|image -> classify| AIClassSvc
+  AIClassSvc --> Models
+  AIClassSvc -->|download/update| ModelHost
+  AIClassSvc -->|writes metadata| DB
+
+  %% Map & Geocoding
+  MapSvc --> Nominatim
+  MapSvc -->|writes coords| DB
+
+  %% Auth external
+  AuthSvc --> GoogleOAuth
+
+  %% Observability
+  Services --> Logs
+  DB --> Logs
+
+  %% State two-way
+  State <--> Views
+  State <--> UI
+
+  %% Optional edges: Analytics reads DB
+  AnalyticsSvc --> DB
 ```
 
 For detailed architecture diagrams, see **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**.

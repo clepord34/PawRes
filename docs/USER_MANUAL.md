@@ -99,7 +99,7 @@ PawRes has two user roles with different permission levels:
 | **Adoption Requests** | Submit + view own applications | Approve/deny all + view user details |
 | **User Management** | View/edit own profile only | View/edit all users + enable/disable + reset passwords |
 | **Audit Logs** | No access | Full access with filtering |
-| **Import/Export** | No access | Import CSV/Excel + export data |
+| **Import/Export** | Export personal data only | Import CSV/Excel + export data |
 | **AI Features** | Use breed detection on rescue form | Use breed detection on animal management |
 | **Hidden Items** | No access | View archived/hidden animals, missions, adoptions |
 
@@ -162,6 +162,9 @@ Report an animal in need of rescue through our emergency rescue system.
    - **Option B**: Click the GPS button (📍) to use your current location (requires location permission)
 
    ![Current Location / Map Marker](screenshots/04_rescue_gps_button.png)
+      - If there's no internet connection, the app can still record your current location using your device's GPS which will be saved as latitude and longitude coordinates. (Note: GPS does not need internet, but geocoding does.)
+      - When connection is restored, the app will attempt to geocode the coordinates to a human-readable address then send the rescue request to admin.
+      ![Offline get location](screenshots/25_offline_get_location.png)
 
 6. **Enter Contact Information**
    - **Contact**: Your phone or email (pre-filled if logged in)
@@ -483,10 +486,7 @@ Review and process adoption applications from users.
    - Click **"Manage Records"** in sidebar
    - Then select **"Adoption Requests"** tab or section
 
-2. **View Pending Approvals**
-   - Filter or search for pending requests
-
-3. **Change Application Status**
+2. **Change Application Status**
    - Click the status badge dropdown on the request row
    - Select new status:
      - **Pending**: Mark as pending (waiting for review)
@@ -496,11 +496,11 @@ Review and process adoption applications from users.
    - When approved, animal status changes to "Adopted"
    - User can check updated status in **"Check Application Status"** page
 
-4. **Archive or Remove Request**
-   - **Archive**: Use archive button (clock icon) to hide completed requests
+3. **Archive or Remove Request**
+   - **Archive**: Use archive button (clock icon) to hide completed requests (can viewed after in the Hidden tab)
    - **Remove**: Use remove button (trash icon) to mark invalid requests
 
-5. **Filter Requests**
+4. **Filter Requests**
    - Filter by status: All, Pending, Approved, Denied, Cancelled
 
 ---
@@ -522,7 +522,6 @@ Administer user accounts and permissions.
      - Email
      - Role (User, Admin)
      - Status (Enabled, Disabled)
-     - Registration date
      - Last login
 
 3. **Search Users**
@@ -533,143 +532,180 @@ Administer user accounts and permissions.
    - Click **"All Roles"** dropdown
    - Select: All, Admin, User
 
-5. **Filter by Status**
-   - Click **"All Statuses"** dropdown
-   - Select: All, Enabled, Disabled
-
-6. **Disable User Account**
+5. **Disable User Account**
    - Click **"Disable"** button next to user
-   - Confirmation dialog: "Are you sure you want to disable [User Name]?"
-   - Click **"Confirm"**
    - User immediately locked out
    - User receives "Account disabled" message on login attempt
 
-7. **Enable User Account**
-   - Find disabled user (use status filter)
+6. **Enable User Account**
+   - Find disabled user
    - Click **"Enable"** button
-   - Confirmation dialog
-   - Click **"Confirm"**
    - User can login again
 
-8. **Reset User Password**
+7. **Reset User Password**
    - Click **"Reset Password"** button (lock icon)
    - Enter new password in dialog
    - Confirm new password
    - Click **"Reset Password"** to save
    - Share new password with user via secure channel (email, phone)
 
-9. **Delete User** (Use with Caution)
+8. **Delete User** (Use with Caution)
    - Click **"Delete"** button (trash icon)
    - Confirmation dialog appears with warning
    - Click **"Delete"** to confirm
    - User account removed
    - Consider disabling users instead of deleting them
 
-10. **View User Details**
+9. **Edit User Details**
     - Click **"Edit"** button to view and edit user information
-    - User table shows:
-      - Name and email
-      - Role and status
-      - Last login date
+    - Can edit:
+      - Name
+      - Email
+      - Phone No.
+      - Role (User, Admin)
 
 ---
 
 ### View Audit Logs
 
-Monitor system activity and security events.
+Monitor important system events and security activity. This page helps admins see what happened and export a copy of the logs.
 
 ![Audit Log Viewer with Filters](screenshots/15_audit_log_view.png)
 
-#### Step-by-Step Instructions
+#### Step-by-step instructions
 
-1. **Navigate to Audit Logs**
-   - Click **"Audit Logs"** in sidebar
+1. **Open Audit Logs**
+   - Click **"Audit Logs"** in the left sidebar (Admin only).
 
-2. **View Recent Events**
-   - Logs display in reverse chronological order (newest first)
-   - Each entry shows:
-     - **Timestamp**: Date and time of event
-     - **Event Type**: Category of event (see below)
-     - **Level**: Info, Warning, Error
-     - **User**: Who performed the action
-     - **Details**: Specific action details
-     - **IP Address**: Request origin (if applicable)
+2. **Read the list of events**
+   - The newest events are shown first (top of the list).
+   - The table shows three main things for each event:
+     - **Timestamp** — When the event happened (date and time).
+     - **Level** — How important the event is: *Info*, *Warning*, or *Error*.
+     - **Event** — A short title and extra details. (Example: "LOGIN_SUCCESS — email=you@example.com")
+   - Note: You may also see the user or IP address inside the **Event** details if the system included them. They are not shown as separate columns.
 
-3. **Filter by Level**
-   - Click **"Level"** dropdown
-   - Select:
-     - **All Levels**: Everything
-     - **Info**: Informational messages
-     - **Warning**: Potential issues
-     - **Error**: Critical problems
+    - **Choose which log type to view (Tabs)**
+       - At the top of the page there are three tabs: **Security**, **Authentication**, and **Admin Actions**.
+       - Click a tab to switch the log type. The table and filters show entries for the selected tab only.
+       - When you click **Export CSV**, the exported file will contain the entries shown for the currently selected tab.
 
-4. **Export Logs**
-   - Click **"Export CSV"** button
-   - CSV file is saved to storage/data/exports/
-   - Contains timestamp, level, and message columns
+3. **Show only important events (filter)**
+   - Use the **Level** dropdown to choose:
+     - **All Levels** — everything
+     - **Info** — normal informational messages
+     - **Warning** — things to watch
+     - **Error** — problems that need attention
 
-#### Event Types Explained
+4. **Save the logs to a CSV file**
+   - Click the **"Export CSV"** button.
+   - A CSV file is created in the exports folder. The file contains three columns: `timestamp`, `level`, and `message`.
+   - The export folder location (inside the app) is:
 
-| Event Type | Examples |
-|------------|----------|
-| **Authentication** | User login, logout, failed login attempt, account lockout |
-| **Admin Actions** | Rescue status changed, adoption approved/denied, user disabled |
-| **Security** | Password changed, multiple failed logins, permission denied |
-| **Data Changes** | Animal created/updated/deleted, user profile updated |
-| **System** | Application started, configuration loaded, backup created |
+```
+app/storage/data/exports/
+```
+
+   - To open that folder on Windows (from your project root), open File Explorer and navigate to the `app` folder, then `storage → data → exports`.
+   - Or run these commands in PowerShell from the project root to open the folder directly:
+
+```powershell
+cd app
+explorer.exe .\storage\data\exports
+```
+
+   - To open the CSV file: double-click the file to open it in Excel (or another spreadsheet program) or right-click and choose *Open with → Notepad*.
+
+#### What the columns mean
+
+- **Timestamp**: When the event happened.
+- **Level**: How serious the event is (Info, Warning, Error).
+- **Message**: A short description that usually contains a simple event name (like "LOGIN_SUCCESS") followed by more details (who, what, or where). If a user or IP address is available it will be shown here in the message.
+
+#### Examples you might see
+
+- Authentication: "LOGIN_SUCCESS — email=jane@example.com"
+- Admin action: "USER_DISABLED — admin_id=2 | user_id=12 | email=user@example.com"
+- Security: "UNAUTHORIZED_ACCESS — route=/admin | user_id=None"
+
+If you do not see a user name or IP address for an event, that's normal — the system only records that information when it is available.
+
+#### Event Types (simple)
+
+| Event Type | Easy description |
+|------------|------------------|
+| **Authentication** | Logins, logouts, failed logins, account lockouts |
+| **Admin Actions** | Changes made by admins (example: change status, disable user) |
+| **Security** | Password changes, blocked attempts, permission problems |
+| **Data Changes** | Items created, updated, or deleted (animals, users) |
+| **System** | App start, configuration loaded, backups |
+
 
 ---
 
 ### Import Animals from CSV/Excel
 
-Bulk import animal records from spreadsheet files.
+Easily add many animals at once by importing a simple spreadsheet. The import tool accepts CSV and Excel files and helps copy any photos referenced by the file.
 
 ![Import Dialog with File Upload and Preview](screenshots/16_bulk_import_dialog.png)
 
+#### Bulk Import Overview
+
+- You can upload a CSV or Excel file containing one animal per row.
+- The app reads the column names (headers) at the top of your file. Column order does not matter, but headers must be present and spelled as shown below.
+- When you choose a file, the app starts the import automatically and shows results when finished.
+
 #### Step-by-Step Instructions
 
-1. **Prepare Import File**
-   - Create CSV or Excel file with these columns (in order):
-     1. `name` - Animal name (required)
-     2. `species` - Dog, Cat, Other (required)
-     3. `breed` - Breed name (optional)
-     4. `age` - Number 0-21 (optional)
-     5. `health_status` - Healthy, Recovering, Injured (optional)
-     6. `photo` - Photo filename relative to import file (optional)
+1. Click **"View Animal List"** in the sidebar.
+2. Click the **"Add Animal"** button, then choose **"Bulk Import"**.
+3. In the dialog, you can download a sample template (CSV or Excel) to see the correct headers.
+4. Click **"Select File to Import"** and choose your CSV or Excel file.
+5. The import starts automatically. A small message appears while the app is working.
+6. When finished, a results dialog shows how many rows were imported and any errors.
 
-2. **Navigate to Import**
-   - Click **"View Animal List"** in sidebar
-   - Click **"Add Animal"** button
-   - Click **"Bulk Import"** button in the Add Animal page
+#### Required Columns (exact header names)
 
-3. **Upload File**
-   - Click **"Choose File"** button
-   - Select your CSV or Excel file
-   - Click **"Open"**
+Include these column headers in your file:
 
-4. **Confirm Import**
-   - If no errors, click **"Import [X] Animals"** button
-   - Progress bar displays
-   - Wait for completion (may take several seconds for large files)
+- `name` — The animal's name (required)
+- `animal_type` — Animal type: Dog, Cat, or Other (required)
+- `breed` — Breed name (optional)
+- `age` — Number from 0 to 21 where 0 = under 1 year, 21 = 20+ years (required)
+- `health_status` — One of: Healthy, Recovering, Injured (case-insensitive) (required)
+- `photo` — Optional: a photo file name (relative to the import file), a web link (URL), or path to an image file
 
-5. **Review Results**
-   - Success message shows:
-     - **Imported**: Number of animals successfully added
-     - **Skipped**: Number of rows with errors
-     - **Duplicates**: Rows skipped due to duplicate names
-   - Click **"View Import Log"** for details
+Notes:
 
-6. **Verify Imported Animals**
-   - Navigate to **"Animals"** → **"Animals List"**
-   - Use filters to find imported animals
-   - Spot-check a few records for accuracy
+- The file does not need to use a specific column order — headers are matched by name.
+- If any required column is missing or a row has invalid values, that row will be skipped and listed in the import report.
 
-#### Import Tips
+#### What the Results Mean
 
-- **Photo Handling**: If photo column contains filenames, place image files in `storage/uploads/` before importing
-- **Duplicate Detection**: Animals with matching names are skipped (case-insensitive)
-- **Batch Size**: For large imports (>500 animals), split into multiple files
-- **Encoding**: Save CSV as UTF-8 to handle special characters
+- **Imported**: Number of animals successfully added.
+- **Skipped / Failed**: Rows that had missing or invalid information. The dialog shows example errors and you can view the import log for details.
+- **Duplicates**: If a row matches an existing animal name in the system it may be skipped; check the import log for details.
+
+Always review the import log and spot-check a few records in **Animals → Animals List** after importing.
+
+#### Photo Files
+
+- If your `photo` column contains a file name (for example `rex.jpg`), place that photo file in the same folder as the CSV/Excel file before importing. The import will copy the file automatically.
+- You may also put a full web link (URL) in the `photo` column; the app will download the image for you.
+- Relative paths (file names) are relative to the location of your CSV/Excel file.
+- Absolute paths (full paths starting with `/` or a drive letter like `C:\`) are also supported.
+- You do not need to manually place photos in `storage/uploads/` — using files alongside your spreadsheet, copying image path, or URLs is simplest.
+
+#### Templates & Excel Support
+
+- Use the **Download Template** buttons in the Bulk Import dialog to get a sample CSV or Excel file with the correct headers and helpful comments.
+- Excel file import requires the `openpyxl` package to be available in the application environment. If Excel import is not available, use CSV instead.
+
+#### Helpful Tips
+
+- Save your CSV as UTF-8 to avoid problems with special characters.
+- For very large imports, split the data into smaller files to keep the import quick and reliable.
+- If you see unexpected skips, open the import log for the exact row numbers and messages to fix the data and try again.
 
 ---
 
@@ -684,15 +720,21 @@ PawRes includes AI-powered breed classification to assist with animal identifica
 #### How It Works
 
 1. **Model Requirements**
-   - First-time use requires downloading AI models (~100 MB)
-   - Click **"Download Models"** when prompted
-   - Progress bar displays during download
-   - Models stored locally for offline use
-
+- When you use the AI feature for the first time, the app needs to download the AI model files (this may be large — about 1 GB total). Please make sure you have a stable internet connection and enough disk space.
+- Click **"Download Models"** when prompted to start the one-time download.
+- A progress bar shows the download status; you can minimize the dialog and let it continue in the background.
+![AI Model Download Progress](screenshots/20_ai_model_download_dialog.png)
+   - When connection is lost during download, the app will pause and retry automatically when the connection is restored.
+   ![Network Connection Lost Message](screenshots/21_network_connection_lost_message.png)
+   ![Connection Restored Message](screenshots/22_connection_restored_message.png)
+- Once downloaded, the models are saved on your computer so AI works offline afterward.
+2. **Upload Photo for Analysis**
+ - Upload a clear photo of the animal you want to classify.
+ - Click the **"Analyze with AI"** button to start the analysis.
 2. **Classify Animal Photo**
-   - Upload a clear photo of the animal (close-up of face/body preferred)
-   - Click **"Analyze with AI"** button
-   - Wait 5-10 seconds for analysis
+ - Upload a clear, well-lit photo of the animal (close-up of face or body works best).
+ - Click the **"Analyze with AI"** button.
+ - If this is the first time and the models still need to download, the process can take several minutes. After the models are downloaded, most analyses typically finish in a few seconds.
 
 3. **Review Results**
    - AI returns top 3 breed predictions with confidence scores
@@ -706,9 +748,11 @@ PawRes includes AI-powered breed classification to assist with animal identifica
    - You can manually edit the breed after selection
 
 5. **Interpretation**
-   - **High confidence (>70%)**: Likely accurate, trust the suggestion
-   - **Medium confidence (40-70%)**: Consider suggestion but verify
-   - **Low confidence (<40%)**: Manual identification recommended
+5. **Interpretation**
+ - **High confidence (about 75% or higher)**: The suggestion is likely correct, but you can still verify if you wish.
+ - **Medium confidence (about 50%–74%)**: The suggestion may be correct — consider it, but check the photo and other details.
+ - **Low confidence (below about 50%)**: The AI is unsure — manual identification is recommended.
+ - If the AI does not have a strong single breed match, it may suggest a general "mixed" label instead of a single breed.
 
 #### Limitations
 
@@ -716,6 +760,13 @@ PawRes includes AI-powered breed classification to assist with animal identifica
 - **Photo Quality**: Blurry, dark, or distant photos reduce accuracy
 - **Mixed Breeds**: AI may struggle with mixed breeds
 - **Species**: Currently supports dogs and cats only
+
+#### Limitations
+
+- **Accuracy**: The AI is trained on many common breeds but may not always recognize rare or unusual ones.
+- **Photo Quality**: Blurry, dark, or distant photos make identification harder — clearer photos improve results.
+- **Mixed Breeds**: The AI may not be able to pick a single breed for mixed animals and may show a "mixed" suggestion.
+- **Species**: The AI only supports dogs and cats at this time.
 
 #### Best Practices
 
@@ -733,109 +784,116 @@ PawRes includes AI-powered breed classification to assist with animal identifica
 
 ### Map Usage
 
-Interactive maps help visualize rescue locations and shelter boundaries.
+Interactive maps help you see where rescue reports come from and where shelters or teams are located.
 
 ![Map Interface with Marker and Controls](screenshots/18_interactive_map.png)
 
 #### Map Features
 
-1. **View Map**
-   - Displays on rescue form and rescue mission detail pages
-   - Default view: Centered on shelter location
-   - Zoom controls: +/- buttons or mouse wheel
+1. **Where you see a map**
+   - Map panels appear in the Rescue Mission lists, the Analytics/Dashboard pages, and in mission detail views.
+   - The Rescue form itself shows a location input and a GPS button (see "Set Location") — the full, interactive map is shown on the pages listed above.
+   - Default view: centered on the shelter area configured for the app.
 
 2. **Set Location (Rescue Form)**
-   - **Method 1**: Type address
-     - Enter address in "Location" field
-     - Address will be geocoded when you submit the form
-   - **Method 2**: Use current location
-     - Click the GPS button (📍) next to the location field
-     - Allow browser location permission
-     - Your coordinates will be captured automatically
+   - **Method 1 — Type the address**
+     - Enter the address into the "Location" field and submit the report.
+     - The app will look up the address and attach coordinates automatically.
+   - **Method 2 — Use your current location (GPS)**
+     - Click the GPS button (📍) next to the location field.
+     - If your device asks for permission, allow it so the app can capture your location.
+     - On some computers or setups, the app may use an approximate location (based on your network) if precise GPS is not available.
 
-3. **View Location (Mission Detail)**
-   - Red marker shows reported location
-   - Zoom in for street-level detail
-   - Click marker for address popup
+3. **Markers and details**
+   - Each report shown on the map uses a colored marker. The color shows urgency or outcome (for example, high urgency is shown as red; rescued missions are green).
+   - Hover over a marker to see a tooltip with informations like animal type, urgency, and status. Users can only see details that are non-sensitive (e.g. contact info, reporter, source(emergency or user)).
 
-4. **Map Controls**
-   - **Zoom In/Out**: +/- buttons or mouse wheel
-   - **Pan**: Click and drag to move the map
-   - **Lock/Unlock**: Toggle map interaction (admin view)
+4. **Map controls (how to interact)**
+   - Zoom: Use your mouse wheel, pinch gestures (on touch screens/trackpads), or any +/– buttons provided by your browser or map control.
+   - Pan: Click and drag (or touch and drag) to move the map.
+   - Lock/Unlock: Maps may start locked to prevent accidental scrolling; click the on-map "Unlock" control to enable full pan and zoom.
 
-#### Troubleshooting
+5. **Offline Map Handling**
+   - If your internet connection is lost, the map may not load or show tiles properly.
+   - The map shows a table of marked rescue missions if the map tiles cannot load.
+   ![Offline Map](screenshots/23_offline_map.png)
+   - If the map doess not have data to show (for example, no rescue missions reported yet), a message will show the placeholder instead.
 
-**Map Not Loading**:
-- Check internet connection
-- Refresh page
-- Clear browser cache
+#### Troubleshooting (Map & Location)
 
-**"Use My Current Location" Not Working**:
-- Allow location permission in browser
-- Ensure device has GPS or location services enabled
-- Try entering address manually instead
+**Map Not Showing or Tiles Missing**
+- Check your internet connection and try refreshing the page.
+- If the problem continues, wait a moment and try again — map tiles come from an online service.
 
-**Geocoding Failed**:
-- Check address spelling
-- Try using landmark + city name
-- Click the GPS button (📍) to capture your current location instead
+**GPS / "Use My Current Location" Not Working**
+- Allow location permission if your browser or device asks for it.
+- On desktop computers without GPS, the app may use a nearby location based on your network — this is normal and may be less precise.
+- If you cannot share location, type the address manually in the Location field.
+
+**Address Could Not Be Found**
+- Check spelling and include a nearby landmark, city, or neighborhood.
+- Try a simpler version of the address (street + city).
+- If still not found, use the GPS button to capture coordinates if possible.
 
 ---
 
 ### Charts & Analytics
 
-Visualize data trends with interactive charts on the dashboard.
+Charts show helpful summaries of rescue and adoption activity so you can see trends at a glance.
 
 ![Dashboard with Multiple Chart Types](screenshots/19_dashboard_charts.png)
 
 #### Chart Types
 
-1. **Bar Charts**
-   - Display counts by category (e.g., animals by species)
-   - Labels show counts
-   - Legend on right side for color mapping
+1. **Bar charts** — Good for comparing counts (for example, how many animals are in each health category).
+2. **Pie charts** — Show how a whole is divided (for example, the share of adoption statuses).
+3. **Line charts** — Show trends over time (for example, rescues or adoptions this month).
+4. **Stat cards** — Large number tiles that give quick facts (for example, total rescues). Click a stat card to go to more details.
 
-2. **Pie Charts**
-   - Show proportions (e.g., adoption status distribution)
-   - Percentages displayed on slices
-   - Legend on right side
+#### How to use charts
 
-3. **Line Charts**
-   - Show trends over time (e.g., rescues per month)
-   - Data points marked with dots
-   - Legend shows series colors and totals
+1. **See more detail**
+   - Click the expand or details icon on a chart card to open a dialog with the full breakdown and values.
 
-4. **Stat Cards**
-   - Quick overview numbers
-   - Color-coded by status (green=good, yellow=warning, red=urgent)
-   - Click card to navigate to related page
+2. **Refresh the data**
+   - Charts update when you return to the page or navigate in the app. If something looks wrong, refresh the page.
 
-#### Interacting with Charts
+3. **Time range**
+   - Most dashboard charts show recent data (for example, the last 30 days). The exact range may be shown on the chart header.
 
-1. **View Chart Details**
-   - Click the expand icon on chart cards to see detailed breakdown
-   - Popup dialogs show complete data with all items listed
+#### Common charts you will see
 
-2. **Refresh Data**
-   - Navigate away and back to refresh charts
-   - Charts show data for the last 30 days by default
+**Admin Dashboard**
+- Rescued vs. Adopted (short-term trend): A line chart showing recent rescue and adoption counts.
+- Breed Distribution: A pie chart of the most common breeds in the system.
 
-#### Available Charts
+**User Dashboard**
+- Your Impact Overview: A summary of your overall contributions and activities.
+- My Rescues: A pie chart showing the status breakdown of your reported rescues (pending, on-going, rescued, failed).
+- My Adoptions: A pie chart showing the status breakdown of your adoption applications (pending, approved, denied).
+- Popular Breeds Adopted: A bar chart of the most adopted breeds among applications.
+- Adoptable Breeds Distribution: A pie chart showing the breed distribution of animals currently available for adoption.
 
-**Admin Dashboard**:
-- **Rescued vs. Adopted (14 Days)**: Line chart showing rescue and adoption trends
-- **Breed Distribution**: Pie chart of most common breeds
+**Your Analytics Page (Users)**
+- Stat Cards:
+  - Total Rescue Missions Submitted
+  - Total Animals Adopted
+  - Successfully Rescued Animals
+  - Pending Adoption Requests
+- Your Activity Over Time (line): Monthly trend of your rescue missions and adoption applications.
+- My Animals by Status (bar): Counts of your animals by status (needs setup, available, adopted).
+- My Urgency Summary (bar): Counts of your reported rescues by urgency (low, medium, high).
 
-**Charts Page**:
-- **Rescued vs. Adopted (30 Days)**: Line chart showing monthly trends
-- **Animals by Species**: Pie chart of species distribution
-- **Health Status**: Bar chart showing healthy, recovering, injured counts
-- **Rescue Status**: Pie chart showing pending, on-going, rescued, failed counts
-- **Adoption Status**: Pie chart showing pending, approved, denied counts
-- **Urgency Distribution**: Bar chart showing low, medium, high urgency counts
-- **Species Ranking**: Bar chart of most adopted species
-- **Breed Distribution**: Pie chart of all breeds
-- **Rescue Mission Map**: Interactive map showing rescue locations
+**Charts Page (full analytics)**
+- Rescued vs. Adopted (monthly trend)
+- Animals by Species (pie)
+- Health Status (bar): healthy, recovering, injured
+- Rescue Status (pie): pending, on-going, rescued, failed
+- Adoption Status (pie): pending, approved, denied
+- Urgency Distribution (bar): low, medium, high
+- Species Ranking (bar): most-adopted species
+- Breed Distribution (pie): distribution across known breeds
+- Rescue Mission Map: interactive map showing areported locations
 
 ---
 
@@ -843,13 +901,13 @@ Visualize data trends with interactive charts on the dashboard.
 
 ### Change Your Password
 
-1. Navigate to **Profile** (click profile section at bottom of sidebar)
-2. Scroll to **"Change Password"** section
-3. Enter current password
-4. Enter new password (must meet requirements)
-5. Confirm new password
-6. Click **"Change Password"** button
-7. Success message displays
+1. Click **"Profile"** in the sidebar.
+2. Scroll to the **Change Password** section.
+3. Type your current password.
+4. Type a new password that follows the rules shown on the page.
+5. Re-type the new password to confirm.
+6. Click **"Change Password"**.
+7. A confirmation message will appear when the change is successful.
 
 ---
 
@@ -857,26 +915,28 @@ Visualize data trends with interactive charts on the dashboard.
 
 #### For Animal Records (Admin)
 
-1. Open add/edit animal form
-2. Click **"Upload Photo"** button or drag-and-drop
-3. Select image file (JPG, PNG, GIF, WEBP)
-4. Photo preview displays
-5. Click **"Save"** or **"Update"** to commit
+1. Open the animal Add or Edit form.
+2. Click **"Upload Photo"** or drag and drop an image into the photo area.
+3. Choose the image file on your device.
+4. A preview of the photo appears before you save.
+5. Click **"Save"** or **"Update"** to store the photo with the record.
 
 #### For Rescue Missions (User)
 
-1. Open rescue form
-2. Click **"Upload Photo"** in photo section
-3. Select image file
-4. Photo preview displays
-5. (Optional) Click **"Analyze with AI"** for breed detection
-6. Submit form
+1. Open the Rescue form.
+2. Click **"Upload Photo"** in the photo section.
+3. Choose the image file on your device.
+4. A preview of the photo appears.
+5. (Optional) Click **"Analyze with AI"** to get suggested breeds.
+6. Submit the form when ready.
 
 #### Photo Requirements
 
-- **Formats**: JPG, JPEG, PNG, GIF, WEBP
-- **Maximum Size**: 5 MB
-- **Recommended**: Clear, well-lit, close-up shots
+- Formats accepted: **JPG, JPEG, PNG, GIF, WEBP**
+- Maximum file size: **5 MB**
+- Tip: Use a clear, well-lit, close-up photo for best results.
+
+If your device does not show the WEBP option, use JPG or PNG instead — the app accepts those formats.
 
 ---
 
@@ -884,23 +944,21 @@ Visualize data trends with interactive charts on the dashboard.
 
 #### Cancel Rescue Mission
 
-1. Navigate to **"Check Application Status"** in sidebar
-2. Find pending mission
-3. Click **"Cancel"** button
-4. Confirmation dialog: "Are you sure? This action cannot be undone."
-5. Click **"Confirm"**
-6. Mission status changes to "Cancelled"
+1. Go to **Check Application Status** from the sidebar.
+2. Locate the mission that is still **Pending**.
+3. Click the **Cancel** button for that mission.
+4. Confirm the cancellation in the dialog that appears.
+5. The mission will be marked **Cancelled**.
 
 #### Cancel Adoption Application
 
-1. Navigate to **"Check Application Status"** in sidebar
-2. Find pending application
-3. Click **"Cancel"** button
-4. Confirmation dialog
-5. Click **"Confirm"**
-6. Application status changes to "Cancelled"
+1. Go to **Check Application Status** from the sidebar.
+2. Find your pending adoption application.
+3. Click the **Cancel** button.
+4. Confirm the cancellation when asked.
+5. The application will be marked **Cancelled**.
 
-**Note**: You cannot cancel requests that are already being processed (On-Going, Under Review) or completed.
+Note: You can only cancel items that have not yet started being processed (for example, items labeled **Pending**). Requests already in progress or completed cannot be cancelled.
 
 ---
 
@@ -908,21 +966,18 @@ Visualize data trends with interactive charts on the dashboard.
 
 #### Archive Rescue Mission (User)
 
-1. Navigate to **"Check Application Status"** in sidebar
-2. Find completed mission (Rescued, Cancelled)
-3. Click **"Archive"** button
-4. Mission hidden from main list
-5. May be viewable in archived items section (if enabled for users)
+1. Open **Check Application Status** in the sidebar.
+2. Find a mission that is finished (for example, **Rescued** or **Cancelled**).
+3. Click **Archive** for that item.
+4. The item will be removed from the main active list and placed in archived items.
 
 #### Archive Animal (Admin)
 
-1. Navigate to **"View Animal List"** in sidebar
-2. Find animal to archive
-3. Click **"Archive"** button
-4. Confirmation: "This will hide the animal from public view."
-5. Click **"Confirm"**
-6. Animal removed from public animal list
-7. Still viewable in **"Manage Records"** → **"Hidden Items"** section
+1. Open **View Animal List** from the sidebar.
+2. Find the animal you want to archive.
+3. Click the **Archive** button and confirm.
+4. The animal will no longer appear in public lists but remains available to admins under **Manage Records → Hidden Items**.
+![Archived Animals in Hidden Items](screenshots/24_archived_animals.png)
 
 ---
 
@@ -930,38 +985,28 @@ Visualize data trends with interactive charts on the dashboard.
 
 #### Export Animals to CSV
 
-1. Navigate to **"View Animal List"** in sidebar (admin view)
-2. Click **"Export"** button (top-right)
-3. CSV file is saved to `storage/data/exports/`
-4. Success message shows filename
+1. Open **View Animal List** (admin view).
+2. Click the **Export** button (top-right).
+3. A CSV file is created and saved on the server.
+4. A message will show the filename when the export finishes.
 
 #### Export Adoption Records
 
-1. Navigate to **"Manage Records"** in sidebar
-2. Select **"Adoptions"** tab
-3. Click **"Export"** button
-4. CSV file is saved to `storage/data/exports/`
+1. Open **Manage Records** and choose the **Adoptions** tab.
+2. Click **Export**.
+3. A CSV file is created and saved on the server.
 
 #### Export Rescue Missions
 
-1. Navigate to **"Manage Records"** in sidebar
-2. Select **"Rescues"** tab
-3. Click **"Export"** button
-4. CSV file is saved to `storage/data/exports/`
+1. Open **Manage Records** and choose the **Rescues** tab.
+2. Click **Export**.
+3. A CSV file is created and saved on the server.
 
-**Note**: Exported files are saved on the server in `app/storage/data/exports/`. Access them directly from that folder.
+Where exported files are saved on the server: `app/storage/data/exports/` — ask your administrator if you need help accessing this folder.
 
 ---
 
 ## Troubleshooting
-
-### Forgot Password
-
-**Solution**:
-- Contact an administrator to reset your password
-- Admin can reset passwords via **User Management** page (lock icon button)
-- Admin will set a new password for you
-- You can change it later from your Profile page
 
 ---
 

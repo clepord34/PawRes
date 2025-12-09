@@ -18,6 +18,7 @@ Comprehensive API documentation for all PawRes service classes. Services provide
 10. [ImportService](#importservice) - Bulk animal data import
 11. [LoggingService](#loggingservice) - Structured logging
 12. [PasswordPolicy](#passwordpolicy) - Password validation and enforcement
+13. [GoogleAuthService](#googleauthservice) - Google OAuth 2.0 sign-in helper
 
 ---
 
@@ -268,6 +269,48 @@ print(f"Failed attempts: {attempts if attempts is not None else 0}")
 ```
 
 ---
+
+## GoogleAuthService
+
+Google OAuth 2.0 service that implements the Authorization Code flow with PKCE. Works for both desktop and web Flet applications and opens the user's browser to perform sign-in, handling a local callback to receive the authorization code.
+
+**Location**: `app/services/google_auth_service.py`
+
+### Constructor
+
+```python
+def __init__(self, callback_port: int = DEFAULT_CALLBACK_PORT) -> None
+```
+
+**Parameters**:
+- `callback_port`: Local port for the OAuth callback server (default: `8085`)
+
+### Properties & Key Methods
+
+- `is_configured`: `bool` — Whether `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set in the environment.
+- `check_internet_available() -> bool`: Verifies that Google's OAuth endpoints are reachable.
+- `get_auth_url() -> str`: Builds the Google authorization URL (generates PKCE pair and state).
+- `exchange_code(auth_code: str) -> Dict[str, Any]`: Exchanges the authorization code for tokens.
+- `get_user_info(access_token: str) -> Dict[str, Any]`: Retrieves user profile information from Google.
+- `sign_in(on_complete: Optional[Callable]=None, on_error: Optional[Callable]=None) -> Optional[Dict[str, Any]]`: Runs the full sign-in flow (opens browser, handles callback, exchanges tokens, returns user info).
+- `sign_in_async(on_complete: Callable, on_error: Callable) -> threading.Thread`: Starts `sign_in` in a background thread for non-blocking UI.
+
+### Example
+
+```python
+from services.google_auth_service import GoogleAuthService
+
+auth = GoogleAuthService()
+if not auth.is_configured:
+    print("Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment")
+else:
+    user_info = auth.sign_in()
+    if user_info:
+        print(f"Signed in: {user_info.get('email')}")
+    else:
+        print("Sign-in failed or cancelled")
+```
+
 
 ## AnimalService
 
@@ -2082,5 +2125,5 @@ Fixtures are provided in `app/tests/conftest.py` for common test scenarios.
 
 ---
 
-*Generated: December 8, 2025*  
+*Last Updated: December 9, 2025*  
 *PawRes Version: 1.0*

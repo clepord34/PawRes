@@ -104,13 +104,6 @@ graph TB
     RescueSvc --> Maps
     AnalyticsSvc --> Charts
     AuthSvc --> OAuth
-    
-    style Views fill:#e1f5ff
-    style Routes fill:#fff3e0
-    style AuthSvc fill:#f3e5f5
-    style AppState fill:#e8f5e9
-    style Database fill:#ffebee
-    style AI fill:#fff9c4
 ```
 
 ---
@@ -154,11 +147,6 @@ graph LR
     
     AdoptionForm --> FormFields
     AdoptionForm --> Dialogs
-    
-    style FormFields fill:#bbdefb
-    style Containers fill:#c8e6c9
-    style Dialogs fill:#ffccbc
-    style Charts fill:#f0f4c3
 ```
 
 ### 2. Service Layer Architecture
@@ -199,13 +187,6 @@ graph TB
     AdoptionService --> LoggingService
     
     AnalyticsService --> Cache
-    
-    style AuthService fill:#e1bee7
-    style UserService fill:#b39ddb
-    style AnimalService fill:#90caf9
-    style RescueService fill:#80deea
-    style AdoptionService fill:#80cbc4
-    style AnalyticsService fill:#a5d6a7
 ```
 
 ### 3. Data Storage Architecture
@@ -248,10 +229,6 @@ graph TB
     Adoptions -->|FK: animal_id| Animals
     Rescues -->|FK: user_id| Users
     Rescues -->|FK: animal_id| Animals
-    
-    style DB fill:#ffccbc
-    style FileStore fill:#fff9c4
-    style Cache fill:#c5e1a5
 ```
 
 ### 4. Authentication & Authorization Flow
@@ -674,13 +651,6 @@ graph TD
     storage --> Cache
     
     components --> utils
-    
-    style main fill:#ffcdd2
-    style routes fill:#f8bbd0
-    style views fill:#e1bee7
-    style services fill:#d1c4e9
-    style storage fill:#c5cae9
-    style components fill:#bbdefb
 ```
 
 ### Module Import Rules
