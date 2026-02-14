@@ -10,23 +10,18 @@ from .utils import clear_page
 def render_user_dashboard(page, params: Dict[str, Any]) -> None:
     """Render the user dashboard."""
     from views.user_dashboard import UserDashboard
-    clear_page(page)
     UserDashboard(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_available_adoption(page, params: Dict[str, Any]) -> None:
     """Render the available animals for adoption page."""
     from views.available_adoption_page import AvailableAdoptionPage
-    clear_page(page)
     AvailableAdoptionPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_adoption_form(page, params: Dict[str, Any]) -> None:
     """Render the adoption form page."""
     from views.adoption_form_page import AdoptionFormPage
-    clear_page(page)
     animal_id = None
     edit_request_id = None
     if "animal_id" in params:
@@ -40,21 +35,17 @@ def render_adoption_form(page, params: Dict[str, Any]) -> None:
         except (ValueError, TypeError):
             pass
     AdoptionFormPage(db_path=app_config.DB_PATH).build(page, animal_id=animal_id, edit_request_id=edit_request_id)
-    page.update()
 
 
 def render_rescue_form(page, params: Dict[str, Any]) -> None:
     """Render the rescue submission form page."""
     from views.rescue_form_page import RescueFormPage
-    clear_page(page)
     RescueFormPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_check_status(page, params: Dict[str, Any]) -> None:
     """Render the check status page."""
     from views.check_status_page import CheckStatusPage
-    clear_page(page)
     user_id = page.session.get("user_id")
     if not user_id:
         print("[WARNING] No user_id in session, redirecting to login")
@@ -68,20 +59,17 @@ def render_check_status(page, params: Dict[str, Any]) -> None:
         except (ValueError, TypeError):
             pass
     CheckStatusPage(db_path=app_config.DB_PATH).build(page, user_id=user_id, tab=tab)
-    page.update()
 
 
 def render_user_analytics(page, params: Dict[str, Any]) -> None:
     """Render the user analytics page."""
     from views.user_analytics_page import UserAnalyticsPage
-    clear_page(page)
     user_id = page.session.get("user_id")
     if not user_id:
         print("[WARNING] No user_id in session, redirecting to login")
         page.go("/")
         return
     UserAnalyticsPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 # ============================================================================

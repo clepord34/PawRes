@@ -14,6 +14,7 @@ from components import (
     create_chart_legend, create_empty_chart_message, create_insight_box, create_clickable_stat_card, 
     show_chart_details_dialog, CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS,
     create_interactive_map,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -32,6 +33,8 @@ class ChartsPage:
 
         page.title = "Data Analytics"
 
+        sidebar = create_admin_sidebar(page, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading charts...")
         sidebar = create_admin_sidebar(page, current_route=page.route)
 
         (months, rescued_counts, adopted_counts), type_dist, status_counts = self.analytics_service.get_chart_data()
@@ -73,7 +76,9 @@ class ChartsPage:
                 {"label": "Adopted", "color": CHART_COLORS["secondary"], "value": sum(adopted_counts)},
             ], horizontal=False, line_refs=line_refs)
         else:
-            line_chart = create_empty_chart_message("No rescue/adoption data available yet", width=450, height=270)
+            line_chart = create_empty_chart_message("No rescue/adoption data available yet", width=450, height=270,
+                button_text="View Manage Records", button_icon=ft.Icons.FOLDER_OPEN,
+                on_click=lambda e: page.go("/manage_records"))
             line_legend = ft.Container()
 
         # Pie chart: type distribution
@@ -94,7 +99,9 @@ class ChartsPage:
                 for idx, (label, value) in enumerate(type_dist.items())
             ], horizontal=False, pie_refs=type_pie_refs)
         else:
-            type_pie_chart = create_empty_chart_message("No animal type data", width=180, height=180)
+            type_pie_chart = create_empty_chart_message("No animal type data", width=180, height=180,
+                button_text="Add Animal", button_icon=ft.Icons.ADD,
+                on_click=lambda e: page.go("/add_animal"))
             type_legend = ft.Container()
 
         # Bar chart: health status
@@ -122,7 +129,9 @@ class ChartsPage:
                 for i, s in enumerate(health_statuses)
             ], horizontal=False, bar_refs=health_bar_refs)
         else:
-            health_bar_chart = create_empty_chart_message("No health status data", width=280, height=200)
+            health_bar_chart = create_empty_chart_message("No health status data", width=280, height=200,
+                button_text="Add Animal", button_icon=ft.Icons.ADD,
+                on_click=lambda e: page.go("/add_animal"))
             health_legend = ft.Container()
 
         # Rescue Status Pie Chart
@@ -146,7 +155,9 @@ class ChartsPage:
                 for s in status_order if s in rescue_status_dist
             ], horizontal=False, pie_refs=rescue_pie_refs)
         else:
-            rescue_pie_chart = create_empty_chart_message("No rescue mission data", width=180, height=180)
+            rescue_pie_chart = create_empty_chart_message("No rescue mission data", width=180, height=180,
+                button_text="View Rescues", button_icon=ft.Icons.LOCAL_HOSPITAL,
+                on_click=lambda e: page.go("/rescue_missions?admin=1"))
             rescue_legend = ft.Container()
 
         # Adoption Status Pie Chart
@@ -170,7 +181,9 @@ class ChartsPage:
                 for s in status_order if s in adoption_status_dist
             ], horizontal=False, pie_refs=adoption_pie_refs)
         else:
-            adoption_pie_chart = create_empty_chart_message("No adoption data", width=180, height=180)
+            adoption_pie_chart = create_empty_chart_message("No adoption data", width=180, height=180,
+                button_text="View Adoptions", button_icon=ft.Icons.VOLUNTEER_ACTIVISM,
+                on_click=lambda e: page.go("/adoption_requests"))
             adoption_legend = ft.Container()
 
         # Urgency Distribution Bar Chart
@@ -201,7 +214,9 @@ class ChartsPage:
                 for level in urgency_order if level in urgency_dist
             ], horizontal=False, bar_refs=urgency_bar_refs)
         else:
-            urgency_bar_chart = create_empty_chart_message("No urgency data", width=280, height=200)
+            urgency_bar_chart = create_empty_chart_message("No urgency data", width=280, height=200,
+                button_text="View Rescues", button_icon=ft.Icons.LOCAL_HOSPITAL,
+                on_click=lambda e: page.go("/rescue_missions?admin=1"))
             urgency_legend = ft.Container()
 
         from services.map_service import MapService
@@ -284,7 +299,9 @@ class ChartsPage:
             # Always build legend for top 3 breeds, even if no data in 30-day window
             if not breed_series:
                 # If no breed data at all, show empty state with no legend
-                return create_empty_chart_message(f"No {mode} breed data available yet", width=600, height=220), ft.Container()
+                return create_empty_chart_message(f"No {mode} breed data available yet", width=600, height=220,
+                    button_text="Add Animal", button_icon=ft.Icons.ADD,
+                    on_click=lambda e: page.go("/add_animal")), ft.Container()
             
             for idx, (breed_name, counts) in enumerate(breed_series[:3]):
                 color = breed_colors[idx] if idx < len(breed_colors) else PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]
@@ -304,7 +321,9 @@ class ChartsPage:
                 chart = create_line_chart(line_data, width=400, height=220, x_labels=day_labels, legend_refs=breed_line_refs)
                 legend = create_chart_legend(legend_data, horizontal=False, line_refs=breed_line_refs) if legend_data else ft.Container()
             else:
-                chart = create_empty_chart_message(f"No {mode} breed data available yet", width=400, height=220)
+                chart = create_empty_chart_message(f"No {mode} breed data available yet", width=400, height=220,
+                    button_text="Add Animal", button_icon=ft.Icons.ADD,
+                    on_click=lambda e: page.go("/add_animal"))
                 legend = ft.Container()
             return chart, legend
         
@@ -488,7 +507,9 @@ class ChartsPage:
                 for idx, (breed, count) in enumerate(breed_distribution)
             ], horizontal=False, pie_refs=breed_pie_refs)
         else:
-            breed_pie_chart = create_empty_chart_message("No breed data", width=200, height=200)
+            breed_pie_chart = create_empty_chart_message("No breed data", width=200, height=200,
+                button_text="Add Animal", button_icon=ft.Icons.ADD,
+                on_click=lambda e: page.go("/add_animal"))
             breed_legend = ft.Container()
         
         breed_data = [{"label": breed, "value": count, "color": PIE_CHART_COLORS[idx % len(PIE_CHART_COLORS)]}
@@ -672,9 +693,7 @@ class ChartsPage:
             main_content,
         ], spacing=0, expand=True)
 
-        page.controls.clear()
-        page.add(create_gradient_background(main_layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, main_layout)
 
 
 __all__ = ["ChartsPage"]

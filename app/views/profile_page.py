@@ -13,7 +13,8 @@ from state import get_app_state
 import app_config
 from components import (
     create_action_button,
-    show_snackbar, create_gradient_background
+    show_snackbar, create_gradient_background,
+    show_page_loading, finish_page_loading,
 )
 from components.sidebar import create_admin_sidebar, create_user_sidebar
 
@@ -84,6 +85,12 @@ class ProfilePage:
             sidebar = create_admin_sidebar(page, current_route="/profile")
         else:
             sidebar = create_user_sidebar(page, app_state.auth.user_name, current_route="/profile")
+
+        _gradient_ref = show_page_loading(page, sidebar, "Loading profile...")
+        if is_admin:
+            sidebar = create_admin_sidebar(page, current_route="/profile")
+        else:
+            sidebar = create_user_sidebar(page, app_state.auth.user_name, current_route="/profile")
         
         # Header
         header = ft.Container(
@@ -131,9 +138,7 @@ class ProfilePage:
             content,
         ], spacing=0, expand=True)
         
-        page.controls.clear()
-        page.add(create_gradient_background(layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, layout)
     
     def _build_profile_card(self) -> object:
         """Build the profile info card with photo."""

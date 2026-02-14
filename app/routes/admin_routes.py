@@ -10,55 +10,42 @@ from .utils import clear_page
 def render_admin_dashboard(page, params: Dict[str, Any]) -> None:
     """Render the admin dashboard."""
     from views.admin_dashboard import AdminDashboard
-    clear_page(page)
     AdminDashboard().build(page)
-    page.update()
 
 
 def render_add_animal(page, params: Dict[str, Any]) -> None:
     """Render the add animal page."""
     from views.add_animal_page import AddAnimalPage
-    clear_page(page)
     AddAnimalPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_edit_animal(page, params: Dict[str, Any]) -> None:
     """Render the edit animal page."""
     from views.edit_animal_page import EditAnimalPage
-    clear_page(page)
     EditAnimalPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_adoption_requests(page, params: Dict[str, Any]) -> None:
     """Render the adoption requests list page (admin)."""
     from views.adoption_request_list_page import AdoptionRequestListPage
-    clear_page(page)
     AdoptionRequestListPage(db_path=app_config.DB_PATH).build(page, user_role="admin")
-    page.update()
 
 
 def render_charts(page, params: Dict[str, Any]) -> None:
     """Render the charts/analytics page."""
     from views.charts_page import ChartsPage
-    clear_page(page)
     ChartsPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_hidden_items(page, params: Dict[str, Any]) -> None:
     """Render the hidden items management page."""
     from views.hidden_items_page import HiddenItemsPage
-    clear_page(page)
     HiddenItemsPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_manage_records(page, params: Dict[str, Any]) -> None:
     """Render the combined manage records page (rescue missions, adoptions, hidden items)."""
     from views.manage_records_page import ManageRecordsPage
-    clear_page(page)
     # Parse tab parameter (0=Rescues, 1=Adoptions, 2=Hidden)
     tab = 0
     if "tab" in params:
@@ -67,23 +54,18 @@ def render_manage_records(page, params: Dict[str, Any]) -> None:
         except (ValueError, TypeError):
             pass
     ManageRecordsPage(db_path=app_config.DB_PATH).build(page, tab=tab)
-    page.update()
 
 
 def render_user_management(page, params: Dict[str, Any]) -> None:
     """Render the user management page."""
     from views.user_management_page import UserManagementPage
-    clear_page(page)
     UserManagementPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_audit_logs(page, params: Dict[str, Any]) -> None:
     """Render the audit log viewer page."""
     from views.audit_log_page import AuditLogPage
-    clear_page(page)
     AuditLogPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 # ============================================================================

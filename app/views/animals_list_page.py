@@ -16,7 +16,8 @@ from services.rescue_service import RescueService
 from components import (
     create_admin_sidebar, create_user_sidebar, create_gradient_background,
     create_page_title, create_animal_card, create_empty_state, show_snackbar,
-    create_archive_dialog, create_remove_dialog, create_action_button
+    create_archive_dialog, create_remove_dialog, create_action_button,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -54,6 +55,12 @@ class AnimalsListPage:
         
         user_name = page.session.get("user_name") or "User"
 
+        if is_admin:
+            sidebar = create_admin_sidebar(page, current_route=page.route)
+        else:
+            sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+
+        _gradient_ref = show_page_loading(page, sidebar, "Loading animals...")
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
@@ -331,9 +338,7 @@ class AnimalsListPage:
         else:
             layout = main_content
 
-        page.controls.clear()
-        page.add(create_gradient_background(layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, layout)
 
     # ---- actions ----
     def _on_edit(self, page, animal_id: int) -> None:

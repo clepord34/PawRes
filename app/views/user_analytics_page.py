@@ -17,6 +17,7 @@ from components import (
     create_insight_box, show_chart_details_dialog,
     CHART_COLORS, STATUS_COLORS, PIE_CHART_COLORS,
     create_interactive_map,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -49,6 +50,8 @@ class UserAnalyticsPage:
             page.go("/")
             return
 
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading analytics...")
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         user_activity_stats = self.analytics_service.get_user_activity_stats(user_id)
@@ -542,9 +545,7 @@ class UserAnalyticsPage:
             main_content,
         ], spacing=0, expand=True)
 
-        page.controls.clear()
-        page.add(create_gradient_background(main_layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, main_layout)
 
 
 __all__ = ["UserAnalyticsPage"]

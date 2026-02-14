@@ -10,27 +10,21 @@ from .utils import clear_page
 def render_animals_list(page, params: Dict[str, Any]) -> None:
     """Render the animals list page."""
     from views.animals_list_page import AnimalsListPage
-    clear_page(page)
     user_role = "admin" if params.get("admin") == "1" else "user"
     AnimalsListPage(db_path=app_config.DB_PATH).build(page, user_role=user_role)
-    page.update()
 
 
 def render_rescue_missions(page, params: Dict[str, Any]) -> None:
     """Render the rescue missions list page."""
     from views.rescue_mission_list_page import RescueMissionListPage
-    clear_page(page)
     user_role = "admin" if params.get("admin") == "1" else "user"
     RescueMissionListPage(db_path=app_config.DB_PATH).build(page, user_role=user_role)
-    page.update()
 
 
 def render_profile(page, params: Dict[str, Any]) -> None:
     """Render the profile page."""
     from views.profile_page import ProfilePage
-    clear_page(page)
     ProfilePage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 # ============================================================================

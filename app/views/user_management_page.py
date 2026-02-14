@@ -12,7 +12,8 @@ import app_config
 from components import (
     create_action_button,
     show_snackbar, create_gradient_background, create_page_title,
-    create_section_card, create_scrollable_data_table, create_stat_card
+    create_section_card, create_scrollable_data_table, create_stat_card,
+    show_page_loading, finish_page_loading,
 )
 from components.sidebar import create_admin_sidebar
 
@@ -61,6 +62,8 @@ class UserManagementPage:
         
         app_state = get_app_state()
         
+        sidebar = create_admin_sidebar(page, current_route="/user_management")
+        _gradient_ref = show_page_loading(page, sidebar, "Loading users...")
         sidebar = create_admin_sidebar(page, current_route="/user_management")
         
         # Stats row
@@ -165,9 +168,7 @@ class UserManagementPage:
             main_content,
         ], spacing=0, expand=True)
         
-        page.controls.clear()
-        page.add(create_gradient_background(layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, layout)
     
     def _refresh_users(self) -> None:
         """Refresh the user list based on current filters."""

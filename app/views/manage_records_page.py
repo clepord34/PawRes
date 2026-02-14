@@ -51,6 +51,7 @@ class ManageRecordsPage:
             create_scrollable_data_table, create_empty_state,
             create_restore_dialog, create_permanent_delete_dialog,
             create_interactive_map,
+            show_page_loading, finish_page_loading,
         )
         
         self._page = page
@@ -65,6 +66,8 @@ class ManageRecordsPage:
             page.go("/login")
             return
         
+        sidebar = create_admin_sidebar(page, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading records...")
         sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Tab change handler
@@ -256,9 +259,12 @@ class ManageRecordsPage:
         # Main layout
         main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
         
-        page.controls.clear()
-        page.add(create_gradient_background(main_layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, main_layout)
+    
+    def _switch_to_tab(self, page, tab_index: int) -> None:
+        """Switch to a specific tab and rebuild the page."""
+        self._tab_index = tab_index
+        self.build(page)
     
     def _build_rescue_missions_content(self, page, ft, show_snackbar, create_section_card,
                                         create_scrollable_data_table, create_archive_dialog,
@@ -820,9 +826,14 @@ class ManageRecordsPage:
         hidden_missions = self._app_state.rescues.load_hidden_missions()
         
         if not hidden_missions:
-            return create_empty_state(
+            from components import create_empty_state_with_action
+            return create_empty_state_with_action(
                 icon=ft.Icons.INBOX_OUTLINED,
-                message="No hidden rescue missions")
+                message="No hidden rescue missions",
+                button_text="View Rescue Missions",
+                button_icon=ft.Icons.LOCAL_HOSPITAL,
+                on_click=lambda e: self._switch_to_tab(page, 0),
+            )
         
         archived = [m for m in hidden_missions if RescueStatus.is_archived(m.get("status", ""))]
         removed = [m for m in hidden_missions if RescueStatus.is_removed(m.get("status", ""))]
@@ -853,9 +864,14 @@ class ManageRecordsPage:
         hidden_requests = self._app_state.adoptions.load_hidden_requests()
         
         if not hidden_requests:
-            return create_empty_state(
+            from components import create_empty_state_with_action
+            return create_empty_state_with_action(
                 icon=ft.Icons.INBOX_OUTLINED,
-                message="No hidden adoption requests")
+                message="No hidden adoption requests",
+                button_text="View Adoption Requests",
+                button_icon=ft.Icons.VOLUNTEER_ACTIVISM,
+                on_click=lambda e: self._switch_to_tab(page, 1),
+            )
         
         archived = [r for r in hidden_requests if AdoptionStatus.is_archived(r.get("status", ""))]
         removed = [r for r in hidden_requests if AdoptionStatus.is_removed(r.get("status", ""))]
@@ -886,9 +902,14 @@ class ManageRecordsPage:
         hidden_animals = self._app_state.animals.load_hidden_animals()
         
         if not hidden_animals:
-            return create_empty_state(
+            from components import create_empty_state_with_action
+            return create_empty_state_with_action(
                 icon=ft.Icons.INBOX_OUTLINED,
-                message="No hidden animals")
+                message="No hidden animals",
+                button_text="View Animals List",
+                button_icon=ft.Icons.PETS,
+                on_click=lambda e: page.go("/animals_list?admin=1"),
+            )
         
         archived = [a for a in hidden_animals if AnimalStatus.is_archived(a.get("status", ""))]
         removed = [a for a in hidden_animals if AnimalStatus.is_removed(a.get("status", ""))]

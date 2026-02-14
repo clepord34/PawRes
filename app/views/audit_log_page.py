@@ -9,7 +9,8 @@ from services.logging_service import read_log_entries, LOGS_DIR
 import app_config
 from components import (
     create_action_button, show_snackbar, create_gradient_background,
-    create_page_title, create_section_card, create_scrollable_data_table
+    create_page_title, create_section_card, create_scrollable_data_table,
+    show_page_loading, finish_page_loading,
 )
 from components.sidebar import create_admin_sidebar
 
@@ -50,6 +51,8 @@ class AuditLogPage:
         self._page = page
         page.title = "Audit Logs"
         
+        sidebar = create_admin_sidebar(page, current_route="/audit_logs")
+        _gradient_ref = show_page_loading(page, sidebar, "Loading logs...")
         sidebar = create_admin_sidebar(page, current_route="/audit_logs")
         
         # Log type tabs
@@ -142,9 +145,7 @@ class AuditLogPage:
             main_content,
         ], spacing=0, expand=True)
         
-        page.controls.clear()
-        page.add(create_gradient_background(layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, layout)
     
     def _on_tab_change(self, index: int) -> None:
         """Handle log type tab change."""

@@ -22,6 +22,7 @@ from components import (
     create_ai_download_dialog,
     create_animal_card,
     create_ai_download_button,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -63,6 +64,9 @@ class UserDashboard:
         app_state = get_app_state()
         user_name = app_state.auth.user_name or "User"
         user_id = app_state.auth.user_id
+
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading dashboard...")
 
         self._sync_pending_addresses_background()
 
@@ -813,9 +817,7 @@ class UserDashboard:
 
         main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
 
-        page.controls.clear()
-        page.add(create_gradient_background(main_layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, main_layout)
 
 
 __all__ = ["UserDashboard"]

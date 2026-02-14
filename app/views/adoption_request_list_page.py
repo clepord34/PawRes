@@ -12,7 +12,8 @@ from state import get_app_state
 from components import (
     create_admin_sidebar, create_gradient_background, create_page_title, create_section_card, 
     show_snackbar, create_archive_dialog, create_remove_dialog,
-    create_scrollable_data_table
+    create_scrollable_data_table,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -36,6 +37,12 @@ class AdoptionRequestListPage:
 
         is_admin = user_role == "admin"
 
+        if is_admin:
+            sidebar = create_admin_sidebar(page, current_route=page.route)
+        else:
+            sidebar = None
+
+        _gradient_ref = show_page_loading(page, sidebar, "Loading requests...")
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
@@ -296,9 +303,7 @@ class AdoptionRequestListPage:
         else:
             main_layout = main_content
 
-        page.controls.clear()
-        page.add(create_gradient_background(main_layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, main_layout)
 
     def _on_status_change(self, page, request_id: int, new_status: str) -> None:
         """Update adoption request status using state manager."""

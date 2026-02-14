@@ -224,6 +224,118 @@ def create_empty_state(
     )
 
 
+def create_empty_state_with_action(
+    message: str = "No data found",
+    icon: Optional[object] = None,
+    button_text: str = "Get Started",
+    button_icon: Optional[object] = None,
+    on_click: Optional[Callable] = None,
+    padding: int = 40,
+    subtitle: Optional[str] = None,
+) -> object:
+    """Create an empty state with an action button.
+
+    Use instead of plain text empty states to give users a clear
+    call-to-action when there's no data.
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed to create containers")
+
+    content = []
+    if icon:
+        content.append(
+            ft.Container(
+                ft.Icon(icon, size=56, color=ft.Colors.GREY_400),
+                width=90, height=90,
+                bgcolor=ft.Colors.GREY_100,
+                border_radius=45,
+                alignment=ft.alignment.center,
+            )
+        )
+        content.append(ft.Container(height=16))
+
+    content.append(ft.Text(message, size=16, weight="w600", color=ft.Colors.BLACK54,
+                          text_align=ft.TextAlign.CENTER))
+
+    if subtitle:
+        content.append(ft.Container(height=4))
+        content.append(ft.Text(subtitle, size=12, color=ft.Colors.GREY_500,
+                              text_align=ft.TextAlign.CENTER))
+
+    if on_click:
+        btn_content = []
+        if button_icon:
+            btn_content.append(ft.Icon(button_icon, size=16, color=ft.Colors.WHITE))
+        btn_content.append(ft.Text(button_text, size=13, weight="w600", color=ft.Colors.WHITE))
+        content.append(ft.Container(height=16))
+        content.append(
+            ft.ElevatedButton(
+                content=ft.Row(btn_content, spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.TEAL_600,
+                    shape=ft.RoundedRectangleBorder(radius=20),
+                    padding=ft.padding.symmetric(horizontal=24, vertical=12),
+                    elevation={"default": 2, "hovered": 4},
+                ),
+                on_click=on_click,
+            )
+        )
+
+    return ft.Container(
+        ft.Column(content, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+        padding=padding,
+        alignment=ft.alignment.center,
+    )
+
+
+def show_page_loading(page, sidebar: Optional[object] = None, message: str = "Loading...") -> object:
+    """Show a loading spinner on the page immediately.
+
+    Call at the START of ``build()``, BEFORE any data loading.
+    Returns a gradient container reference that must be passed to
+    ``finish_page_loading`` when the final layout is ready.
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed")
+
+    from components.background import create_gradient_background
+
+    spinner = ft.Container(
+        ft.Column([
+            ft.ProgressRing(width=40, height=40, stroke_width=3, color=ft.Colors.TEAL_600),
+            ft.Container(height=16),
+            ft.Text(message, size=14, color=ft.Colors.BLACK54, weight="w500"),
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+           alignment=ft.MainAxisAlignment.CENTER, spacing=0),
+        expand=True,
+        alignment=ft.alignment.center,
+    )
+
+    if sidebar:
+        inner = ft.Row([sidebar, spinner], spacing=0, expand=True)
+    else:
+        inner = spinner
+
+    gradient = create_gradient_background(inner)
+
+    page.controls.clear()
+    page.add(gradient)
+    page.update()
+
+    return gradient
+
+
+def finish_page_loading(page, gradient_ref: object, final_layout: object) -> None:
+    """Swap the spinner for the final content without clearing the page.
+
+    Replaces the *content* inside the gradient container that
+    ``show_page_loading`` already placed on the page, avoiding the
+    black-screen flash that ``page.controls.clear()`` would cause.
+    """
+    gradient_ref.content = final_layout
+    page.update()
+
+
 def create_data_table(
     columns: List[str],
     rows: List[List[object]],

@@ -10,25 +10,19 @@ from .utils import clear_page
 def render_login(page, params: Dict[str, Any]) -> None:
     """Render the login page."""
     from views.login_page import LoginPage
-    clear_page(page)
     LoginPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_signup(page, params: Dict[str, Any]) -> None:
     """Render the signup page."""
     from views.signup_page import SignupPage
-    clear_page(page)
     SignupPage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 def render_emergency_rescue(page, params: Dict[str, Any]) -> None:
     """Render the emergency rescue page (no login required)."""
     from views.emergency_rescue_page import EmergencyRescuePage
-    clear_page(page)
     EmergencyRescuePage(db_path=app_config.DB_PATH).build(page)
-    page.update()
 
 
 # ============================================================================

@@ -18,6 +18,7 @@ from components import (
     create_page_title, create_section_card, show_snackbar, create_confirmation_dialog,
     create_scrollable_data_table, create_action_button,
     create_interactive_map,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -66,6 +67,8 @@ class CheckStatusPage:
 
         user_name = self._app_state.auth.user_name or "User"
 
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading statuses...")
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         self._app_state.adoptions.load_user_requests(user_id)
@@ -226,9 +229,7 @@ class CheckStatusPage:
         # Main layout
         main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
 
-        page.controls.clear()
-        page.add(create_gradient_background(main_layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, main_layout)
 
     def _make_status_badge(self, ft, status: str, admin_message: str = "", is_rescue: bool = False,
                            removal_reason: str = "", archive_note: str = ""):

@@ -52,13 +52,18 @@ STATUS_COLORS = {
 }
 
 
-def create_empty_chart_message(message: str = "No Data Available", height: int = 200, width: Optional[int] = None) -> Any:
+def create_empty_chart_message(message: str = "No Data Available", height: int = 200, width: Optional[int] = None,
+                               button_text: Optional[str] = None, button_icon: Optional[object] = None,
+                               on_click: Optional[Callable] = None) -> Any:
     """Create an empty state message for charts with no data.
     
     Args:
         message: The message to display
         height: Height of the container
         width: Width of the container (optional)
+        button_text: Optional text for an action button
+        button_icon: Optional icon for the action button
+        on_click: Optional callback when button is clicked
         
     Returns:
         A Flet container with the empty state message
@@ -66,12 +71,30 @@ def create_empty_chart_message(message: str = "No Data Available", height: int =
     if ft is None:
         raise RuntimeError("Flet must be installed")
     
+    content_items = [
+        ft.Icon(ft.Icons.INSERT_CHART_OUTLINED, size=48, color=ft.Colors.GREY_400),
+        ft.Text(message, size=14, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
+    ]
+    
+    if button_text and on_click:
+        content_items.append(ft.Container(height=8))
+        content_items.append(
+            ft.ElevatedButton(
+                text=button_text,
+                icon=button_icon,
+                on_click=on_click,
+                style=ft.ButtonStyle(
+                    bgcolor=ft.Colors.TEAL_600,
+                    color=ft.Colors.WHITE,
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                    padding=ft.padding.symmetric(horizontal=16, vertical=8),
+                ),
+            )
+        )
+    
     return ft.Container(
         content=ft.Column(
-            [
-                ft.Icon(ft.Icons.INSERT_CHART_OUTLINED, size=48, color=ft.Colors.GREY_400),
-                ft.Text(message, size=14, color=ft.Colors.GREY_500, text_align=ft.TextAlign.CENTER),
-            ],
+            content_items,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.CENTER,
             spacing=10,

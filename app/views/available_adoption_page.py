@@ -11,7 +11,8 @@ from state import get_app_state
 from services.photo_service import load_photo
 from components import (
     create_user_sidebar, create_gradient_background,
-    create_page_title, create_animal_card, create_empty_state
+    create_page_title, create_animal_card, create_empty_state,
+    show_page_loading, finish_page_loading,
 )
 
 
@@ -38,6 +39,8 @@ class AvailableAdoptionPage:
 
         user_name = page.session.get("user_name") or "User"
 
+        sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading animals...")
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         self._app_state.animals.load_adoptable_animals()
@@ -136,9 +139,7 @@ class AvailableAdoptionPage:
             main_content,
         ], spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
 
-        page.controls.clear()
-        page.add(create_gradient_background(layout))
-        page.update()
+        finish_page_loading(page, _gradient_ref, layout)
 
     def _on_apply(self, page, animal_id: int) -> None:
         # navigate to adoption form with query param

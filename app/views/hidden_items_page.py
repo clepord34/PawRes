@@ -63,6 +63,7 @@ class HiddenItemsPage:
             show_snackbar,
             create_restore_dialog,
             create_permanent_delete_dialog,
+            show_page_loading, finish_page_loading,
         )
         from state import get_app_state
         
@@ -77,6 +78,10 @@ class HiddenItemsPage:
         
         page.title = "Hidden Items - PawRes Admin"
         page.bgcolor = ft.Colors.GREY_100
+
+        sidebar = create_admin_sidebar(page, current_route=page.route)
+        _gradient_ref = show_page_loading(page, sidebar, "Loading hidden items...")
+        sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Tab change handler
         def on_tab_change(e):
@@ -132,14 +137,11 @@ class HiddenItemsPage:
         )
         
         # Page layout
-        page.controls.clear()
-        page.add(
-            ft.Row([
-                sidebar,
-                main_content,
-            ], expand=True, spacing=0)
-        )
-        page.update()
+        final_layout = ft.Row([
+            sidebar,
+            main_content,
+        ], expand=True, spacing=0)
+        finish_page_loading(page, _gradient_ref, final_layout)
     
     def _refresh_content(self):
         """Refresh the content area based on selected tab."""
@@ -159,14 +161,17 @@ class HiddenItemsPage:
     def _build_rescue_missions_content(self):
         """Build the rescue missions hidden items list."""
         import flet as ft
-        from components import create_empty_state, create_section_card
+        from components import create_empty_state_with_action, create_section_card
         
         hidden_missions = self._rescue_state.load_hidden_missions()
         
         if not hidden_missions:
-            return create_empty_state(
+            return create_empty_state_with_action(
                 icon=ft.Icons.INBOX_OUTLINED,
-                message="No hidden rescue missions. There are no archived or removed missions."
+                message="No hidden rescue missions. There are no archived or removed missions.",
+                button_text="View My Rescues",
+                button_icon=ft.Icons.LOCAL_HOSPITAL,
+                on_click=lambda e: self._page.go("/rescue_missions?admin=1"),
             )
         
         # Separate archived and removed
@@ -194,14 +199,17 @@ class HiddenItemsPage:
     def _build_adoption_requests_content(self):
         """Build the adoption requests hidden items list."""
         import flet as ft
-        from components import create_empty_state
+        from components import create_empty_state_with_action
         
         hidden_requests = self._adoption_state.load_hidden_requests()
         
         if not hidden_requests:
-            return create_empty_state(
+            return create_empty_state_with_action(
                 icon=ft.Icons.INBOX_OUTLINED,
-                message="No hidden adoption requests. There are no archived or removed requests."
+                message="No hidden adoption requests. There are no archived or removed requests.",
+                button_text="View Adoptions",
+                button_icon=ft.Icons.VOLUNTEER_ACTIVISM,
+                on_click=lambda e: self._page.go("/adoption_requests"),
             )
         
         # Separate archived and removed
@@ -229,14 +237,17 @@ class HiddenItemsPage:
     def _build_animals_content(self):
         """Build the animals hidden items list."""
         import flet as ft
-        from components import create_empty_state
+        from components import create_empty_state_with_action
         
         hidden_animals = self._animal_state.load_hidden_animals()
         
         if not hidden_animals:
-            return create_empty_state(
+            return create_empty_state_with_action(
                 icon=ft.Icons.INBOX_OUTLINED,
-                message="No hidden animals. There are no archived or removed animals."
+                message="No hidden animals. There are no archived or removed animals.",
+                button_text="Browse Animals",
+                button_icon=ft.Icons.PETS,
+                on_click=lambda e: self._page.go("/animals_list?admin=1"),
             )
         
         # Separate archived and removed
