@@ -15,6 +15,8 @@ from components import (
     create_action_button,
     show_snackbar, create_gradient_background,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_admin_drawer, create_user_drawer,
 )
 from components.sidebar import create_admin_sidebar, create_user_sidebar
 
@@ -80,13 +82,16 @@ class ProfilePage:
             return
         
         is_admin = app_state.auth.is_admin
+        _mobile = is_mobile(page)
         
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route="/profile")
+            drawer = create_admin_drawer(page, current_route="/profile") if _mobile else None
         else:
             sidebar = create_user_sidebar(page, app_state.auth.user_name, current_route="/profile")
+            drawer = create_user_drawer(page, current_route="/profile") if _mobile else None
 
-        _gradient_ref = show_page_loading(page, sidebar, "Loading profile...")
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading profile...")
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route="/profile")
         else:
@@ -122,21 +127,17 @@ class ProfilePage:
         content = ft.Container(
             ft.Column([
                 header,
-                ft.Row([
-                    ft.Column([profile_card], expand=1),
-                    ft.Column([edit_card, linked_accounts_card, password_card], spacing=20, expand=2),
-                ], spacing=20, expand=True, alignment=ft.MainAxisAlignment.START,
-                   vertical_alignment=ft.CrossAxisAlignment.START),
+                ft.ResponsiveRow([
+                    ft.Container(ft.Column([profile_card]), col={"xs": 12, "md": 4}),
+                    ft.Container(ft.Column([edit_card, linked_accounts_card, password_card], spacing=20), col={"xs": 12, "md": 8}),
+                ], spacing=20, run_spacing=20),
             ], spacing=20, scroll=ft.ScrollMode.AUTO, expand=True),
-            padding=30,
+            padding=responsive_padding(page),
             expand=True,
         )
         
         # Layout with sidebar
-        layout = ft.Row([
-            sidebar,
-            content,
-        ], spacing=0, expand=True)
+        layout = create_responsive_layout(page, sidebar, content, drawer, title="Profile")
         
         finish_page_loading(page, _gradient_ref, layout)
     

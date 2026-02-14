@@ -11,6 +11,8 @@ from components import (
     create_action_button, show_snackbar, create_gradient_background,
     create_page_title, create_section_card, create_scrollable_data_table,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_admin_drawer,
 )
 from components.sidebar import create_admin_sidebar
 
@@ -51,8 +53,10 @@ class AuditLogPage:
         self._page = page
         page.title = "Audit Logs"
         
+        _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route="/audit_logs")
-        _gradient_ref = show_page_loading(page, sidebar, "Loading logs...")
+        drawer = create_admin_drawer(page, current_route="/audit_logs") if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading logs...")
         sidebar = create_admin_sidebar(page, current_route="/audit_logs")
         
         # Log type tabs
@@ -135,15 +139,12 @@ class AuditLogPage:
         
         main_content = ft.Container(
             ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=30,
+            padding=responsive_padding(page),
             expand=True,
         )
         
         # Layout with sidebar
-        layout = ft.Row([
-            sidebar,
-            main_content,
-        ], spacing=0, expand=True)
+        layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Audit Logs")
         
         finish_page_loading(page, _gradient_ref, layout)
     

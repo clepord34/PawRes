@@ -139,7 +139,6 @@ class AnimalFormWidget:
         # Card container
         card = ft.Container(
             card_content,
-            width=480,
             padding=30,
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
@@ -149,6 +148,7 @@ class AnimalFormWidget:
                 color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
                 offset=(0, 8)
             ),
+            width=480,  # acts as max_width in centered layout
         )
         
         if self.rescue_info:
@@ -423,7 +423,6 @@ class AnimalFormWidget:
         self._type_dropdown = create_form_dropdown(
             label="Animal Type",
             options=["Dog", "Cat", "Other"],
-            width=400,
             value=species_value,
         )
         
@@ -431,7 +430,6 @@ class AnimalFormWidget:
         self._name_field = create_form_text_field(
             label="Animal Name",
             hint_text="Enter the animal's name",
-            width=400,
             value=name_value,
         )
         
@@ -440,7 +438,6 @@ class AnimalFormWidget:
         self._breed_field = create_form_text_field(
             label="Breed (Optional)",
             hint_text="Enter breed or use AI to detect",
-            width=400,
             value=breed_value,
         )
         
@@ -450,7 +447,6 @@ class AnimalFormWidget:
         self._age_dropdown = create_form_dropdown(
             label=age_label,
             options=age_options,
-            width=400,
             value=age_value,
             menu_height=200,  # Limit dropdown height to show ~5 items
         )
@@ -459,7 +455,6 @@ class AnimalFormWidget:
         self._health_dropdown = create_form_dropdown(
             label="Health Status",
             options=["Healthy", "Recovering", "Injured"],
-            width=400,
             value=status_value,
         )
         

@@ -18,6 +18,8 @@ from components import (
     create_page_title, create_animal_card, create_empty_state, show_snackbar,
     create_archive_dialog, create_remove_dialog, create_action_button,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_admin_drawer, create_user_drawer,
 )
 
 
@@ -52,15 +54,18 @@ class AnimalsListPage:
         page.title = "Animals List"
 
         is_admin = user_role == "admin"
+        _mobile = is_mobile(page)
         
         user_name = page.session.get("user_name") or "User"
 
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
+            drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
         else:
             sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+            drawer = create_user_drawer(page, current_route=page.route) if _mobile else None
 
-        _gradient_ref = show_page_loading(page, sidebar, "Loading animals...")
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading animals...")
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
@@ -283,12 +288,10 @@ class AnimalsListPage:
                 padding=40
             ))
         
-        self._animal_cards_container = ft.Row(
-            animal_cards,
-            wrap=True,
+        self._animal_cards_container = ft.ResponsiveRow(
+            [ft.Container(c, col={"xs": 12, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
             spacing=15,
             run_spacing=15,
-            alignment=ft.MainAxisAlignment.START,
         )
         
         self._count_text = ft.Text(f"Showing {len(animals)} animal(s)", size=13, color=ft.Colors.BLACK54)
@@ -299,42 +302,39 @@ class AnimalsListPage:
                 # Page title row with Add Animal button
                 ft.Row([
                     create_page_title("Animal List"),
-                    ft.Container(expand=True),
                     add_animal_btn,
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 
+                # Filters row
                 ft.Container(
                     ft.Row([
                         filter_dropdown,
                         species_filter,
                         search_field,
-                        ft.Container(expand=True),
+                    ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
+                    padding=ft.padding.only(bottom=5, top=5),
+                ),
+                
+                # Actions row (count, refresh, export)
+                ft.Container(
+                    ft.Row([
                         self._count_text,
                         refresh_btn,
                         export_btn,
-                    ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=12),
-                    padding=ft.padding.only(bottom=15, top=5),
+                    ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.END),
+                    padding=ft.padding.only(bottom=10),
                 ),
                 
                 # Animal cards grid
-                ft.Container(
-                    self._animal_cards_container,
-                    padding=20,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=12,
-                    shadow=ft.BoxShadow(blur_radius=15, spread_radius=2, color=ft.Colors.BLACK12, offset=(0, 3)),
-                ),
+                self._animal_cards_container,
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             expand=True,
-            padding=30,
+            padding=responsive_padding(page),
         )
 
         # Layout with or without sidebar
         if sidebar:
-            layout = ft.Row([
-                sidebar,
-                main_content,
-            ], spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
+            layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Animals")
         else:
             layout = main_content
 

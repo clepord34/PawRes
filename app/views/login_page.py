@@ -60,7 +60,6 @@ class LoginPage:
             create_action_button(
                 "Login",
                 on_click=lambda e: self._on_login(page, e),
-                width=280,
                 height=45
             ),
             padding=ft.padding.only(top=5, bottom=10),
@@ -74,7 +73,6 @@ class LoginPage:
                     ft.Image(src="https://www.google.com/favicon.ico", width=18, height=18),
                     ft.Text("Sign in with Google", size=14, color=ft.Colors.BLACK87 if google_configured else ft.Colors.GREY_400, weight="w500"),
                 ], alignment="center", spacing=10),
-                width=280,
                 height=45,
                 on_click=lambda e: self._on_google(page, e),
                 disabled=not google_configured,
@@ -108,7 +106,6 @@ class LoginPage:
                     ft.Icon(ft.Icons.EMERGENCY, size=18, color=ft.Colors.WHITE),
                     ft.Text("Emergency Report Rescue", size=14, color=ft.Colors.WHITE, weight="w600"),
                 ], alignment="center", spacing=8),
-                width=280,
                 height=48,
                 on_click=lambda e: page.go("/emergency_rescue"),
                 style=ft.ButtonStyle(
@@ -131,11 +128,11 @@ class LoginPage:
                 [
                     ft.Text("Login Your Account", size=24, weight="w600", color=ft.Colors.BLACK87),
                     ft.Container(height=25),  # spacing
-                    ft.Container(email_label, width=280, alignment=ft.alignment.center_left),
+                    ft.Container(email_label, alignment=ft.alignment.center_left),
                     ft.Container(height=6),
                     self._email_field,
                     ft.Container(height=15),
-                    ft.Container(password_label, width=280, alignment=ft.alignment.center_left),
+                    ft.Container(password_label, alignment=ft.alignment.center_left),
                     ft.Container(height=6),
                     self._password_field,
                     ft.Container(height=8),
@@ -146,7 +143,6 @@ class LoginPage:
                             ft.Text("  or  ", size=12, color=ft.Colors.BLACK45),
                             ft.Container(ft.Divider(color=ft.Colors.GREY_300), expand=True),
                         ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                        width=280,
                         padding=ft.padding.symmetric(vertical=5),
                     ),
                     self._google_btn,
@@ -158,7 +154,7 @@ class LoginPage:
             ),
             padding=40,
             alignment=ft.alignment.center,
-            width=400,
+            width=400,  # acts as max-width in centered Column
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
             shadow=ft.BoxShadow(

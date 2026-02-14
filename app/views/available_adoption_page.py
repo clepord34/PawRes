@@ -13,6 +13,8 @@ from components import (
     create_user_sidebar, create_gradient_background,
     create_page_title, create_animal_card, create_empty_state,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_user_drawer,
 )
 
 
@@ -39,8 +41,10 @@ class AvailableAdoptionPage:
 
         user_name = page.session.get("user_name") or "User"
 
+        _mobile = is_mobile(page)
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading animals...")
+        drawer = create_user_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading animals...")
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         self._app_state.animals.load_adoptable_animals()
@@ -82,12 +86,10 @@ class AvailableAdoptionPage:
                 padding=40
             ))
         
-        self._animal_cards_container = ft.Row(
-            animal_cards,
-            wrap=True,
+        self._animal_cards_container = ft.ResponsiveRow(
+            [ft.Container(c, col={"xs": 12, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
             spacing=15,
             run_spacing=15,
-            alignment=ft.MainAxisAlignment.START,
         )
 
         # Main content area
@@ -130,14 +132,11 @@ class AvailableAdoptionPage:
                 ),
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             expand=True,
-            padding=30,
+            padding=responsive_padding(page),
         )
 
         # Layout with sidebar
-        layout = ft.Row([
-            sidebar,
-            main_content,
-        ], spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
+        layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Available Adoption")
 
         finish_page_loading(page, _gradient_ref, layout)
 

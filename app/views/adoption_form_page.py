@@ -112,7 +112,6 @@ class AdoptionFormPage:
 
         self._animal_dropdown = ft.Dropdown(
             label="Select Animal to Adopt",
-            width=400,
             options=animal_options,
             hint_text="Choose an animal",
             bgcolor=ft.Colors.WHITE,
@@ -150,19 +149,16 @@ class AdoptionFormPage:
         self._name_field = create_form_text_field(
             label="Your Full Name", 
             hint_text="Enter your full name",
-            width=400,
         )
         self._contact_field = create_form_text_field(
             label="Contact Information", 
             hint_text="Email or phone number (e.g., email@example.com or 09XXXXXXXXX)",
-            width=400,
         )
         self._reason_field = create_form_text_field(
             label="Why do you want to adopt? (Optional)",
             hint_text="Tell us about your home, experience with pets, etc.",
             multiline=True,
             min_lines=3,
-            width=400,
         )
 
         # Pre-fill user info from state for logged-in users
@@ -193,7 +189,7 @@ class AdoptionFormPage:
                 spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            width=180,
+            expand=True,
             height=48,
             on_click=lambda e: self._on_submit(page),
             style=ft.ButtonStyle(
@@ -206,7 +202,7 @@ class AdoptionFormPage:
         
         cancel_btn = ft.OutlinedButton(
             content=ft.Text("Cancel", size=14, weight="w500"),
-            width=120,
+            expand=True,
             height=48,
             on_click=lambda e: page.go("/check_status") if edit_request_id else page.go("/available_adoption"),
             style=ft.ButtonStyle(
@@ -289,7 +285,7 @@ class AdoptionFormPage:
                     alignment=ft.MainAxisAlignment.CENTER
                 ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=480,
+            width=480,  # acts as max-width in centered layout
             padding=30,
             bgcolor=ft.Colors.WHITE,
             border_radius=16,

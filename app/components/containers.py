@@ -75,10 +75,11 @@ def create_chart_container(
     title: str,
     chart_image: Optional[str] = None,
     chart_widget: Optional[object] = None,
-    width: int = 400,
+    width: Optional[int] = None,
     height: int = 200,
     padding: int = 12,
     fallback_text: str = "No data available",
+    expand: bool = True,
 ) -> object:
     """Create a container for chart images or widgets.
     
@@ -86,10 +87,11 @@ def create_chart_container(
         title: Chart title
         chart_image: Base64 encoded chart image
         chart_widget: Alternative widget to display (e.g., map)
-        width: Container width
+        width: Container width (None = expand to fill parent)
         height: Chart height
         padding: Container padding
         fallback_text: Text to show if no chart available
+        expand: Whether to expand to fill available space
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
@@ -97,7 +99,6 @@ def create_chart_container(
     if chart_image:
         chart_content = ft.Image(
             src_base64=chart_image, 
-            width=width - 40, 
             height=height, 
             fit=ft.ImageFit.CONTAIN
         )
@@ -115,17 +116,23 @@ def create_chart_container(
             alignment=ft.alignment.center,
         )
     
-    return ft.Container(
-        ft.Column([
+    container_kwargs = {
+        "content": ft.Column([
             ft.Text(title, size=15, weight="w600", color=ft.Colors.BLACK87),
             chart_content,
         ], horizontal_alignment="center", spacing=8),
-        width=width,
-        padding=padding,
-        bgcolor=ft.Colors.WHITE,
-        border_radius=12,
-        shadow=_get_card_shadow(),
-    )
+        "padding": padding,
+        "bgcolor": ft.Colors.WHITE,
+        "border_radius": 12,
+        "shadow": _get_card_shadow(),
+    }
+    
+    if width is not None:
+        container_kwargs["width"] = width
+    if expand:
+        container_kwargs["expand"] = True
+    
+    return ft.Container(**container_kwargs)
 
 
 def create_page_title(
@@ -531,8 +538,8 @@ def create_stat_card(
     value: str,
     change: str = "",
     value_color: Optional[object] = None,
-    width: int = 200,
-    expand: bool = False,
+    width: Optional[int] = None,
+    expand: bool = True,
 ) -> object:
     """Create a statistics card with value and change indicator.
     
@@ -541,8 +548,8 @@ def create_stat_card(
         value: Main value to display
         change: Change text (e.g., "+15% this month")
         value_color: Color for the value text
-        width: Card width (ignored if expand=True)
-        expand: Whether to expand to fill available space
+        width: Card width (None = auto based on expand)
+        expand: Whether to expand to fill available space (default True)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
@@ -576,8 +583,10 @@ def create_stat_card(
     
     if expand:
         container_kwargs["expand"] = True
-    else:
+    if width is not None:
         container_kwargs["width"] = width
+    elif not expand:
+        container_kwargs["width"] = 200  # legacy fallback
     
     return ft.Container(**container_kwargs)
 
@@ -586,9 +595,10 @@ def create_map_container(
     title: str,
     map_widget: Optional[object] = None,
     placeholder_count: int = 0,
-    width: int = 370,
+    width: Optional[int] = None,
     height: int = 200,
     padding: int = 12,
+    expand: bool = True,
 ) -> object:
     """Create a container for map widgets.
     
@@ -596,9 +606,10 @@ def create_map_container(
         title: Container title
         map_widget: The map widget to display
         placeholder_count: Number of items for placeholder text
-        width: Container width
+        width: Container width (None = expand)
         height: Map height
         padding: Container padding
+        expand: Whether to expand to fill available space
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
@@ -624,17 +635,23 @@ def create_map_container(
             border_radius=8,
         )
     
-    return ft.Container(
-        ft.Column([
+    container_kwargs = {
+        "content": ft.Column([
             ft.Text(title, size=15, weight="w600", color=ft.Colors.BLACK87),
             map_content,
         ], horizontal_alignment="center", spacing=8),
-        width=width,
-        padding=padding,
-        bgcolor=ft.Colors.WHITE,
-        border_radius=12,
-        shadow=_get_card_shadow(),
-    )
+        "padding": padding,
+        "bgcolor": ft.Colors.WHITE,
+        "border_radius": 12,
+        "shadow": _get_card_shadow(),
+    }
+    
+    if width is not None:
+        container_kwargs["width"] = width
+    if expand:
+        container_kwargs["expand"] = True
+    
+    return ft.Container(**container_kwargs)
 
 
 def create_animal_card(

@@ -52,6 +52,8 @@ class ManageRecordsPage:
             create_restore_dialog, create_permanent_delete_dialog,
             create_interactive_map,
             show_page_loading, finish_page_loading,
+            is_mobile, create_responsive_layout, responsive_padding,
+            create_admin_drawer,
         )
         
         self._page = page
@@ -66,8 +68,10 @@ class ManageRecordsPage:
             page.go("/login")
             return
         
+        _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading records...")
+        drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading records...")
         sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Tab change handler
@@ -251,13 +255,13 @@ class ManageRecordsPage:
                 ft.Container(height=15),
                 content,
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=30,
+            padding=responsive_padding(page),
             alignment=ft.alignment.top_center,
             expand=True,
         )
         
         # Main layout
-        main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
+        main_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Manage Records")
         
         finish_page_loading(page, _gradient_ref, main_layout)
     

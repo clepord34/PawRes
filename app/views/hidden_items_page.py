@@ -64,6 +64,8 @@ class HiddenItemsPage:
             create_restore_dialog,
             create_permanent_delete_dialog,
             show_page_loading, finish_page_loading,
+            is_mobile, create_responsive_layout, responsive_padding,
+            create_admin_drawer,
         )
         from state import get_app_state
         
@@ -79,8 +81,10 @@ class HiddenItemsPage:
         page.title = "Hidden Items - PawRes Admin"
         page.bgcolor = ft.Colors.GREY_100
 
+        _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading hidden items...")
+        drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading hidden items...")
         sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Tab change handler
@@ -133,14 +137,11 @@ class HiddenItemsPage:
                 self._content_area,
             ], scroll=ft.ScrollMode.AUTO),
             expand=True,
-            padding=24,
+            padding=responsive_padding(page),
         )
         
         # Page layout
-        final_layout = ft.Row([
-            sidebar,
-            main_content,
-        ], expand=True, spacing=0)
+        final_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Hidden Items")
         finish_page_loading(page, _gradient_ref, final_layout)
     
     def _refresh_content(self):

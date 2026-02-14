@@ -15,6 +15,8 @@ from components import (
     show_chart_details_dialog, CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS,
     create_interactive_map,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_admin_drawer,
 )
 
 
@@ -33,8 +35,10 @@ class ChartsPage:
 
         page.title = "Data Analytics"
 
+        _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading charts...")
+        drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading charts...")
         sidebar = create_admin_sidebar(page, current_route=page.route)
 
         (months, rescued_counts, adopted_counts), type_dist, status_counts = self.analytics_service.get_chart_data()
@@ -225,40 +229,52 @@ class ChartsPage:
         
         is_online = map_service.check_map_tiles_available()
 
-        stats_row = ft.Row([
-            create_clickable_stat_card(
-                title="Animals Rescued",
-                value=str(total_rescued),
-                subtitle=rescues_change,
-                icon=ft.Icons.PETS,
-                icon_color=ft.Colors.GREEN_600,
-                on_click=lambda e: page.go("/manage_records?tab=0"),
+        stats_row = ft.ResponsiveRow([
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Animals Rescued",
+                    value=str(total_rescued),
+                    subtitle=rescues_change,
+                    icon=ft.Icons.PETS,
+                    icon_color=ft.Colors.GREEN_600,
+                    on_click=lambda e: page.go("/manage_records?tab=0"),
+                ),
+                col={"xs": 6, "md": 3},
             ),
-            create_clickable_stat_card(
-                title="Adoption Requests",
-                value=f"{total_requests:,}",
-                subtitle=f"{total_adopted} approved",
-                icon=ft.Icons.FAVORITE,
-                icon_color=ft.Colors.ORANGE_600,
-                on_click=lambda e: page.go("/manage_records?tab=1"),
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Adoption Requests",
+                    value=f"{total_requests:,}",
+                    subtitle=f"{total_adopted} approved",
+                    icon=ft.Icons.FAVORITE,
+                    icon_color=ft.Colors.ORANGE_600,
+                    on_click=lambda e: page.go("/manage_records?tab=1"),
+                ),
+                col={"xs": 6, "md": 3},
             ),
-            create_clickable_stat_card(
-                title="Pending Adoptions",
-                value=str(total_pending),
-                subtitle=pending_change,
-                icon=ft.Icons.PENDING_ACTIONS,
-                icon_color=ft.Colors.BLUE_600,
-                on_click=lambda e: page.go("/manage_records?tab=1"),
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Pending Adoptions",
+                    value=str(total_pending),
+                    subtitle=pending_change,
+                    icon=ft.Icons.PENDING_ACTIONS,
+                    icon_color=ft.Colors.BLUE_600,
+                    on_click=lambda e: page.go("/manage_records?tab=1"),
+                ),
+                col={"xs": 6, "md": 3},
             ),
-            create_clickable_stat_card(
-                title="Pending Rescues",
-                value=str(pending_rescues),
-                subtitle=pending_rescues_change,
-                icon=ft.Icons.EMERGENCY,
-                icon_color=ft.Colors.RED_600,
-                on_click=lambda e: page.go("/manage_records?tab=0"),
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Pending Rescues",
+                    value=str(pending_rescues),
+                    subtitle=pending_rescues_change,
+                    icon=ft.Icons.EMERGENCY,
+                    icon_color=ft.Colors.RED_600,
+                    on_click=lambda e: page.go("/manage_records?tab=0"),
+                ),
+                col={"xs": 6, "md": 3},
             ),
-        ], spacing=15, expand=True)
+        ], spacing=15, run_spacing=15)
 
         # Chart containers with Flet native charts
         chart1_container = ft.Container(
@@ -377,10 +393,10 @@ class ChartsPage:
         )
         
         # Combined chart row (rescued vs adopted + breed trends)
-        charts_row_1 = ft.Row([
-            chart1_container,
-            breed_trend_container,
-        ], spacing=15, expand=True)
+        charts_row_1 = ft.ResponsiveRow([
+            ft.Container(chart1_container, col={"xs": 12, "md": 6}),
+            ft.Container(breed_trend_container, col={"xs": 12, "md": 6}),
+        ], spacing=15, run_spacing=15)
 
         # Helper to create consistent chart cards with legend beside (clickable expand icon only)
         def create_chart_card_container(title: str, chart: Any, legend: Any, icon: Any = None, data_for_dialog: List = None) -> Any:
@@ -431,11 +447,11 @@ class ChartsPage:
                          for s in ["pending", "approved", "denied"] if s in adoption_status_dist] if adoption_status_dist else []
 
         # Pie charts row
-        pie_charts_row = ft.Row([
-            create_chart_card_container("Animal Type Distribution", type_pie_chart, type_legend, ft.Icons.CATEGORY, type_data),
-            create_chart_card_container("Rescue Mission Status", rescue_pie_chart, rescue_legend, ft.Icons.PETS, rescue_data),
-            create_chart_card_container("Adoption Request Status", adoption_pie_chart, adoption_legend, ft.Icons.FAVORITE, adoption_data),
-        ], spacing=15, expand=True)
+        pie_charts_row = ft.ResponsiveRow([
+            ft.Container(create_chart_card_container("Animal Type Distribution", type_pie_chart, type_legend, ft.Icons.CATEGORY, type_data), col={"xs": 12, "md": 6, "lg": 4}),
+            ft.Container(create_chart_card_container("Rescue Mission Status", rescue_pie_chart, rescue_legend, ft.Icons.PETS, rescue_data), col={"xs": 12, "md": 6, "lg": 4}),
+            ft.Container(create_chart_card_container("Adoption Request Status", adoption_pie_chart, adoption_legend, ft.Icons.FAVORITE, adoption_data), col={"xs": 12, "md": 6, "lg": 4}),
+        ], spacing=15, run_spacing=15)
 
         # Helper for bar chart cards with legend beside (clickable expand icon only)
         def create_bar_chart_card(title: str, chart: Any, legend: Any = None, icon: Any = None, data_for_dialog: List = None) -> Any:
@@ -516,11 +532,11 @@ class ChartsPage:
                       for idx, (breed, count) in enumerate(breed_distribution)] if breed_distribution else []
 
         # Bar charts row (replaced "Top Species for Adoption" with "Breed Distribution")
-        bar_charts_row = ft.Row([
-            create_bar_chart_card("Health Status Breakdown", health_bar_chart, health_legend, ft.Icons.HEALTH_AND_SAFETY, health_data),
-            create_bar_chart_card("Rescue Urgency Distribution", urgency_bar_chart, urgency_legend, ft.Icons.WARNING_AMBER, urgency_data),
-            create_chart_card_container("Breed Distribution", breed_pie_chart, breed_legend, ft.Icons.PETS, breed_data),
-        ], spacing=15, expand=True)
+        bar_charts_row = ft.ResponsiveRow([
+            ft.Container(create_bar_chart_card("Health Status Breakdown", health_bar_chart, health_legend, ft.Icons.HEALTH_AND_SAFETY, health_data), col={"xs": 12, "md": 6, "lg": 4}),
+            ft.Container(create_bar_chart_card("Rescue Urgency Distribution", urgency_bar_chart, urgency_legend, ft.Icons.WARNING_AMBER, urgency_data), col={"xs": 12, "md": 6, "lg": 4}),
+            ft.Container(create_chart_card_container("Breed Distribution", breed_pie_chart, breed_legend, ft.Icons.PETS, breed_data), col={"xs": 12, "md": 6, "lg": 4}),
+        ], spacing=15, run_spacing=15)
 
         rescue_insight_data = insights.get("rescue_insight", {"headline": "No data", "detail": "", "action": ""})
         adoption_insight_data = insights.get("adoption_insight", {"headline": "No data", "detail": "", "action": ""})
@@ -544,40 +560,40 @@ class ChartsPage:
                     ], spacing=2),
                 ], spacing=12),
                 ft.Divider(height=24, color=ft.Colors.GREY_300),
-                ft.Row([
-                    create_insight_box(
+                ft.ResponsiveRow([
+                    ft.Container(create_insight_box(
                         "Rescue Operations",
                         rescue_insight_data,
                         ft.Icons.PETS,
                         ft.Colors.BLUE_600,
                         ft.Colors.BLUE_50,
                         ft.Colors.BLUE_100,
-                    ),
-                    create_insight_box(
+                    ), col={"xs": 12, "md": 6, "lg": 3}),
+                    ft.Container(create_insight_box(
                         "Adoption Progress", 
                         adoption_insight_data,
                         ft.Icons.FAVORITE,
                         ft.Colors.ORANGE_600,
                         ft.Colors.ORANGE_50,
                         ft.Colors.ORANGE_100,
-                    ),
-                    create_insight_box(
+                    ), col={"xs": 12, "md": 6, "lg": 3}),
+                    ft.Container(create_insight_box(
                         "Animal Health",
                         health_insight_data,
                         ft.Icons.HEALTH_AND_SAFETY,
                         ft.Colors.GREEN_600,
                         ft.Colors.GREEN_50,
                         ft.Colors.GREEN_100,
-                    ),
-                    create_insight_box(
+                    ), col={"xs": 12, "md": 6, "lg": 3}),
+                    ft.Container(create_insight_box(
                         "Breed Popularity",
                         breed_insight_data,
                         ft.Icons.PETS,
                         ft.Colors.PURPLE_600,
                         ft.Colors.PURPLE_50,
                         ft.Colors.PURPLE_100,
-                    ),
-                ], spacing=15, expand=True),
+                    ), col={"xs": 12, "md": 6, "lg": 3}),
+                ], spacing=15, run_spacing=15),
             ], spacing=0),
             padding=25,
             bgcolor=ft.Colors.WHITE,
@@ -683,15 +699,12 @@ class ChartsPage:
                 ft.Container(height=20),
                 ft.Row([refresh_btn, back_btn], alignment="center", spacing=15),
             ], spacing=0, scroll=ft.ScrollMode.AUTO),
-            padding=30,
+            padding=responsive_padding(page),
             expand=True,
         )
 
         # Main layout with sidebar
-        main_layout = ft.Row([
-            sidebar,
-            main_content,
-        ], spacing=0, expand=True)
+        main_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Analytics")
 
         finish_page_loading(page, _gradient_ref, main_layout)
 

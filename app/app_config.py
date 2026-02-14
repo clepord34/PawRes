@@ -76,8 +76,19 @@ DEFAULT_MAP_ZOOM = 9
 # UI defaults
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
-DEFAULT_WINDOW_MIN_WIDTH = 1000
-DEFAULT_WINDOW_MIN_HEIGHT = 700
+DEFAULT_WINDOW_MIN_WIDTH = 360
+DEFAULT_WINDOW_MIN_HEIGHT = 500
+
+# Responsive breakpoints (matches Bootstrap/Flet defaults)
+BREAKPOINT_XS = 0       # Extra small: < 576px (phones)
+BREAKPOINT_SM = 576     # Small: >= 576px (large phones)
+BREAKPOINT_MD = 768     # Medium: >= 768px (tablets)
+BREAKPOINT_LG = 992     # Large: >= 992px (desktops)
+BREAKPOINT_XL = 1200    # Extra large: >= 1200px (large desktops)
+BREAKPOINT_XXL = 1400   # Extra extra large: >= 1400px
+
+# Sidebar collapse threshold — below this, sidebar becomes a drawer
+SIDEBAR_COLLAPSE_WIDTH = BREAKPOINT_MD  # 768px
 
 # Validation limits
 MAX_NAME_LENGTH = 100

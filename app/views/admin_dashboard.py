@@ -16,6 +16,8 @@ from components import (
     STATUS_COLORS, PIE_CHART_COLORS, create_interactive_map,
     create_ai_download_dialog, create_ai_download_button,
     show_page_loading, finish_page_loading, create_empty_chart_message,
+    is_mobile, create_responsive_layout,
+    responsive_padding, create_admin_drawer,
 )
 
 
@@ -41,8 +43,10 @@ class AdminDashboard:
 
         page.title = "Admin Dashboard"
 
+        _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading dashboard...")
+        drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading dashboard...")
 
         stats = self.analytics_service.get_dashboard_stats()
         total_animals = stats["total_animals"]
@@ -69,40 +73,53 @@ class AdminDashboard:
 
         sidebar = create_admin_sidebar(page, current_route=page.route)
 
-        stat_cards = ft.Row([
-            create_clickable_stat_card(
-                title="Total Animals",
-                value=str(total_animals),
-                subtitle=animals_change,
-                icon=ft.Icons.PETS,
-                icon_color=ft.Colors.TEAL_600,
-                on_click=lambda e: page.go("/animals_list?admin=1"),
+        _stat_col = {"xs": 6, "md": 3}
+        stat_cards = ft.ResponsiveRow([
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Total Animals",
+                    value=str(total_animals),
+                    subtitle=animals_change,
+                    icon=ft.Icons.PETS,
+                    icon_color=ft.Colors.TEAL_600,
+                    on_click=lambda e: page.go("/animals_list?admin=1"),
+                ),
+                col=_stat_col,
             ),
-            create_clickable_stat_card(
-                title="Adoption Requests",
-                value=str(total_requests),
-                subtitle=f"{total_adoptions} approved",
-                icon=ft.Icons.FAVORITE,
-                icon_color=ft.Colors.ORANGE_600,
-                on_click=lambda e: page.go("/manage_records?tab=1"),
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Adoption Requests",
+                    value=str(total_requests),
+                    subtitle=f"{total_adoptions} approved",
+                    icon=ft.Icons.FAVORITE,
+                    icon_color=ft.Colors.ORANGE_600,
+                    on_click=lambda e: page.go("/manage_records?tab=1"),
+                ),
+                col=_stat_col,
             ),
-            create_clickable_stat_card(
-                title="Pending Adoptions",
-                value=str(pending_applications),
-                subtitle=pending_change,
-                icon=ft.Icons.PENDING_ACTIONS,
-                icon_color=ft.Colors.BLUE_600,
-                on_click=lambda e: page.go("/manage_records?tab=1"),
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Pending Adoptions",
+                    value=str(pending_applications),
+                    subtitle=pending_change,
+                    icon=ft.Icons.PENDING_ACTIONS,
+                    icon_color=ft.Colors.BLUE_600,
+                    on_click=lambda e: page.go("/manage_records?tab=1"),
+                ),
+                col=_stat_col,
             ),
-            create_clickable_stat_card(
-                title="Pending Rescues",
-                value=str(pending_rescues),
-                subtitle=rescues_change,
-                icon=ft.Icons.EMERGENCY,
-                icon_color=ft.Colors.RED_600,
-                on_click=lambda e: page.go("/manage_records?tab=0"),
+            ft.Container(
+                create_clickable_stat_card(
+                    title="Pending Rescues",
+                    value=str(pending_rescues),
+                    subtitle=rescues_change,
+                    icon=ft.Icons.EMERGENCY,
+                    icon_color=ft.Colors.RED_600,
+                    on_click=lambda e: page.go("/manage_records?tab=0"),
+                ),
+                col=_stat_col,
             ),
-        ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
+        ], spacing=15, run_spacing=15)
 
         has_line_data = any(v > 0 for v in rescued_counts + adopted_counts)
 
@@ -134,12 +151,12 @@ class AdminDashboard:
                         ft.Container(line_legend, padding=ft.padding.only(left=15, right=10)),
                     ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                width=420,
                 height=270,
                 padding=ft.padding.only(left=15, top=15, bottom=15, right=25),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                col={"xs": 12, "md": 6},
             )
         else:
             rescued_chart_container = ft.Container(
@@ -154,12 +171,12 @@ class AdminDashboard:
                         on_click=lambda e: page.go("/manage_records"),
                     ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                width=420,
                 height=270,
                 padding=ft.padding.only(left=15, top=15, bottom=15, right=25),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                col={"xs": 12, "md": 6},
             )
 
         has_breed_data = bool(breed_distribution)
@@ -225,12 +242,12 @@ class AdminDashboard:
                         breed_legend,
                     ], alignment=ft.MainAxisAlignment.CENTER, spacing=10, expand=True),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                width=380,
                 height=270,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                col={"xs": 12, "md": 6},
             )
         else:
             breed_chart_container = ft.Container(
@@ -245,12 +262,12 @@ class AdminDashboard:
                         on_click=lambda e: page.go("/add_animal"),
                     ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                width=380,
                 height=270,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                col={"xs": 12, "md": 6},
             )
 
         # Chart 3: Health Status Bar Chart (Clickable)
@@ -302,12 +319,12 @@ class AdminDashboard:
                     ft.Divider(height=8, color=ft.Colors.GREY_300),
                     health_bar_chart,
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                width=320,
                 height=298,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                col={"xs": 12, "md": 5},
             )
         else:
             health_chart_container = ft.Container(
@@ -322,12 +339,12 @@ class AdminDashboard:
                         on_click=lambda e: page.go("/add_animal"),
                     ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                width=320,
                 height=298,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                col={"xs": 12, "md": 5},
             )
 
         # Map: Realtime Rescue Mission Map
@@ -344,10 +361,10 @@ class AdminDashboard:
                 show_legend=True,
                 initially_locked=True,
             )
-            # Wrap in fixed-size container for dashboard layout
+            # Wrap for responsive layout
             map_container = ft.Container(
                 content=map_container,
-                width=420,
+                col={"xs": 12, "md": 7},
             )
         else:
             offline_widget = self.map_service.create_offline_map_fallback(missions, is_admin=True)
@@ -360,12 +377,12 @@ class AdminDashboard:
                             offline_widget,
                         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5,  expand=True),
                     margin=ft.margin.all(5),),
-                    width=420,
                     height=298,
                     padding=15,
                     bgcolor=ft.Colors.WHITE,
                     border_radius=12,
                     shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                    col={"xs": 12, "md": 7},
                 )
             else:
                 # Final fallback to simple placeholder
@@ -375,13 +392,15 @@ class AdminDashboard:
                         ft.Divider(height=8, color=ft.Colors.GREY_300),
                         self.map_service.create_empty_map_placeholder(len(missions)),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True),
-                    width=420,
                     height=298,
                     padding=15,
                     bgcolor=ft.Colors.WHITE,
                     border_radius=12,
                     shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=ft.Offset(0, 2)),
+                    col={"xs": 12, "md": 7},
                 )
+
+        _content_padding = responsive_padding(page)
 
         main_content = ft.Container(
             ft.Column([
@@ -394,36 +413,25 @@ class AdminDashboard:
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     padding=ft.padding.only(bottom=15),
                 ),
-                ft.Container(
-                    stat_cards,
-                    alignment=ft.alignment.center,
-                ),
+                stat_cards,
                 ft.Container(height=15),
-                ft.Container(
-                    ft.Row([
-                        rescued_chart_container,
-                        breed_chart_container,
-                    ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
-                    alignment=ft.alignment.center,
-                ),
+                # Row 1: Rescued vs Adopted + Breed Distribution
+                ft.ResponsiveRow([
+                    rescued_chart_container,
+                    breed_chart_container,
+                ], spacing=12, run_spacing=12),
                 ft.Container(height=12),
-                # Row 2: Health status + Map (side by side)
-                ft.Container(
-                    ft.Row([
-                        health_chart_container,
-                        map_container,
-                    ], spacing=12, alignment=ft.MainAxisAlignment.CENTER),
-                    alignment=ft.alignment.center,
-                ),
+                # Row 2: Health status + Map
+                ft.ResponsiveRow([
+                    health_chart_container,
+                    map_container,
+                ], spacing=12, run_spacing=12),
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             expand=True,
-            padding=25,
+            padding=_content_padding,
         )
 
-        layout = ft.Row([
-            sidebar,
-            main_content,
-        ], spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
+        layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Admin Dashboard")
 
         finish_page_loading(page, _gradient_ref, layout)
 

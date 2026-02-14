@@ -19,6 +19,8 @@ from components import (
     create_scrollable_data_table, create_action_button,
     create_interactive_map,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_user_drawer,
 )
 
 
@@ -67,8 +69,10 @@ class CheckStatusPage:
 
         user_name = self._app_state.auth.user_name or "User"
 
+        _mobile = is_mobile(page)
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading statuses...")
+        drawer = create_user_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading statuses...")
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         self._app_state.adoptions.load_user_requests(user_id)
@@ -221,13 +225,13 @@ class CheckStatusPage:
                 ft.Container(height=15),
                 content,
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=30,
+            padding=responsive_padding(page),
             alignment=ft.alignment.top_center,
             expand=True,
         )
 
         # Main layout
-        main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
+        main_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Check Status")
 
         finish_page_loading(page, _gradient_ref, main_layout)
 

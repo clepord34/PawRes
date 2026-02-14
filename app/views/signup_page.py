@@ -160,7 +160,6 @@ class SignupPage:
         submit_btn = create_action_button(
             "Create Account",
             on_click=lambda e: self._on_submit(page, e),
-            width=130,
             height=45
         )
 
@@ -168,7 +167,6 @@ class SignupPage:
         back_btn = create_action_button(
             "Back to Login",
             on_click=lambda e: page.go("/"),
-            width=130,
             height=45,
             outlined=True,
             bgcolor=ft.Colors.TEAL_600
@@ -181,21 +179,21 @@ class SignupPage:
                     ft.Container(height=12),  # spacing
                     photo_section,
                     ft.Container(height=12),  # spacing
-                    ft.Container(name_label, width=280, alignment=ft.alignment.center_left),
+                    ft.Container(name_label, alignment=ft.alignment.center_left),
                     ft.Container(height=4),
                     self._name_field,
                     ft.Container(height=10),
-                    ft.Container(email_label, width=280, alignment=ft.alignment.center_left),
+                    ft.Container(email_label, alignment=ft.alignment.center_left),
                     ft.Container(height=4),
                     self._email_field,
                     ft.Container(height=10),
-                    ft.Container(password_label, width=280, alignment=ft.alignment.center_left),
+                    ft.Container(password_label, alignment=ft.alignment.center_left),
                     ft.Container(height=2),
                     password_hint,
                     ft.Container(height=2),
                     self._password_field,
                     ft.Container(height=10),
-                    ft.Container(confirm_label, width=280, alignment=ft.alignment.center_left),
+                    ft.Container(confirm_label, alignment=ft.alignment.center_left),
                     ft.Container(height=4),
                     self._confirm_field,
                     ft.Container(height=18),
@@ -207,7 +205,7 @@ class SignupPage:
             ),
             padding=ft.padding.symmetric(horizontal=10, vertical=16),
             alignment=ft.alignment.center,
-            width=375,
+            width=375,  # acts as max-width in centered Column
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
             shadow=ft.BoxShadow(

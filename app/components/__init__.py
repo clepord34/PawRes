@@ -3,7 +3,17 @@
 # Header components
 from .header import create_header, create_page_header
 
-from .sidebar import create_admin_sidebar, create_user_sidebar
+from .sidebar import create_admin_sidebar, create_user_sidebar, create_admin_drawer, create_user_drawer
+
+# Responsive layout helpers
+from .responsive_layout import (
+    get_breakpoint,
+    is_mobile,
+    responsive_col,
+    create_responsive_layout,
+    create_mobile_appbar,
+    responsive_padding,
+)
 
 # Button components
 from .buttons import (
@@ -128,6 +138,15 @@ __all__ = [
     "create_page_header",
     "create_admin_sidebar",
     "create_user_sidebar",
+    "create_admin_drawer",
+    "create_user_drawer",
+    # Responsive layout
+    "get_breakpoint",
+    "is_mobile",
+    "responsive_col",
+    "create_responsive_layout",
+    "create_mobile_appbar",
+    "responsive_padding",
     # Buttons
     "create_nav_button",
     "create_action_button",

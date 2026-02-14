@@ -14,6 +14,8 @@ from components import (
     show_snackbar, create_archive_dialog, create_remove_dialog,
     create_scrollable_data_table,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_admin_drawer,
 )
 
 
@@ -36,13 +38,16 @@ class AdoptionRequestListPage:
         page.title = "Adoption Requests"
 
         is_admin = user_role == "admin"
+        _mobile = is_mobile(page)
 
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
+            drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
         else:
             sidebar = None
+            drawer = None
 
-        _gradient_ref = show_page_loading(page, sidebar, "Loading requests...")
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading requests...")
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
         else:
@@ -293,13 +298,13 @@ class AdoptionRequestListPage:
         # Main content area
         main_content = ft.Container(
             ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=30,
+            padding=responsive_padding(page),
             expand=True,
         )
 
         # Main layout
         if sidebar:
-            main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
+            main_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Adoption Requests")
         else:
             main_layout = main_content
 

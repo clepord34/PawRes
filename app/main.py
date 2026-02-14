@@ -36,6 +36,18 @@ def main(page) -> None:
 	page.bgcolor = ft.Colors.TRANSPARENT
 	page.theme_mode = ft.ThemeMode.LIGHT
 
+	# --- Responsive: track page width and re-render on resize ---
+	def _on_page_resize(e):
+		"""Store current width in session and re-render the active route."""
+		try:
+			page.session.set("page_width", page.width)
+		except Exception:
+			pass
+		# Re-trigger the current route so views can re-build for new size
+		route_change(page.route)
+
+	page.on_resize = _on_page_resize
+
 	def _render_error_page(message: str, details: str = "") -> None:
 		"""Render an error page with a home button."""
 		clear_page(page)

@@ -85,21 +85,18 @@ class RescueFormPage:
         self._type_dropdown = create_form_dropdown(
             label="Animal Type",
             options=["Dog", "Cat", "Other"],
-            width=400,
         )
         
         # Urgency level dropdown - use Urgency class labels
         self._urgency_dropdown = create_form_dropdown(
             label="Urgency Level",
             options=[Urgency.get_label(Urgency.LOW), Urgency.get_label(Urgency.MEDIUM), Urgency.get_label(Urgency.HIGH)],
-            width=400,
         )
         
         # Breed field (optional - can help with rescue identification)
         self._breed_field = create_form_text_field(
             label="Breed (Optional)",
             hint_text="Enter breed if known or use AI to detect from photo",
-            width=400,
         )
 
         # Reporter name field - pre-fill with user name if logged in
@@ -110,7 +107,6 @@ class RescueFormPage:
         self._name_field = create_form_text_field(
             label="Your Name", 
             hint_text="Enter your full name",
-            width=400,
             value=user_name_value,
         )
         
@@ -118,7 +114,6 @@ class RescueFormPage:
         self._phone_field = create_form_text_field(
             label="Contact Number/Email",
             hint_text="Email or phone (e.g., email@example.com or 09XXXXXXXXX)",
-            width=400,
             value=user_contact_value,
         )
         
@@ -126,7 +121,6 @@ class RescueFormPage:
         self._location_field = create_form_text_field(
             label="Location",
             hint_text="Enter address or use GPS button →",
-            width=330,
         )
         
         # Location status indicator (checkmark or warning)
@@ -195,7 +189,6 @@ class RescueFormPage:
             hint_text="Describe the animal's condition and surroundings...",
             multiline=True,
             min_lines=4,
-            width=400,
         )
 
         # Error display (only for actual errors, not loading states)
@@ -323,7 +316,7 @@ class RescueFormPage:
                     alignment=ft.MainAxisAlignment.CENTER
                 ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=480,
+            width=480,  # acts as max-width in centered layout
             padding=30,
             bgcolor=ft.Colors.WHITE,
             border_radius=16,

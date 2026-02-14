@@ -14,6 +14,8 @@ from components import (
     show_snackbar, create_gradient_background, create_page_title,
     create_section_card, create_scrollable_data_table, create_stat_card,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_admin_drawer,
 )
 from components.sidebar import create_admin_sidebar
 
@@ -62,17 +64,19 @@ class UserManagementPage:
         
         app_state = get_app_state()
         
+        _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route="/user_management")
-        _gradient_ref = show_page_loading(page, sidebar, "Loading users...")
+        drawer = create_admin_drawer(page, current_route="/user_management") if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading users...")
         sidebar = create_admin_sidebar(page, current_route="/user_management")
         
         # Stats row
         stats = self.service.get_user_stats()
-        stats_row = ft.Row([
-            create_stat_card("Total Users", str(stats["total"]), value_color=ft.Colors.BLUE_600, width=150),
-            create_stat_card("Admins", str(stats["admins"]), value_color=ft.Colors.PURPLE_600, width=150),
-            create_stat_card("Regular Users", str(stats["users"]), value_color=ft.Colors.GREEN_600, width=150),
-            create_stat_card("Disabled", str(stats["disabled"]), value_color=ft.Colors.RED_600, width=150),
+        stats_row = ft.ResponsiveRow([
+            ft.Container(create_stat_card("Total Users", str(stats["total"]), value_color=ft.Colors.BLUE_600), col={"xs": 6, "md": 3}),
+            ft.Container(create_stat_card("Admins", str(stats["admins"]), value_color=ft.Colors.PURPLE_600), col={"xs": 6, "md": 3}),
+            ft.Container(create_stat_card("Regular Users", str(stats["users"]), value_color=ft.Colors.GREEN_600), col={"xs": 6, "md": 3}),
+            ft.Container(create_stat_card("Disabled", str(stats["disabled"]), value_color=ft.Colors.RED_600), col={"xs": 6, "md": 3}),
         ], spacing=15)
         
         # Search and filter row
@@ -158,15 +162,12 @@ class UserManagementPage:
         
         main_content = ft.Container(
             ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=30,
+            padding=responsive_padding(page),
             expand=True,
         )
         
         # Layout with sidebar
-        layout = ft.Row([
-            sidebar,
-            main_content,
-        ], spacing=0, expand=True)
+        layout = create_responsive_layout(page, sidebar, main_content, drawer, title="User Management")
         
         finish_page_loading(page, _gradient_ref, layout)
     

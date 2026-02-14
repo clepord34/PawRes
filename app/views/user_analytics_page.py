@@ -18,6 +18,8 @@ from components import (
     CHART_COLORS, STATUS_COLORS, PIE_CHART_COLORS,
     create_interactive_map,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout, responsive_padding,
+    create_user_drawer,
 )
 
 
@@ -50,8 +52,10 @@ class UserAnalyticsPage:
             page.go("/")
             return
 
+        _mobile = is_mobile(page)
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading analytics...")
+        drawer = create_user_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading analytics...")
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
 
         user_activity_stats = self.analytics_service.get_user_activity_stats(user_id)
@@ -75,40 +79,40 @@ class UserAnalyticsPage:
             success_rate = "No data"
 
         # Stats cards row - routes go to /check_status with tab parameter (tab=0: Rescues, tab=1: Adoptions)
-        stats_row = ft.Row([
-            create_clickable_stat_card(
+        stats_row = ft.ResponsiveRow([
+            ft.Container(create_clickable_stat_card(
                 title="Rescues Reported",
                 value=str(total_rescues),
                 subtitle=f"{rescued_successfully} rescued",
                 icon=ft.Icons.PETS,
                 icon_color=ft.Colors.ORANGE_600,
                 on_click=lambda e: page.go("/check_status?tab=0"),
-            ),
-            create_clickable_stat_card(
+            ), col={"xs": 6, "md": 3}),
+            ft.Container(create_clickable_stat_card(
                 title="Successfully Rescued",
                 value=str(rescued_successfully),
                 subtitle=success_rate,
                 icon=ft.Icons.CHECK_CIRCLE,
                 icon_color=ft.Colors.GREEN_600,
                 on_click=lambda e: page.go("/check_status?tab=0"),
-            ),
-            create_clickable_stat_card(
+            ), col={"xs": 6, "md": 3}),
+            ft.Container(create_clickable_stat_card(
                 title="Animals Adopted",
                 value=str(total_adoptions),
                 subtitle="Forever homes given",
                 icon=ft.Icons.FAVORITE,
                 icon_color=ft.Colors.TEAL_600,
                 on_click=lambda e: page.go("/check_status?tab=1"),
-            ),
-            create_clickable_stat_card(
+            ), col={"xs": 6, "md": 3}),
+            ft.Container(create_clickable_stat_card(
                 title="Pending Requests",
                 value=str(pending_adoptions),
                 subtitle="Awaiting review",
                 icon=ft.Icons.PENDING_ACTIONS,
                 icon_color=ft.Colors.BLUE_600,
                 on_click=lambda e: page.go("/check_status?tab=1"),
-            ),
-        ], spacing=15, alignment=ft.MainAxisAlignment.CENTER)
+            ), col={"xs": 6, "md": 3}),
+        ], spacing=15, run_spacing=15)
 
         # Chart 1: Your Activity Line Chart (30 Days)
         has_line_data = any(c > 0 for c in rescues_reported) or any(c > 0 for c in adoptions_approved)
@@ -367,11 +371,11 @@ class UserAnalyticsPage:
         )
         
         # Breed chart row - add to existing pie charts row
-        charts_row = ft.Row([
-            rescue_chart_container,
-            adoption_chart_container,
-            breed_chart_container,
-        ], spacing=15, expand=True)
+        charts_row = ft.ResponsiveRow([
+            ft.Container(rescue_chart_container, col={"xs": 12, "md": 6, "lg": 4}),
+            ft.Container(adoption_chart_container, col={"xs": 12, "md": 6, "lg": 4}),
+            ft.Container(breed_chart_container, col={"xs": 12, "md": 6, "lg": 4}),
+        ], spacing=15, run_spacing=15)
 
         # Map: Your Rescue Mission Locations
         from app_config import RescueStatus
@@ -456,32 +460,32 @@ class UserAnalyticsPage:
                     ], spacing=2),
                 ], spacing=12),
                 ft.Divider(height=24, color=ft.Colors.GREY_300),
-                ft.Row([
-                    create_insight_box(
+                ft.ResponsiveRow([
+                    ft.Container(create_insight_box(
                         "Rescue Reports",
                         rescue_insight_data,
                         ft.Icons.PETS,
                         ft.Colors.ORANGE_600,
                         ft.Colors.ORANGE_50,
                         ft.Colors.ORANGE_100,
-                    ),
-                    create_insight_box(
+                    ), col={"xs": 12, "md": 4}),
+                    ft.Container(create_insight_box(
                         "Adoptions",
                         adoption_insight_data,
                         ft.Icons.FAVORITE,
                         ft.Colors.TEAL_600,
                         ft.Colors.TEAL_50,
                         ft.Colors.TEAL_100,
-                    ),
-                    create_insight_box(
+                    ), col={"xs": 12, "md": 4}),
+                    ft.Container(create_insight_box(
                         "Overall Activity",
                         activity_insight_data,
                         ft.Icons.STAR,
                         ft.Colors.AMBER_600,
                         ft.Colors.AMBER_50,
                         ft.Colors.AMBER_100,
-                    ),
-                ], spacing=15, expand=True),
+                    ), col={"xs": 12, "md": 4}),
+                ], spacing=15, run_spacing=15),
             ], spacing=0),
             padding=25,
             bgcolor=ft.Colors.WHITE,
@@ -535,15 +539,12 @@ class UserAnalyticsPage:
                 ft.Row([refresh_btn, back_btn], alignment="center", spacing=15),
                 ft.Container(height=30),
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=30,
+            padding=responsive_padding(page),
             expand=True,
         )
 
         # Main layout with sidebar
-        main_layout = ft.Row([
-            sidebar,
-            main_content,
-        ], spacing=0, expand=True)
+        main_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Your Analytics")
 
         finish_page_loading(page, _gradient_ref, main_layout)
 

@@ -23,6 +23,8 @@ from components import (
     create_animal_card,
     create_ai_download_button,
     show_page_loading, finish_page_loading,
+    is_mobile, create_responsive_layout,
+    responsive_padding, create_user_drawer,
 )
 
 
@@ -65,8 +67,10 @@ class UserDashboard:
         user_name = app_state.auth.user_name or "User"
         user_id = app_state.auth.user_id
 
+        _mobile = is_mobile(page)
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
-        _gradient_ref = show_page_loading(page, sidebar, "Loading dashboard...")
+        drawer = create_user_drawer(page, current_route=page.route) if _mobile else None
+        _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading dashboard...")
 
         self._sync_pending_addresses_background()
 
@@ -96,6 +100,8 @@ class UserDashboard:
             random.shuffle(adoptable_animals)
 
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
+        if _mobile:
+            drawer = create_user_drawer(page, current_route=page.route)
 
         user_activity_stats = self.analytics_service.get_user_activity_stats(user_id) if user_id else {}
         rescued_successfully = user_rescue_status_dist.get("rescued", 0) if user_rescue_status_dist else 0
@@ -131,16 +137,15 @@ class UserDashboard:
                     ft.Text("Your Impact", size=16, weight="w600", color=ft.Colors.BLACK87),
                 ], spacing=8),
                 ft.Divider(height=10, color=ft.Colors.GREY_200, thickness=2),
-                ft.Row([
-                    create_impact_stat(ft.Icons.PETS, total_rescues, "Rescues\nReported", ft.Colors.ORANGE_600),
-                    create_impact_stat(ft.Icons.CHECK_CIRCLE, rescued_successfully, "Successfully\nRescued", ft.Colors.GREEN_600),
-                    create_impact_stat(ft.Icons.FAVORITE, user_activity_stats.get("total_adoptions", 0), "Animals\nAdopted", ft.Colors.TEAL_600),
-                    create_impact_stat(ft.Icons.PENDING, user_activity_stats.get("pending_adoption_requests", 0), "Pending\nRequests", ft.Colors.BLUE_600),
-                ], alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+                ft.ResponsiveRow([
+                    ft.Container(create_impact_stat(ft.Icons.PETS, total_rescues, "Rescues\nReported", ft.Colors.ORANGE_600), col={"xs": 6, "sm": 3}),
+                    ft.Container(create_impact_stat(ft.Icons.CHECK_CIRCLE, rescued_successfully, "Successfully\nRescued", ft.Colors.GREEN_600), col={"xs": 6, "sm": 3}),
+                    ft.Container(create_impact_stat(ft.Icons.FAVORITE, user_activity_stats.get("total_adoptions", 0), "Animals\nAdopted", ft.Colors.TEAL_600), col={"xs": 6, "sm": 3}),
+                    ft.Container(create_impact_stat(ft.Icons.PENDING, user_activity_stats.get("pending_adoption_requests", 0), "Pending\nRequests", ft.Colors.BLUE_600), col={"xs": 6, "sm": 3}),
+                ], spacing=0, run_spacing=0),
                 ft.Container(height=7),
                 ft.Row(insight_widgets, spacing=10, alignment=ft.MainAxisAlignment.CENTER, wrap=True),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
-            margin=ft.margin.symmetric(horizontal=50),
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
@@ -163,15 +168,7 @@ class UserDashboard:
                 on_click=lambda e: page.go(route),
             )
         
-        welcome_section = ft.Container(
-            ft.Row([
-                ft.Icon(ft.Icons.WAVING_HAND, size=28, color=ft.Colors.ORANGE_400),
-                ft.Column([
-                    ft.Text(f"Welcome back, {user_name}!", size=22, weight="w600", color=ft.Colors.BLACK87),
-                    ft.Text("Here's your activity overview", size=13, color=ft.Colors.BLACK54),
-                ], spacing=2),
-                ft.Container(expand=True),
-                ft.Row([
+        _quick_actions = ft.Row([
                     create_quick_action_btn(ft.Icons.PETS, "Report Rescue", ft.Colors.ORANGE_600, "/rescue_form"),
                     create_quick_action_btn(ft.Icons.FAVORITE, "Apply to Adopt", ft.Colors.TEAL_500, "/available_adoption"),
                     create_ai_download_button(
@@ -180,14 +177,44 @@ class UserDashboard:
                         border_radius=20,
                         padding=ft.padding.symmetric(horizontal=16),
                     ),
-                ], spacing=12),
-            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=ft.padding.symmetric(horizontal=25, vertical=18),
-            bgcolor=ft.Colors.WHITE,
-            border_radius=12,
-            border=ft.border.all(1, ft.Colors.GREY_200),
-            shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
-        )
+                ], spacing=12, wrap=True)
+
+        if _mobile:
+            welcome_section = ft.Container(
+                ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.WAVING_HAND, size=28, color=ft.Colors.ORANGE_400),
+                        ft.Column([
+                            ft.Text(f"Welcome back, {user_name}!", size=22, weight="w600", color=ft.Colors.BLACK87),
+                            ft.Text("Here's your activity overview", size=13, color=ft.Colors.BLACK54),
+                        ], spacing=2, expand=True),
+                    ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    ft.Container(height=8),
+                    _quick_actions,
+                ], spacing=0),
+                padding=ft.padding.symmetric(horizontal=15, vertical=14),
+                bgcolor=ft.Colors.WHITE,
+                border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
+                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+            )
+        else:
+            welcome_section = ft.Container(
+                ft.Row([
+                    ft.Icon(ft.Icons.WAVING_HAND, size=28, color=ft.Colors.ORANGE_400),
+                    ft.Column([
+                        ft.Text(f"Welcome back, {user_name}!", size=22, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Text("Here's your activity overview", size=13, color=ft.Colors.BLACK54),
+                    ], spacing=2),
+                    ft.Container(expand=True),
+                    _quick_actions,
+                ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.symmetric(horizontal=25, vertical=18),
+                bgcolor=ft.Colors.WHITE,
+                border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
+                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+            )
 
         adoption_pie_refs = {}  # For legend-pie sync
         if user_adoption_status_dist and sum(user_adoption_status_dist.values()) > 0:
@@ -264,7 +291,6 @@ class UserDashboard:
                 ),
                 
             ], spacing=0),
-            width=360,
             height=230,
             padding=20,
             bgcolor=ft.Colors.WHITE,
@@ -347,7 +373,6 @@ class UserDashboard:
                 expand=True,
                 ),
             ], spacing=0),
-            width=360,
             height=230,
             padding=20,
             bgcolor=ft.Colors.WHITE,
@@ -423,7 +448,6 @@ class UserDashboard:
                         breed_legend,
                     ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ], spacing=0),
-                width=420,
                 height=230,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
@@ -448,7 +472,6 @@ class UserDashboard:
                         alignment=ft.alignment.center,
                     ),
                 ], spacing=0),
-                width=420,
                 height=230,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
@@ -533,7 +556,6 @@ class UserDashboard:
                 expand=True,
                 ),
             ], spacing=0),
-            width=420,
             height=230,
             padding=20,
             bgcolor=ft.Colors.WHITE,
@@ -737,7 +759,6 @@ class UserDashboard:
                     show_legend=True,
                     initially_locked=True,
                 ),
-                margin=ft.margin.symmetric(horizontal=80),
             )
         else:
             offline_widget = self.map_service.create_offline_map_fallback(all_rescues, is_admin=False)
@@ -756,7 +777,6 @@ class UserDashboard:
                             border=ft.border.all(1, ft.Colors.AMBER_200),
                         ),
                     ], spacing=0),
-                    margin=ft.margin.symmetric(horizontal=80),
                     padding=20,
                     bgcolor=ft.Colors.WHITE,
                     border_radius=12,
@@ -780,22 +800,34 @@ class UserDashboard:
                     shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
                 )
 
-        # Activity section: 3 columns - Left (adoptions+rescues), Middle (breed charts), Right (featured)
-        activity_section = ft.Row([
+        # Activity section: responsive 3 columns on desktop, stacked on mobile
+        _card_col = {"xs": 12, "md": 6, "lg": 4}
+        activity_section = ft.ResponsiveRow([
             # Left: My Adoptions and My Rescues stacked vertically
-            ft.Column([
-                adoptions_card,
-                rescues_card,
-            ], spacing=15),
+            ft.Container(
+                ft.Column([
+                    adoptions_card,
+                    rescues_card,
+                ], spacing=15),
+                col=_card_col,
+            ),
             # Middle: Breed charts stacked vertically
-            ft.Column([
-                popular_breeds_card,
-                adoptable_breeds_card,
-            ], spacing=15),
+            ft.Container(
+                ft.Column([
+                    popular_breeds_card,
+                    adoptable_breeds_card,
+                ], spacing=15),
+                col=_card_col,
+            ),
             # Right: Featured Adoptables
-            featured_card,
-        ], alignment=ft.MainAxisAlignment.CENTER, spacing=15, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            ft.Container(
+                featured_card,
+                col=_card_col,
+            ),
+        ], spacing=15, run_spacing=15)
         
+        _content_padding = responsive_padding(page)
+
         main_content = ft.Container(
             ft.Column([
                 # Welcome section
@@ -811,11 +843,11 @@ class UserDashboard:
                 map_card,
                 ft.Container(height=30),
             ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=30,
+            padding=_content_padding,
             expand=True,
         )
 
-        main_layout = ft.Row([sidebar, main_content], spacing=0, expand=True)
+        main_layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Dashboard")
 
         finish_page_loading(page, _gradient_ref, main_layout)
 

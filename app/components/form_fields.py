@@ -11,7 +11,7 @@ except ImportError:
 def create_form_text_field(
     hint_text: str = "",
     label: Optional[str] = None,
-    width: int = 280,
+    width: Optional[int] = None,
     height: int = 50,
     password: bool = False,
     multiline: bool = False,
@@ -21,13 +21,14 @@ def create_form_text_field(
     value: str = "",
     on_change: Optional[Callable] = None,
     on_submit: Optional[Callable] = None,
+    expand: Optional[bool] = None,
 ) -> object:
     """Create a standardized text field for forms.
     
     Args:
         hint_text: Placeholder text
         label: Optional label (uses label instead of hint if provided)
-        width: Field width
+        width: Field width (None = expand to fill parent)
         height: Field height (ignored if multiline)
         password: Whether this is a password field
         multiline: Whether to allow multiple lines
@@ -37,12 +38,12 @@ def create_form_text_field(
         value: Initial value
         on_change: Callback when value changes
         on_submit: Callback when Enter key is pressed
+        expand: Whether to expand to fill parent (auto when width is None)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create form fields")
     
     field_kwargs = {
-        "width": width,
         "bgcolor": ft.Colors.WHITE,
         "border_color": ft.Colors.GREY_300,
         "focused_border_color": ft.Colors.TEAL_400,
@@ -50,6 +51,14 @@ def create_form_text_field(
         "color": ft.Colors.BLACK,
         "content_padding": ft.padding.symmetric(horizontal=15, vertical=12),
     }
+    
+    # Responsive: use width if given, otherwise expand to fill parent
+    if width is not None:
+        field_kwargs["width"] = width
+    
+    _expand = expand if expand is not None else (width is None)
+    if _expand:
+        field_kwargs["expand"] = True
     
     if label:
         field_kwargs["label"] = label
@@ -88,12 +97,13 @@ def create_form_dropdown(
     hint_text: str = "",
     label: Optional[str] = None,
     options: Optional[List[str]] = None,
-    width: int = 280,
+    width: Optional[int] = None,
     prefix_icon: Optional[object] = None,
     leading_icon: Optional[object] = None,
     value: Optional[str] = None,
     on_change: Optional[Callable] = None,
     menu_height: Optional[int] = None,
+    expand: Optional[bool] = None,
 ) -> object:
     """Create a standardized dropdown for forms.
     
@@ -101,12 +111,13 @@ def create_form_dropdown(
         hint_text: Placeholder text
         label: Optional label
         options: List of option strings
-        width: Dropdown width
+        width: Dropdown width (None = expand to fill parent)
         prefix_icon: (Deprecated) Icon to show at start - use leading_icon instead
         leading_icon: Icon to show at start of dropdown
         value: Initial selected value
         on_change: Callback when selection changes
         menu_height: Maximum height of the dropdown menu (limits visible items)
+        expand: Whether to expand to fill parent (auto when width is None)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create form fields")
@@ -116,12 +127,19 @@ def create_form_dropdown(
         dropdown_options = [ft.dropdown.Option(opt) for opt in options]
     
     dropdown_kwargs = {
-        "width": width,
         "bgcolor": ft.Colors.WHITE,
         "border_color": ft.Colors.GREY_300,
         "focused_border_color": ft.Colors.TEAL_400,
         "options": dropdown_options,
     }
+    
+    # Responsive: use width if given, otherwise expand to fill parent
+    if width is not None:
+        dropdown_kwargs["width"] = width
+    
+    _expand = expand if expand is not None else (width is None)
+    if _expand:
+        dropdown_kwargs["expand"] = True
     
     if label:
         dropdown_kwargs["label"] = label
@@ -149,7 +167,7 @@ def create_form_label(
     icon: Optional[object] = None,
     size: int = 13,
     weight: str = "w500",
-    width: int = 280,
+    width: Optional[int] = None,
 ) -> object:
     """Create a form field label with optional icon.
     
@@ -158,7 +176,7 @@ def create_form_label(
         icon: Optional icon to show before text
         size: Text size
         weight: Font weight
-        width: Container width for alignment
+        width: Container width for alignment (None = expand)
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create form fields")
@@ -171,7 +189,13 @@ def create_form_label(
     else:
         content = ft.Text(text, size=size, weight=weight, color=ft.Colors.BLACK87)
     
-    return ft.Container(content, width=width, alignment=ft.alignment.center_left)
+    container_kwargs = {"alignment": ft.alignment.center_left}
+    if width is not None:
+        container_kwargs["width"] = width
+    else:
+        container_kwargs["expand"] = True
+    
+    return ft.Container(content, **container_kwargs)
 
 
 def create_labeled_field(
@@ -179,7 +203,7 @@ def create_labeled_field(
     field: object,
     icon: Optional[object] = None,
     spacing: int = 8,
-    width: int = 280,
+    width: Optional[int] = None,
 ) -> object:
     """Create a label + field combination.
     

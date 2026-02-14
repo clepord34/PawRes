@@ -80,14 +80,12 @@ class EmergencyRescuePage:
         self._type_dropdown = create_form_dropdown(
             label="Animal Type",
             options=["Dog", "Cat", "Other"],
-            width=400,
         )
         
         # Urgency level dropdown - default to High for emergency
         self._urgency_dropdown = create_form_dropdown(
             label="Urgency Level",
             options=["Low - Animal appears safe", "Medium - Needs attention soon", "High - Immediate help needed"],
-            width=400,
             value="High - Immediate help needed",
         )
         
@@ -95,28 +93,25 @@ class EmergencyRescuePage:
         self._breed_field = create_form_text_field(
             label="Breed (Optional)",
             hint_text="Enter breed if known",
-            width=400,
         )
 
         # Reporter name field
         self._name_field = create_form_text_field(
             label="Your Name", 
             hint_text="Enter your full name",
-            width=400,
         )
         
         # Contact field - required for emergency reports
         self._contact_field = create_form_text_field(
             label="Contact Number/Email",
             hint_text="Email or phone (e.g., email@example.com or 09XXXXXXXXX)",
-            width=400,
         )
         
         # Location field
         self._location_field = create_form_text_field(
             label="Location",
             hint_text="Enter address or use GPS button →",
-            width=330,
+            expand=True,
         )
         
         # Location status indicator
@@ -185,7 +180,6 @@ class EmergencyRescuePage:
             hint_text="Describe the animal's condition and surroundings...",
             multiline=True,
             min_lines=4,
-            width=400,
         )
 
         # Error display
@@ -198,8 +192,8 @@ class EmergencyRescuePage:
                 spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            width=200,
             height=48,
+            expand=True,
             on_click=lambda e: self._on_submit(page),
             style=ft.ButtonStyle(
                 bgcolor=ft.Colors.RED_600,
@@ -211,7 +205,7 @@ class EmergencyRescuePage:
         
         back_btn = ft.OutlinedButton(
             content=ft.Text("Back to Login", size=14, weight="w500"),
-            width=140,
+            expand=True,
             height=48,
             on_click=lambda e: page.go("/"),
             style=ft.ButtonStyle(
@@ -314,7 +308,7 @@ class EmergencyRescuePage:
                     alignment=ft.MainAxisAlignment.CENTER
                 ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=500,
+            width=500,  # acts as max-width in centered layout
             padding=30,
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
