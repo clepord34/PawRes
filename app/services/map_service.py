@@ -27,6 +27,10 @@ class MapService:
     
     # Class-level timestamp to track last request across instances
     _last_request_time = 0
+    _tiles_check_cache: Optional[bool] = None
+    _tiles_check_cache_at: float = 0
+    _geocode_check_cache: Optional[bool] = None
+    _geocode_check_cache_at: float = 0
     
     def __init__(self):
         """Initialize the map service."""
@@ -62,16 +66,24 @@ class MapService:
         if not self.geocoder:
             return False
         
+        current_time = time.time()
+        if current_time - MapService._geocode_check_cache_at < 60 and MapService._geocode_check_cache is not None:
+            return MapService._geocode_check_cache
+
         try:
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(3)
             try:
                 sock.connect(("nominatim.openstreetmap.org", 443))
+                MapService._geocode_check_cache = True
+                MapService._geocode_check_cache_at = current_time
                 return True
             finally:
                 sock.close()
         except (socket.error, socket.timeout, OSError):
+            MapService._geocode_check_cache = False
+            MapService._geocode_check_cache_at = current_time
             return False
     
     def check_map_tiles_available(self) -> bool:
@@ -80,16 +92,24 @@ class MapService:
         Returns:
             True if tile server is reachable, False otherwise
         """
+        current_time = time.time()
+        if current_time - MapService._tiles_check_cache_at < 60 and MapService._tiles_check_cache is not None:
+            return MapService._tiles_check_cache
+
         try:
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(3)
             try:
-                sock.connect(("tile.openstreetmap.org", 443))
+                sock.connect((app_config.MAP_TILE_HEALTHCHECK_HOST, 443))
+                MapService._tiles_check_cache = True
+                MapService._tiles_check_cache_at = current_time
                 return True
             finally:
                 sock.close()
         except (socket.error, socket.timeout, OSError):
+            MapService._tiles_check_cache = False
+            MapService._tiles_check_cache_at = current_time
             return False
     
     def geocode_location(self, location: str) -> Optional[Tuple[float, float]]:
@@ -348,8 +368,8 @@ class MapService:
         marker_layer = MarkerLayer(markers=markers)
         
         tile_layer = TileLayer(
-            url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-            max_zoom=19,
+            url_template=app_config.MAP_TILE_URL_TEMPLATE,
+            max_zoom=app_config.MAP_TILE_MAX_ZOOM,
         )
         
         # Configure interaction based on locked state

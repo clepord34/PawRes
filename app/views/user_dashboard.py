@@ -15,6 +15,8 @@ from state import get_app_state
 from components import (
     create_user_sidebar, create_gradient_background,
     create_pie_chart, create_chart_legend, create_bar_chart,
+    create_empty_chart_message,
+    create_scrollable_chart_content,
     show_chart_details_dialog,
     create_impact_insight_widgets,
     STATUS_COLORS, PIE_CHART_COLORS,
@@ -230,7 +232,7 @@ class UserDashboard:
                         "title": f"{pct:.0f}%",
                         "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
                     })
-            adoption_pie = create_pie_chart(adoption_sections, width=120, height=120, section_radius=68, legend_refs=adoption_pie_refs)
+            adoption_pie = create_pie_chart(adoption_sections, width=140, height=140, section_radius=54, legend_refs=adoption_pie_refs)
             
             adoption_legend_items = [
                 {"label": status.capitalize(), "value": user_adoption_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])}
@@ -278,20 +280,15 @@ class UserDashboard:
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Divider(height=5),
                 # Content: Chart + Legend side by side
-                ft.Row([
-                    ft.Container(
-                        adoption_pie,
-                        width=150,
-                        height=150,
-                    ),
-                    ft.Container(width=10),
+                create_scrollable_chart_content(
+                    adoption_pie,
                     adoption_legend,
-                ], vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                expand=True
+                    chart_width=160,
+                    legend_width=170,
+                    legend_height=150,
                 ),
                 
             ], spacing=0),
-            height=230,
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
@@ -313,7 +310,7 @@ class UserDashboard:
                         "title": f"{pct:.0f}%",
                         "color": STATUS_COLORS.get(status, STATUS_COLORS["default"]),
                     })
-            rescue_pie = create_pie_chart(rescue_sections, width=120, height=120, section_radius=68, legend_refs=rescue_pie_refs)
+            rescue_pie = create_pie_chart(rescue_sections, width=140, height=140, section_radius=54, legend_refs=rescue_pie_refs)
             
             rescue_legend_items = [
                 {"label": status.capitalize(), "value": user_rescue_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])}
@@ -322,14 +319,8 @@ class UserDashboard:
             rescue_legend = create_chart_legend(rescue_legend_items, horizontal=False, pie_refs=rescue_pie_refs)
             rescue_data_for_dialog = [{"label": status.capitalize(), "value": user_rescue_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])} for status in status_order if status in user_rescue_status_dist]
         else:
-            rescue_pie = ft.Container(
-                ft.Column([
-                    ft.Icon(ft.Icons.PIE_CHART, size=48, color=ft.Colors.GREY_400),
-                    ft.Text("No data", size=12, color=ft.Colors.GREY_500),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-                width=150, height=150, alignment=ft.alignment.center,
-            )
-            rescue_legend = ft.Text("No reports yet", size=13, color=ft.Colors.BLACK54)
+            rescue_pie = create_empty_chart_message("No reports yet", width=160, height=150)
+            rescue_legend = ft.Container()
             rescue_data_for_dialog = []
         
         def show_rescue_details(e):
@@ -361,19 +352,14 @@ class UserDashboard:
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Divider(height=5),
                 # Content: Chart + Legend side by side
-                ft.Row([
-                    ft.Container(
-                        rescue_pie,
-                        width=150,
-                        height=150,
-                    ),
-                    ft.Container(width=10),
+                create_scrollable_chart_content(
+                    rescue_pie,
                     rescue_legend,
-                ], vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                expand=True,
+                    chart_width=160,
+                    legend_width=170,
+                    legend_height=150,
                 ),
             ], spacing=0),
-            height=230,
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
@@ -439,16 +425,14 @@ class UserDashboard:
                         ),
                     ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     ft.Divider(height=5),
-                    ft.Row([
-                        ft.Container(
-                            popular_breeds_bar_chart,
-                            expand=True,
-                        ),
-                        ft.Container(width=10),
+                    create_scrollable_chart_content(
+                        popular_breeds_bar_chart,
                         breed_legend,
-                    ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                        chart_width=180,
+                        legend_width=170,
+                        legend_height=150,
+                    ),
                 ], spacing=0),
-                height=230,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -472,7 +456,6 @@ class UserDashboard:
                         alignment=ft.alignment.center,
                     ),
                 ], spacing=0),
-                height=230,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -502,7 +485,7 @@ class UserDashboard:
                     "color": color,
                 })
             
-            breed_pie = create_pie_chart(breed_sections, width=120, height=120, section_radius=68, legend_refs=breed_pie_refs)
+            breed_pie = create_pie_chart(breed_sections, width=140, height=140, section_radius=54, legend_refs=breed_pie_refs)
             
             breed_legend_items = [
                 {"label": breed, "value": count, "color": PIE_CHART_COLORS[i % len(PIE_CHART_COLORS)]}
@@ -510,14 +493,8 @@ class UserDashboard:
             ]
             breed_legend = create_chart_legend(breed_legend_items, horizontal=False, pie_refs=breed_pie_refs, text_size=10)
         else:
-            breed_pie = ft.Container(
-                ft.Column([
-                    ft.Icon(ft.Icons.PIE_CHART, size=48, color=ft.Colors.GREY_400),
-                    ft.Text("No data", size=12, color=ft.Colors.GREY_500),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-                width=150, height=150, alignment=ft.alignment.center,
-            )
-            breed_legend = ft.Text("No animals available", size=13, color=ft.Colors.BLACK54)
+            breed_pie = create_empty_chart_message("No animals available", width=160, height=150)
+            breed_legend = ft.Container()
             breed_data_for_dialog = []
         
         def show_adoptable_breeds_details(e):
@@ -544,19 +521,14 @@ class UserDashboard:
                     ) if breed_data_for_dialog else ft.Container(),
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Divider(height=5),
-                ft.Row([
-                    ft.Container(
-                        breed_pie,
-                        width=150,
-                        height=150,
-                    ),
-                    ft.Container(width=10),
+                create_scrollable_chart_content(
+                    breed_pie,
                     breed_legend,
-                ], vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                expand=True,
+                    chart_width=160,
+                    legend_width=170,
+                    legend_height=150,
                 ),
             ], spacing=0),
-            height=230,
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,

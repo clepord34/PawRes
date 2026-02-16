@@ -72,6 +72,12 @@ PASSWORD_HISTORY_COUNT = int(os.getenv("PASSWORD_HISTORY_COUNT", "5"))
 # Map defaults
 DEFAULT_MAP_CENTER = (13.5250, 123.3486)  # Camarines Sur, Philippines
 DEFAULT_MAP_ZOOM = 9
+MAP_TILE_URL_TEMPLATE = os.getenv(
+    "MAP_TILE_URL_TEMPLATE",
+    "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+)
+MAP_TILE_MAX_ZOOM = int(os.getenv("MAP_TILE_MAX_ZOOM", "19"))
+MAP_TILE_HEALTHCHECK_HOST = os.getenv("MAP_TILE_HEALTHCHECK_HOST", "a.basemaps.cartocdn.com")
 
 # UI defaults
 DEFAULT_WINDOW_WIDTH = 1200
@@ -519,6 +525,9 @@ __all__ = [
     "SALT_LENGTH",
     "DEFAULT_MAP_CENTER",
     "DEFAULT_MAP_ZOOM",
+    "MAP_TILE_URL_TEMPLATE",
+    "MAP_TILE_MAX_ZOOM",
+    "MAP_TILE_HEALTHCHECK_HOST",
     "DEFAULT_WINDOW_WIDTH",
     "DEFAULT_WINDOW_HEIGHT",
     "DEFAULT_WINDOW_MIN_WIDTH",

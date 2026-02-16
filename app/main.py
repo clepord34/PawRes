@@ -36,16 +36,40 @@ def main(page) -> None:
 	page.bgcolor = ft.Colors.TRANSPARENT
 	page.theme_mode = ft.ThemeMode.LIGHT
 
+	def _get_breakpoint_from_width(width) -> str:
+		"""Map width to responsive breakpoint key."""
+		w = width or app_config.DEFAULT_WINDOW_WIDTH
+		if w >= app_config.BREAKPOINT_XXL:
+			return "xxl"
+		if w >= app_config.BREAKPOINT_XL:
+			return "xl"
+		if w >= app_config.BREAKPOINT_LG:
+			return "lg"
+		if w >= app_config.BREAKPOINT_MD:
+			return "md"
+		if w >= app_config.BREAKPOINT_SM:
+			return "sm"
+		return "xs"
+
 	# --- Responsive: track page width and re-render on resize ---
 	def _on_page_resize(e):
-		"""Store current width in session and re-render the active route."""
+		"""Store width and re-render only when responsive breakpoint changes."""
+		current_width = page.width or app_config.DEFAULT_WINDOW_WIDTH
+		current_bp = _get_breakpoint_from_width(current_width)
+		last_bp = None
 		try:
-			page.session.set("page_width", page.width)
+			last_bp = page.session.get("page_breakpoint")
+			page.session.set("page_width", current_width)
+			page.session.set("page_breakpoint", current_bp)
 		except Exception:
-			pass
-		# Re-trigger the current route so views can re-build for new size
-		route_change(page.route)
+			last_bp = None
 
+		# Rebuild only when crossing breakpoints (desktop/tablet/mobile changes)
+		if last_bp != current_bp:
+			route_change(page.route)
+
+	# Keep compatibility with Flet resize event variants
+	page.on_resized = _on_page_resize
 	page.on_resize = _on_page_resize
 
 	def _render_error_page(message: str, details: str = "") -> None:
@@ -102,6 +126,11 @@ def main(page) -> None:
 	if not page.route:
 		page.go("/")
 	else:
+		try:
+			page.session.set("page_width", page.width or app_config.DEFAULT_WINDOW_WIDTH)
+			page.session.set("page_breakpoint", _get_breakpoint_from_width(page.width))
+		except Exception:
+			pass
 		route_change(page.route)
 
 

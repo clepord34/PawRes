@@ -253,32 +253,40 @@ def create_interactive_map(
         bgcolor=ft.Colors.GREY_100,
     )
     
-    # Header row with title and controls
+    # Header row with responsive wrapping:
+    # same row when there is space, wraps controls below when narrow
+    title_group = ft.Row([
+        ft.Container(
+            content=ft.Icon(ft.Icons.MAP_OUTLINED, size=18, color=ft.Colors.WHITE),
+            width=32,
+            height=32,
+            border_radius=8,
+            bgcolor=ft.Colors.TEAL_600,
+            alignment=ft.alignment.center,
+        ),
+        ft.Column([
+            ft.Text(title, size=14, weight="w600", color=ft.Colors.GREY_900),
+            ft.Text(
+                "Click map to enable pan & zoom" if is_locked[0] else "Drag to pan, scroll to zoom",
+                size=10,
+                color=ft.Colors.GREY_500,
+            ),
+        ], spacing=0),
+    ], spacing=10, tight=True)
+
+    controls_group = ft.Row([
+        count_badge,
+        lock_button,
+    ], spacing=8, tight=True)
+
     header_row = ft.Container(
-        content=ft.Row([
-            ft.Row([
-                ft.Container(
-                    content=ft.Icon(ft.Icons.MAP_OUTLINED, size=18, color=ft.Colors.WHITE),
-                    width=32,
-                    height=32,
-                    border_radius=8,
-                    bgcolor=ft.Colors.TEAL_600,
-                    alignment=ft.alignment.center,
-                ),
-                ft.Column([
-                    ft.Text(title, size=14, weight="w600", color=ft.Colors.GREY_900),
-                    ft.Text(
-                        "Click map to enable pan & zoom" if is_locked[0] else "Drag to pan, scroll to zoom",
-                        size=10,
-                        color=ft.Colors.GREY_500,
-                    ),
-                ], spacing=0),
-            ], spacing=10),
-            ft.Row([
-                count_badge,
-                lock_button,
-            ], spacing=8),
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        content=ft.Row(
+            controls=[title_group, controls_group],
+            wrap=True,
+            run_spacing=8,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        ),
         padding=ft.padding.only(bottom=10),
     )
     

@@ -102,7 +102,7 @@ class AvailableAdoptionPage:
                         # Species filter dropdown
                         ft.Dropdown(
                             hint_text="Filter by Species",
-                            width=180,
+                            width=150 if _mobile else 180,
                             value=self._species_filter,
                             options=[
                                 ft.dropdown.Option("all", text="All Species")
@@ -114,11 +114,11 @@ class AvailableAdoptionPage:
                         ft.TextField(
                             hint_text="Search by animal name or breed...",
                             prefix_icon=ft.Icons.SEARCH,
-                            width=300,
+                            width=260 if _mobile else 300,
                             value=self.current_search,
                             on_change=lambda e: self._on_search(page, e.control.value),
                         ),
-                    ], spacing=10),
+                    ], spacing=10, wrap=True, run_spacing=8),
                     padding=ft.padding.symmetric(horizontal=20, vertical=10),
                     border_radius=12,
                 ),
@@ -193,7 +193,9 @@ class AvailableAdoptionPage:
             ))
         
         if self._animal_cards_container:
-            self._animal_cards_container.controls = animal_cards
+            self._animal_cards_container.controls = [
+                ft.Container(c, col={"xs": 12, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards
+            ]
             self._animal_cards_container.update()
 
 

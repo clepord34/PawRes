@@ -105,6 +105,74 @@ def create_empty_chart_message(message: str = "No Data Available", height: int =
     )
 
 
+def create_scrollable_chart_content(
+    chart: Any,
+    legend: Optional[Any] = None,
+    *,
+    chart_width: int = 320,
+    legend_width: int = 170,
+    legend_height: int = 240,
+    indicator_text: str = "Scroll horizontally to view chart details",
+) -> Any:
+    """Create a universal chart+legend layout that prevents clipping.
+
+    Behavior:
+    - Chart and legend are kept side-by-side.
+    - Horizontal scroll is enabled for overflow on any screen size.
+    - Legend area supports vertical scrolling for long lists.
+    - A small scroll indicator is shown when legend content exists.
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed")
+
+    has_legend = not (
+        legend is None or (hasattr(legend, "content") and legend.content is None)
+    )
+
+    chart_panel = ft.Container(
+        chart,
+        width=chart_width if has_legend else None,
+        alignment=ft.alignment.center_left if has_legend else ft.alignment.center,
+    )
+
+    row_controls = [chart_panel]
+    if has_legend:
+        row_controls.append(
+            ft.Container(
+                ft.Column([legend], scroll=ft.ScrollMode.AUTO, height=legend_height),
+                width=legend_width,
+                alignment=ft.alignment.top_left,
+            )
+        )
+
+    if has_legend:
+        scroll_row = ft.Row(
+            row_controls,
+            spacing=6,
+            scroll=ft.ScrollMode.AUTO,
+            alignment=ft.MainAxisAlignment.START,
+            vertical_alignment=ft.CrossAxisAlignment.START,
+        )
+    else:
+        scroll_row = ft.Container(
+            chart_panel,
+            alignment=ft.alignment.center,
+            expand=True,
+        )
+
+    scroll_hint = ft.Container(
+        ft.Row([
+            ft.Icon(ft.Icons.SWAP_HORIZ, size=14, color=ft.Colors.GREY_600),
+            ft.Text(indicator_text, size=11, color=ft.Colors.GREY_600),
+        ], spacing=6),
+        visible=has_legend,
+        alignment=ft.alignment.center_left,
+        padding=ft.padding.only(top=2, bottom=6),
+    )
+
+    return ft.Column([scroll_hint, scroll_row], spacing=0)
+
+
 def create_line_chart(
     data_series: List[Dict[str, Any]],
     height: int = 200,
@@ -993,13 +1061,13 @@ def create_clickable_stat_card(
     card_content = ft.Column([
         ft.Row([
             ft.Icon(icon or ft.Icons.INFO, size=20, color=icon_color or ft.Colors.TEAL_600),
-            ft.Text(title, size=12, color=ft.Colors.BLACK54, weight="w500"),
+            ft.Text(title, size=12, color=ft.Colors.BLACK54, weight="w500", expand=True, max_lines=2),
         ], spacing=8),
         ft.Container(height=5),
         ft.Text(value, size=32, weight="bold", color=icon_color or ft.Colors.BLACK87),
         ft.Row([
             ft.Icon(subtitle_icon, size=14, color=subtitle_color),
-            ft.Text(subtitle, size=11, color=subtitle_color),
+            ft.Text(subtitle, size=11, color=subtitle_color, expand=True, max_lines=2),
         ], spacing=4),
     ], spacing=3)
     
@@ -1240,6 +1308,7 @@ __all__ = [
     "PIE_CHART_COLORS",
     "STATUS_COLORS",
     "create_empty_chart_message",
+    "create_scrollable_chart_content",
     "create_line_chart",
     "create_bar_chart",
     "create_pie_chart",

@@ -36,6 +36,13 @@ class LoginPage:
 
         self._page = page
         page.title = "Login"
+        try:
+            if page.drawer:
+                page.close(page.drawer)
+        except Exception:
+            pass
+        page.drawer = None
+        page.appbar = None
 
         # Header with logo/title - matching the image design
         header = create_header()
@@ -165,9 +172,15 @@ class LoginPage:
             ),
         )
 
+        card_wrapper = ft.Container(
+            card,
+            padding=ft.padding.symmetric(horizontal=14, vertical=16),
+            margin=ft.margin.only(top=4, bottom=16),
+        )
+
         # Scrollable centered layout with gradient background
         layout = ft.Column(
-            [header, card],
+            [header, card_wrapper],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             expand=True,

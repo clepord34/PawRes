@@ -11,6 +11,7 @@ from services.analytics_service import AnalyticsService
 from components import (
     create_admin_sidebar, create_gradient_background,
     create_line_chart, create_bar_chart, create_pie_chart,
+    create_scrollable_chart_content,
     create_chart_legend, create_empty_chart_message, create_insight_box, create_clickable_stat_card, 
     show_chart_details_dialog, CHART_COLORS, PIE_CHART_COLORS, STATUS_COLORS,
     create_interactive_map,
@@ -40,6 +41,20 @@ class ChartsPage:
         drawer = create_admin_drawer(page, current_route=page.route) if _mobile else None
         _gradient_ref = show_page_loading(page, None if _mobile else sidebar, "Loading charts...")
         sidebar = create_admin_sidebar(page, current_route=page.route)
+
+        line_chart_width = 300 if _mobile else None
+        line_chart_height = 220 if _mobile else 270
+        trend_chart_width = 300 if _mobile else None
+        trend_chart_height = 200 if _mobile else 220
+
+        def _build_horizontal_panel(chart: Any, legend: Any = None) -> Any:
+            return create_scrollable_chart_content(
+                chart,
+                legend,
+                chart_width=300 if _mobile else 340,
+                legend_width=170 if _mobile else 180,
+                legend_height=220 if _mobile else 240,
+            )
 
         (months, rescued_counts, adopted_counts), type_dist, status_counts = self.analytics_service.get_chart_data()
 
@@ -74,16 +89,18 @@ class ChartsPage:
                 {"label": "Rescued", "color": CHART_COLORS["primary"], "values": list(zip(range(len(months)), rescued_counts))},
                 {"label": "Adopted", "color": CHART_COLORS["secondary"], "values": list(zip(range(len(months)), adopted_counts))},
             ]
-            line_chart = create_line_chart(line_data, width=450, height=270, x_labels=months, legend_refs=line_refs)
+            line_chart = create_line_chart(line_data, width=line_chart_width, height=line_chart_height, x_labels=months, legend_refs=line_refs)
             line_legend = create_chart_legend([
                 {"label": "Rescued", "color": CHART_COLORS["primary"], "value": sum(rescued_counts)},
                 {"label": "Adopted", "color": CHART_COLORS["secondary"], "value": sum(adopted_counts)},
             ], horizontal=False, line_refs=line_refs)
         else:
-            line_chart = create_empty_chart_message("No rescue/adoption data available yet", width=450, height=270,
+            line_chart = create_empty_chart_message("No rescue/adoption data available yet", width=line_chart_width, height=line_chart_height,
                 button_text="View Manage Records", button_icon=ft.Icons.FOLDER_OPEN,
                 on_click=lambda e: page.go("/manage_records"))
             line_legend = ft.Container()
+
+        chart1_body = _build_horizontal_panel(line_chart, line_legend)
 
         # Pie chart: type distribution
         type_pie_refs = {}  # For legend-pie sync
@@ -103,7 +120,7 @@ class ChartsPage:
                 for idx, (label, value) in enumerate(type_dist.items())
             ], horizontal=False, pie_refs=type_pie_refs)
         else:
-            type_pie_chart = create_empty_chart_message("No animal type data", width=180, height=180,
+            type_pie_chart = create_empty_chart_message("No animal type data", width=260, height=180,
                 button_text="Add Animal", button_icon=ft.Icons.ADD,
                 on_click=lambda e: page.go("/add_animal"))
             type_legend = ft.Container()
@@ -159,7 +176,7 @@ class ChartsPage:
                 for s in status_order if s in rescue_status_dist
             ], horizontal=False, pie_refs=rescue_pie_refs)
         else:
-            rescue_pie_chart = create_empty_chart_message("No rescue mission data", width=180, height=180,
+            rescue_pie_chart = create_empty_chart_message("No rescue mission data", width=260, height=180,
                 button_text="View Rescues", button_icon=ft.Icons.LOCAL_HOSPITAL,
                 on_click=lambda e: page.go("/rescue_missions?admin=1"))
             rescue_legend = ft.Container()
@@ -185,7 +202,7 @@ class ChartsPage:
                 for s in status_order if s in adoption_status_dist
             ], horizontal=False, pie_refs=adoption_pie_refs)
         else:
-            adoption_pie_chart = create_empty_chart_message("No adoption data", width=180, height=180,
+            adoption_pie_chart = create_empty_chart_message("No adoption data", width=260, height=180,
                 button_text="View Adoptions", button_icon=ft.Icons.VOLUNTEER_ACTIVISM,
                 on_click=lambda e: page.go("/adoption_requests"))
             adoption_legend = ft.Container()
@@ -281,15 +298,12 @@ class ChartsPage:
             ft.Column([
                 ft.Row([
                     ft.Icon(ft.Icons.SHOW_CHART, size=20, color=ft.Colors.TEAL_600),
-                    ft.Text("Rescued vs. Adopted (Last 30 Days)", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ft.Text("Rescued vs. Adopted (Last 30 Days)", size=16, weight="w600", color=ft.Colors.BLACK87, expand=True, max_lines=2),
                 ], spacing=10),
                 ft.Divider(height=12, color=ft.Colors.GREY_200),
-                ft.Row([
-                    ft.Container(line_chart, padding=ft.padding.only(top=10)),
-                    ft.Container(line_legend, padding=ft.padding.only(left=15, top=10)),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                chart1_body,
             ], spacing=8, horizontal_alignment="center"),
-            padding=ft.padding.only(top=25, bottom=50, left=25, right=25),
+            padding=ft.padding.only(top=20 if _mobile else 25, bottom=20 if _mobile else 50, left=16 if _mobile else 25, right=16 if _mobile else 25),
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
             border=ft.border.all(1, ft.Colors.GREY_200),
@@ -334,10 +348,10 @@ class ChartsPage:
             
             breed_line_refs = {}  # For legend-line sync
             if line_data:
-                chart = create_line_chart(line_data, width=400, height=220, x_labels=day_labels, legend_refs=breed_line_refs)
+                chart = create_line_chart(line_data, width=trend_chart_width, height=trend_chart_height, x_labels=day_labels, legend_refs=breed_line_refs)
                 legend = create_chart_legend(legend_data, horizontal=False, line_refs=breed_line_refs) if legend_data else ft.Container()
             else:
-                chart = create_empty_chart_message(f"No {mode} breed data available yet", width=400, height=220,
+                chart = create_empty_chart_message(f"No {mode} breed data available yet", width=trend_chart_width, height=trend_chart_height,
                     button_text="Add Animal", button_icon=ft.Icons.ADD,
                     on_click=lambda e: page.go("/add_animal"))
                 legend = ft.Container()
@@ -347,10 +361,7 @@ class ChartsPage:
             """Handle tab change for breed trends."""
             mode = "adoption" if breed_trend_mode.current.selected_index == 0 else "rescue"
             chart, legend = build_breed_trend_chart(mode)
-            breed_chart_content.current.content = ft.Row([
-                ft.Container(chart, padding=ft.padding.only(top=10)),
-                ft.Container(legend, padding=ft.padding.only(left=20, top=10)),
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+            breed_chart_content.current.content = _build_horizontal_panel(chart, legend)
             page.update()
         
         # Initial breed trend chart (adoption mode)
@@ -360,7 +371,7 @@ class ChartsPage:
             ft.Column([
                 ft.Row([
                     ft.Icon(ft.Icons.TRENDING_UP, size=20, color=ft.Colors.TEAL_600),
-                    ft.Text("Top 3 Breed Trends (Last 30 Days)", size=16, weight="w600", color=ft.Colors.BLACK87),
+                    ft.Text("Top 3 Breed Trends (Last 30 Days)", size=16, weight="w600", color=ft.Colors.BLACK87, expand=True, max_lines=2),
                 ], spacing=10),
                 ft.Divider(height=8, color=ft.Colors.GREY_200),
                 ft.Tabs(
@@ -378,13 +389,10 @@ class ChartsPage:
                 ),
                 ft.Container(
                     ref=breed_chart_content,
-                    content=ft.Row([
-                        ft.Container(initial_breed_chart, padding=ft.padding.only(top=10)),
-                        ft.Container(initial_breed_legend, padding=ft.padding.only(left=20, top=10)),
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    content=_build_horizontal_panel(initial_breed_chart, initial_breed_legend),
                 ),
             ], spacing=8, horizontal_alignment="center"),
-            padding=25,
+            padding=16 if _mobile else 25,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
             border=ft.border.all(1, ft.Colors.GREY_200),
@@ -394,9 +402,18 @@ class ChartsPage:
         
         # Combined chart row (rescued vs adopted + breed trends)
         charts_row_1 = ft.ResponsiveRow([
-            ft.Container(chart1_container, col={"xs": 12, "md": 6}),
-            ft.Container(breed_trend_container, col={"xs": 12, "md": 6}),
+            ft.Container(chart1_container, col={"xs": 12, "xl": 6}),
+            ft.Container(breed_trend_container, col={"xs": 12, "xl": 6}),
         ], spacing=15, run_spacing=15)
+
+        def _build_horizontal_chart_content(chart: Any, legend: Any = None) -> Any:
+            return create_scrollable_chart_content(
+                chart,
+                legend,
+                chart_width=300 if _mobile else 320,
+                legend_width=170 if _mobile else 180,
+                legend_height=220 if _mobile else 240,
+            )
 
         # Helper to create consistent chart cards with legend beside (clickable expand icon only)
         def create_chart_card_container(title: str, chart: Any, legend: Any, icon: Any = None, data_for_dialog: List = None) -> Any:
@@ -423,13 +440,13 @@ class ChartsPage:
                         ) if data_for_dialog else ft.Container(),
                     ], spacing=8),
                     ft.Divider(height=12, color=ft.Colors.GREY_200),
-                    ft.Row([
-                        ft.Container(chart, alignment=ft.alignment.center),
-                        ft.Container(legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
-                    ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                ], spacing=5, horizontal_alignment="center", expand=True),
-                padding=20,
-                height=280,
+                    ft.Container(
+                        _build_horizontal_chart_content(chart, legend),
+                        expand=True,
+                    ),
+                ], spacing=5, horizontal_alignment="center"),
+                padding=16 if _mobile else 20,
+                height=None,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 border=ft.border.all(1, ft.Colors.GREY_200),
@@ -458,14 +475,7 @@ class ChartsPage:
             def show_details(e):
                 if data_for_dialog:
                     show_chart_details_dialog(page, f"{title} Details", data_for_dialog, "bar")
-            
-            if legend:
-                chart_content = ft.Row([
-                    ft.Container(chart, alignment=ft.alignment.center),
-                    ft.Container(legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True)
-            else:
-                chart_content = ft.Container(chart, alignment=ft.alignment.center, expand=True)
+            chart_content = _build_horizontal_chart_content(chart, legend)
             
             return ft.Container(
                 ft.Column([
@@ -487,9 +497,9 @@ class ChartsPage:
                     ], spacing=8),
                     ft.Divider(height=12, color=ft.Colors.GREY_200),
                     chart_content,
-                ], spacing=5, horizontal_alignment="center", expand=True),
-                padding=20,
-                height=280,
+                ], spacing=5, horizontal_alignment="center"),
+                padding=16 if _mobile else 20,
+                height=None,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
                 border=ft.border.all(1, ft.Colors.GREY_200),

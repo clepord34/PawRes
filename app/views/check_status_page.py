@@ -115,7 +115,7 @@ class CheckStatusPage:
             filter_controls = ft.Row([
                 ft.Dropdown(
                     hint_text="Status",
-                    width=140,
+                    width=130 if _mobile else 140,
                     value=self._adoption_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -127,7 +127,7 @@ class CheckStatusPage:
                     border_radius=8,
                     on_change=lambda e: self._on_adoption_filter_change(page, user_id, e.control.value),
                 ),
-            ], spacing=10)
+            ], spacing=10, wrap=_mobile, run_spacing=8)
             
             export_action = lambda e: self._export_adoption_csv(
                 [a for a in all_adoptions if self._adoption_status_filter == "all" or 
@@ -148,7 +148,7 @@ class CheckStatusPage:
             filter_controls = ft.Row([
                 ft.Dropdown(
                     hint_text="Status",
-                    width=140,
+                    width=130 if _mobile else 140,
                     value=self._rescue_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -163,7 +163,7 @@ class CheckStatusPage:
                 ),
                 ft.Dropdown(
                     hint_text="Urgency",
-                    width=150,
+                    width=130 if _mobile else 150,
                     value=self._rescue_urgency_filter,
                     options=[
                         ft.dropdown.Option("all", "All Urgency"),
@@ -174,37 +174,38 @@ class CheckStatusPage:
                     border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, user_id, "urgency", e.control.value),
                 ),
-            ], spacing=10)
+            ], spacing=10, wrap=_mobile, run_spacing=8)
             
             export_action = lambda e: self._export_rescue_csv(filtered_rescues)
             count_text = f"{filtered_count} mission(s)"
 
-        # Unified control bar: Tabs | Filters | Count | Refresh | Export
+        # Unified control bar: Tabs + responsive controls
         control_bar = ft.Container(
-            ft.Row([
-                # Tabs on the left
-                ft.Container(tabs, width=250),
-                # Vertical divider
-                ft.VerticalDivider(width=1, color=ft.Colors.GREY_300),
-                # Spacer
-                ft.Container(expand=True),
-                filter_controls,
-                ft.Text(count_text, size=13, color=ft.Colors.BLACK54),
-                # Refresh button
-                ft.IconButton(
-                    ft.Icons.REFRESH,
-                    tooltip="Refresh",
-                    icon_color=ft.Colors.TEAL_600,
-                    on_click=lambda e: self.build(page, user_id),
+            ft.Column([
+                ft.Container(tabs, width=None if _mobile else 250),
+                ft.Row([
+                    filter_controls,
+                    ft.Text(count_text, size=13, color=ft.Colors.BLACK54),
+                    ft.IconButton(
+                        ft.Icons.REFRESH,
+                        tooltip="Refresh",
+                        icon_color=ft.Colors.TEAL_600,
+                        on_click=lambda e: self.build(page, user_id),
+                    ),
+                    create_action_button(
+                        "Export",
+                        on_click=export_action,
+                        icon=ft.Icons.DOWNLOAD,
+                        width=110,
+                    ),
+                ],
+                    spacing=12,
+                    wrap=True,
+                    run_spacing=8,
+                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-                # Export button
-                create_action_button(
-                    "Export",
-                    on_click=export_action,
-                    icon=ft.Icons.DOWNLOAD,
-                    width=110,
-                ),
-            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=8),
             padding=ft.padding.symmetric(horizontal=5, vertical=5),
             border_radius=10,
         )

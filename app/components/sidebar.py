@@ -254,6 +254,17 @@ def _build_drawer(page, current_route: str, is_admin: bool) -> object:
     route_path = current_route.split("?")[0] if current_route else ""
     items = _ADMIN_NAV_ITEMS if is_admin else _USER_NAV_ITEMS
 
+    try:
+        from state import get_app_state
+        app_state = get_app_state()
+        user_name = app_state.auth.user_name or ("Admin" if is_admin else "User")
+        user_id = app_state.auth.user_id
+    except Exception:
+        user_name = "Admin" if is_admin else "User"
+        user_id = None
+
+    profile_photo = _get_user_profile_photo(user_id)
+
     destinations = []
     selected_idx = 0
     for idx, (label, icon, nav_route, match_routes) in enumerate(items):
@@ -277,11 +288,43 @@ def _build_drawer(page, current_route: str, is_admin: bool) -> object:
             page.go(route_list[idx])
 
     # Header inside drawer
+    if profile_photo:
+        drawer_avatar = ft.Image(
+            src_base64=profile_photo,
+            width=36,
+            height=36,
+            fit=ft.ImageFit.COVER,
+            border_radius=18,
+        )
+    else:
+        drawer_avatar = ft.Icon(ft.Icons.PERSON, color=ft.Colors.GREY_600)
+
     drawer_header = ft.Container(
         ft.Column([
             create_sidebar_header(),
-        ], horizontal_alignment="center"),
-        padding=ft.padding.only(top=20, bottom=10),
+            ft.Container(
+                ft.ListTile(
+                    leading=ft.Container(
+                        drawer_avatar,
+                        width=40,
+                        height=40,
+                        bgcolor=ft.Colors.GREY_200,
+                        border_radius=20,
+                        alignment=ft.alignment.center,
+                        border=ft.border.all(1, ft.Colors.TEAL_200),
+                        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+                    ),
+                    title=ft.Text(user_name, weight="w600", size=14),
+                    subtitle=ft.Text("Admin Account" if is_admin else "User Account", size=11, color=ft.Colors.BLACK54),
+                    trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT, color=ft.Colors.GREY_400),
+                    on_click=lambda e: page.go("/profile"),
+                ),
+                border=ft.border.all(1, ft.Colors.GREY_200),
+                border_radius=10,
+                padding=ft.padding.symmetric(horizontal=4, vertical=2),
+            ),
+        ], horizontal_alignment="center", spacing=10),
+        padding=ft.padding.only(top=20, bottom=10, left=12, right=12),
     )
 
     # Logout button at bottom

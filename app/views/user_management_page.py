@@ -82,7 +82,7 @@ class UserManagementPage:
         # Search and filter row
         self._search_field = ft.TextField(
             hint_text="Search by name or email...",
-            width=250,
+            width=260 if _mobile else 250,
             prefix_icon=ft.Icons.SEARCH,
             border_radius=8,
             on_change=lambda e: self._refresh_users(),
@@ -90,7 +90,7 @@ class UserManagementPage:
         
         self._role_filter = ft.Dropdown(
             hint_text="Filter by role",
-            width=140,
+            width=130 if _mobile else 140,
             options=[
                 ft.dropdown.Option("all", "All Roles"),
                 ft.dropdown.Option("admin", "Admin"),
@@ -123,22 +123,38 @@ class UserManagementPage:
             width=110,
         )
         
+        add_user_btn = create_action_button(
+            "Add User",
+            on_click=lambda e: self._show_create_dialog(),
+            icon=ft.Icons.PERSON_ADD,
+            width=130
+        )
+
         filter_row = ft.Container(
-            ft.Row([
-                self._search_field,
-                self._role_filter,
-                self._include_disabled,
-                ft.Container(expand=True),
-                ft.Text(f"{len(self._users)} user(s)", size=13, color=ft.Colors.BLACK54),
-                refresh_btn,
-                export_btn,
-                create_action_button(
-                    "Add User",
-                    on_click=lambda e: self._show_create_dialog(),
-                    icon=ft.Icons.PERSON_ADD,
-                    width=130
+            ft.Column([
+                ft.Row([
+                    self._search_field,
+                    self._role_filter,
+                    self._include_disabled,
+                ],
+                    spacing=12,
+                    wrap=_mobile,
+                    run_spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ft.Row([
+                    ft.Text(f"{len(self._users)} user(s)", size=13, color=ft.Colors.BLACK54),
+                    refresh_btn,
+                    export_btn,
+                    add_user_btn,
+                ],
+                    spacing=12,
+                    wrap=True,
+                    run_spacing=8,
+                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+            ], spacing=8),
             padding=ft.padding.symmetric(vertical=15),
         )
         

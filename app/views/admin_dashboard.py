@@ -12,6 +12,7 @@ import app_config
 from components import (
     create_admin_sidebar, create_gradient_background, create_page_title,
     create_line_chart, create_bar_chart, create_pie_chart,
+    create_scrollable_chart_content,
     create_chart_legend, create_clickable_stat_card, show_chart_details_dialog,
     STATUS_COLORS, PIE_CHART_COLORS, create_interactive_map,
     create_ai_download_dialog, create_ai_download_button,
@@ -146,12 +147,14 @@ class AdminDashboard:
                 ft.Column([
                     ft.Text("Rescued vs. Adopted (14 Days)", size=14, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
                     ft.Divider(height=8, color=ft.Colors.GREY_300),
-                    ft.Row([
+                    create_scrollable_chart_content(
                         line_chart,
-                        ft.Container(line_legend, padding=ft.padding.only(left=15, right=10)),
-                    ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+                        line_legend,
+                        chart_width=300 if _mobile else 340,
+                        legend_width=170 if _mobile else 180,
+                        legend_height=220,
+                    ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                height=270,
                 padding=ft.padding.only(left=15, top=15, bottom=15, right=25),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -171,7 +174,6 @@ class AdminDashboard:
                         on_click=lambda e: page.go("/manage_records"),
                     ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                height=270,
                 padding=ft.padding.only(left=15, top=15, bottom=15, right=25),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -205,9 +207,10 @@ class AdminDashboard:
             breed_pie_refs = {}
             breed_pie_chart = create_pie_chart(
                 sections=breed_sections,
-                height=150,
-                section_radius=60,
-                center_space_radius=20,
+                width=180,
+                height=170,
+                section_radius=54,
+                center_space_radius=18,
                 legend_refs=breed_pie_refs,
             )
             
@@ -237,12 +240,14 @@ class AdminDashboard:
                         ),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                     ft.Divider(height=8, color=ft.Colors.GREY_300),
-                    ft.Row([
+                    create_scrollable_chart_content(
                         breed_pie_chart,
                         breed_legend,
-                    ], alignment=ft.MainAxisAlignment.CENTER, spacing=10, expand=True),
+                        chart_width=260 if _mobile else 300,
+                        legend_width=170 if _mobile else 180,
+                        legend_height=220,
+                    ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                height=270,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -262,7 +267,6 @@ class AdminDashboard:
                         on_click=lambda e: page.go("/add_animal"),
                     ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                height=270,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -319,7 +323,6 @@ class AdminDashboard:
                     ft.Divider(height=8, color=ft.Colors.GREY_300),
                     health_bar_chart,
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                height=298,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -339,7 +342,6 @@ class AdminDashboard:
                         on_click=lambda e: page.go("/add_animal"),
                     ),
                 ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-                height=298,
                 padding=15,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -402,15 +404,40 @@ class AdminDashboard:
 
         _content_padding = responsive_padding(page)
 
+        header_controls = (
+            ft.Column(
+                [
+                    create_page_title("Admin Dashboard Overview"),
+                    ft.Row(
+                        [
+                            create_ai_download_button(
+                                on_click=lambda e: create_ai_download_dialog(page),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.END,
+                    ),
+                ],
+                spacing=8,
+            )
+            if _mobile
+            else ft.Row(
+                [
+                    ft.Container(
+                        create_page_title("Admin Dashboard Overview"),
+                        expand=True,
+                    ),
+                    create_ai_download_button(
+                        on_click=lambda e: create_ai_download_dialog(page),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            )
+        )
+
         main_content = ft.Container(
             ft.Column([
                 ft.Container(
-                    ft.Row([
-                        create_page_title("Admin Dashboard Overview"),
-                        create_ai_download_button(
-                            on_click=lambda e: create_ai_download_dialog(page),
-                        ),
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    header_controls,
                     padding=ft.padding.only(bottom=15),
                 ),
                 stat_cards,

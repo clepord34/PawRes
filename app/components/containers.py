@@ -157,7 +157,7 @@ def create_page_title(
             title, 
             size=size, 
             weight="bold", 
-            color=ft.Colors.with_opacity(opacity, ft.Colors.BLACK)
+            color=ft.Colors.with_opacity(opacity, ft.Colors.BLACK),
         ),
         padding=ft.padding.only(bottom=padding_bottom),
         alignment=ft.alignment.center,
@@ -222,12 +222,13 @@ def create_empty_state(
     if icon:
         content.append(ft.Icon(icon, size=48, color=ft.Colors.GREY_400))
         content.append(ft.Container(height=10))
-    content.append(ft.Text(message, size=13, color=ft.Colors.BLACK54))
+    content.append(ft.Text(message, size=13, color=ft.Colors.BLACK54, text_align=ft.TextAlign.CENTER))
     
     return ft.Container(
-        ft.Column(content, horizontal_alignment="center", spacing=0),
+        ft.Column(content, horizontal_alignment="center", alignment=ft.MainAxisAlignment.CENTER, spacing=0),
         padding=padding,
         alignment=ft.alignment.center,
+        expand=True,
     )
 
 
@@ -415,6 +416,8 @@ def create_scrollable_data_table(
     data_row_height: int = 50,
     horizontal_lines: bool = True,
     show_checkbox_column: bool = False,
+    min_width: Optional[int] = None,
+    scroll_indicator_text: str = "Scroll horizontally to view more columns",
 ) -> object:
     """Create a scrollable data table with fixed height.
     
@@ -430,6 +433,8 @@ def create_scrollable_data_table(
         data_row_height: Height of each data row
         horizontal_lines: Whether to show horizontal divider lines
         show_checkbox_column: Whether to show checkbox column (unused, for API compat)
+        min_width: Optional minimum table width before horizontal scrolling.
+        scroll_indicator_text: Text shown as horizontal scroll hint.
         
     Example:
         columns = [
@@ -524,8 +529,35 @@ def create_scrollable_data_table(
             spacing=0,
         )
     
+    if min_width is None:
+        total_expand = sum(max(int(col.get("expand", 1)), 1) for col in columns)
+        min_width = max(680, total_expand * 95)
+
+    horizontal_scroll_content = ft.Row(
+        [
+            ft.Container(
+                table_content,
+                width=min_width,
+            )
+        ],
+        scroll=ft.ScrollMode.AUTO,
+        spacing=0,
+    )
+
+    scroll_indicator = ft.Container(
+        ft.Row([
+            ft.Icon(ft.Icons.SWAP_HORIZ, size=14, color=ft.Colors.GREY_600),
+            ft.Text(scroll_indicator_text, size=11, color=ft.Colors.GREY_600),
+        ], spacing=6),
+        alignment=ft.alignment.center_left,
+        padding=ft.padding.only(left=12, right=12, top=8, bottom=6),
+    )
+
     return ft.Container(
-        table_content,
+        ft.Column([
+            scroll_indicator,
+            horizontal_scroll_content,
+        ], spacing=0),
         bgcolor=ft.Colors.WHITE,
         border_radius=8,
         border=ft.border.all(1, ft.Colors.GREY_200),

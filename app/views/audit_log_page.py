@@ -77,7 +77,7 @@ class AuditLogPage:
         # Level filter
         self._level_filter = ft.Dropdown(
             hint_text="Filter by level",
-            width=150,
+            width=130 if _mobile else 150,
             options=[
                 ft.dropdown.Option("all", "All Levels"),
                 ft.dropdown.Option("INFO", "Info"),
@@ -97,18 +97,25 @@ class AuditLogPage:
         )
         
         filter_row = ft.Container(
-            ft.Row([
+            ft.Column([
                 log_tabs,
-                ft.Container(expand=True),
-                self._level_filter,
-                refresh_btn,
-                create_action_button(
-                    "Export CSV",
-                    on_click=lambda e: self._export_csv(),
-                    icon=ft.Icons.DOWNLOAD,
-                    width=140
+                ft.Row([
+                    self._level_filter,
+                    refresh_btn,
+                    create_action_button(
+                        "Export CSV",
+                        on_click=lambda e: self._export_csv(),
+                        icon=ft.Icons.DOWNLOAD,
+                        width=140
+                    ),
+                ],
+                    wrap=True,
+                    run_spacing=8,
+                    spacing=10,
+                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
-            ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ], spacing=8),
             padding=ft.padding.symmetric(vertical=10),
         )
         

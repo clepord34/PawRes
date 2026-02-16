@@ -95,6 +95,12 @@ def create_responsive_layout(page, sidebar, content, drawer=None, title="PawRes"
         return content
     else:
         # Desktop — classic sidebar + content row
+        try:
+            if page.drawer:
+                page.close(page.drawer)
+        except Exception:
+            pass
+        page.drawer = None
         page.appbar = None
         return ft.Row([sidebar, content], spacing=0, expand=True)
 

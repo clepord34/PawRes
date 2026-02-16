@@ -122,7 +122,7 @@ class ManageRecordsPage:
             filter_controls = ft.Row([
                 ft.Dropdown(
                     hint_text="Status",
-                    width=140,
+                    width=130 if _mobile else 140,
                     value=self._rescue_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -137,7 +137,7 @@ class ManageRecordsPage:
                 ),
                 ft.Dropdown(
                     hint_text="Urgency",
-                    width=160,
+                    width=140 if _mobile else 160,
                     value=self._rescue_urgency_filter,
                     options=[
                         ft.dropdown.Option("all", "All Urgency"),
@@ -148,7 +148,7 @@ class ManageRecordsPage:
                     border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, "urgency", e.control.value),
                 ),
-            ], spacing=10)
+            ], spacing=10, wrap=_mobile, run_spacing=8)
             
             count_text = f"{len(filtered_missions)} mission(s)"
             export_action = lambda e: self._export_rescue_csv(filtered_missions)
@@ -168,7 +168,7 @@ class ManageRecordsPage:
             filter_controls = ft.Row([
                 ft.Dropdown(
                     hint_text="Status",
-                    width=140,
+                    width=130 if _mobile else 140,
                     value=self._adoption_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -180,7 +180,7 @@ class ManageRecordsPage:
                     border_radius=8,
                     on_change=lambda e: self._on_adoption_filter_change(page, e.control.value),
                 ),
-            ], spacing=10)
+            ], spacing=10, wrap=_mobile, run_spacing=8)
             
             count_text = f"{len(filtered_requests)} request(s)"
             export_action = lambda e: self._export_adoption_csv(filtered_requests)
@@ -217,17 +217,19 @@ class ManageRecordsPage:
         
         # Unified control bar: Tabs | Filters | Count | Refresh | Export
         control_bar = ft.Container(
-            ft.Row([
-                # Tabs on the left
-                ft.Container(tabs, width=280),
-                # Vertical divider
-                ft.VerticalDivider(width=1, color=ft.Colors.GREY_300),
-                # Spacer
-                ft.Container(expand=True),
-                filter_controls,
-                # Right side controls
-                *right_controls,
-            ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Column([
+                ft.Container(tabs, width=None if _mobile else 280),
+                ft.Row([
+                    filter_controls,
+                    *right_controls,
+                ],
+                    spacing=12,
+                    wrap=True,
+                    run_spacing=8,
+                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+            ], spacing=8),
             padding=ft.padding.symmetric(horizontal=5, vertical=5),
             border_radius=10,
         )

@@ -13,7 +13,7 @@ from components import (
     create_user_sidebar, create_gradient_background,
     create_clickable_stat_card,
     create_line_chart, create_pie_chart, create_bar_chart,
-    create_chart_legend, create_empty_chart_message,
+    create_chart_legend, create_empty_chart_message, create_scrollable_chart_content,
     create_insight_box, show_chart_details_dialog,
     CHART_COLORS, STATUS_COLORS, PIE_CHART_COLORS,
     create_interactive_map,
@@ -125,7 +125,7 @@ class UserAnalyticsPage:
                     {"label": "Rescues Reported", "values": list(zip(range(len(day_labels)), rescues_reported)), "color": CHART_COLORS["primary"]},
                     {"label": "Adoptions Approved", "values": list(zip(range(len(day_labels)), adoptions_approved)), "color": CHART_COLORS["secondary"]},
                 ],
-                width=600,
+                width=300 if _mobile else 420,
                 height=220,
                 x_labels=formatted_labels,
                 legend_refs=user_line_refs,
@@ -135,7 +135,7 @@ class UserAnalyticsPage:
                 {"label": "Adoptions Approved", "color": CHART_COLORS["secondary"], "value": sum(adoptions_approved)},
             ], horizontal=False, line_refs=user_line_refs)
         else:
-            line_chart = create_empty_chart_message("No activity in the last 30 days", width=600, height=220)
+            line_chart = create_empty_chart_message("No activity in the last 30 days", width=300 if _mobile else 420, height=220)
             line_legend = ft.Container()
 
         activity_chart_container = ft.Container(
@@ -145,10 +145,13 @@ class UserAnalyticsPage:
                     ft.Text("Your Activity (Last 30 Days)", size=16, weight=ft.FontWeight.W_600, color=ft.Colors.BLACK87),
                 ], spacing=10),
                 ft.Divider(height=12, color=ft.Colors.GREY_200),
-                ft.Row([
-                    ft.Container(line_chart, padding=ft.padding.only(top=10)),
-                    ft.Container(line_legend, padding=ft.padding.only(left=15, top=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                create_scrollable_chart_content(
+                    line_chart,
+                    line_legend,
+                    chart_width=300 if _mobile else 420,
+                    legend_width=170 if _mobile else 180,
+                    legend_height=220,
+                ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             padding=25,
             bgcolor=ft.Colors.WHITE,
@@ -209,13 +212,15 @@ class UserAnalyticsPage:
                     ) if rescue_data_for_dialog else ft.Container(),
                 ], spacing=8),
                 ft.Divider(height=12, color=ft.Colors.GREY_200),
-                ft.Row([
-                    ft.Container(rescue_pie_chart, alignment=ft.alignment.center),
-                    ft.Container(rescue_legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+                create_scrollable_chart_content(
+                    rescue_pie_chart,
+                    rescue_legend,
+                    chart_width=260 if _mobile else 300,
+                    legend_width=170 if _mobile else 180,
+                    legend_height=220,
+                ),
             ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
             padding=20,
-            height=280,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
             border=ft.border.all(1, ft.Colors.GREY_200),
@@ -275,13 +280,15 @@ class UserAnalyticsPage:
                     ) if adoption_data_for_dialog else ft.Container(),
                 ], spacing=8),
                 ft.Divider(height=12, color=ft.Colors.GREY_200),
-                ft.Row([
-                    ft.Container(adoption_pie_chart, alignment=ft.alignment.center),
-                    ft.Container(adoption_legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+                create_scrollable_chart_content(
+                    adoption_pie_chart,
+                    adoption_legend,
+                    chart_width=260 if _mobile else 300,
+                    legend_width=170 if _mobile else 180,
+                    legend_height=220,
+                ),
             ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
             padding=20,
-            height=280,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
             border=ft.border.all(1, ft.Colors.GREY_200),
@@ -356,13 +363,15 @@ class UserAnalyticsPage:
                     ) if breed_data_for_dialog else ft.Container(),
                 ], spacing=8),
                 ft.Divider(height=12, color=ft.Colors.GREY_200),
-                ft.Row([
-                    ft.Container(breed_bar_chart, alignment=ft.alignment.center),
-                    ft.Container(breed_legend, alignment=ft.alignment.center_left, padding=ft.padding.only(left=10)),
-                ], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+                create_scrollable_chart_content(
+                    breed_bar_chart,
+                    breed_legend,
+                    chart_width=260 if _mobile else 300,
+                    legend_width=170 if _mobile else 180,
+                    legend_height=220,
+                ),
             ], spacing=5, horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
             padding=20,
-            height=280,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
             border=ft.border.all(1, ft.Colors.GREY_200),
