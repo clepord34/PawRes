@@ -180,10 +180,12 @@ class AddAnimalPage:
 
         card = animal_form.build()
 
-        # Main layout
+        # Main layout - margin wrapper so card doesn't touch screen edges
+        card_with_margin = ft.Container(card, margin=ft.margin.symmetric(horizontal=16))
+
         layout = ft.Column([
             header,
-            card,
+            card_with_margin,
             ft.Container(height=20),  # Bottom padding
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10, scroll=ft.ScrollMode.AUTO)
 

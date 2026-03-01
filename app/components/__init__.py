@@ -62,6 +62,7 @@ from .containers import (
     create_animal_card,
     show_page_loading,
     finish_page_loading,
+    create_page_control_bar,
 )
 
 # Dialog components
@@ -186,6 +187,7 @@ __all__ = [
     "create_stat_card",
     "create_map_container",
     "create_animal_card",
+    "create_page_control_bar",
     # Dialogs
     "show_snackbar",
     "create_error_dialog",

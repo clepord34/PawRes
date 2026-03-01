@@ -150,10 +150,12 @@ class EditAnimalPage:
 
         card = animal_form.build()
 
-        # Main layout - wrapped in scrollable container
+        # Main layout - margin wrapper so card doesn't touch screen edges
+        card_with_margin = ft.Container(card, margin=ft.margin.symmetric(horizontal=16))
+
         layout = ft.Column([
             header,
-            card,
+            card_with_margin,
             ft.Container(height=20),  # Bottom padding for scroll
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, scroll=ft.ScrollMode.AUTO)
 

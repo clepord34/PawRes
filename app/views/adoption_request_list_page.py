@@ -235,14 +235,13 @@ class AdoptionRequestListPage:
             else:
                 animal_name_widget = ft.Text(animal_name, size=12, color=ft.Colors.BLACK87)
                 breed = req.get("animal_breed") or "Not Specified"
-                breed_display = breed[:20] + "..." if len(breed) > 20 else breed
+                breed_display = breed
                 breed_widget = ft.Container(
                     ft.Text(breed_display, size=12, color=ft.Colors.BLACK87),
-                    tooltip=breed if len(breed) > 20 else None,
+                    tooltip=breed,
                 )
             
-            # Truncate long reason text for table display
-            reason_display = reason[:40] + "..." if len(reason) > 40 else reason
+            reason_display = reason
 
             row_data = [
                 ft.Text(user_name, size=12, color=ft.Colors.BLACK87),
@@ -251,7 +250,7 @@ class AdoptionRequestListPage:
                 ft.Text(contact, size=12, color=ft.Colors.BLACK87),
                 ft.Container(
                     ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
-                    tooltip=reason if len(reason) > 40 else None,
+                    tooltip=reason,
                 ),
                 final_status_widget,
             ]
@@ -284,7 +283,7 @@ class AdoptionRequestListPage:
         )
 
         content_items = [
-            create_page_title("Adoption Requests List"),
+            create_page_title("Adoption Requests List", page=page),
             ft.Container(height=20),
             # Adoption Requests Section using create_section_card
             create_section_card(
@@ -297,8 +296,14 @@ class AdoptionRequestListPage:
 
         # Main content area
         main_content = ft.Container(
-            ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=responsive_padding(page),
+            ft.Column(
+                [ft.Container(
+                    ft.Column(content_items, spacing=0, horizontal_alignment="center"),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
         )
 

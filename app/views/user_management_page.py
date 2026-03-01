@@ -15,7 +15,7 @@ from components import (
     create_section_card, create_scrollable_data_table, create_stat_card,
     show_page_loading, finish_page_loading,
     is_mobile, create_responsive_layout, responsive_padding,
-    create_admin_drawer,
+    create_admin_drawer, create_page_control_bar,
 )
 from components.sidebar import create_admin_sidebar
 
@@ -79,18 +79,18 @@ class UserManagementPage:
             ft.Container(create_stat_card("Disabled", str(stats["disabled"]), value_color=ft.Colors.RED_600), col={"xs": 6, "md": 3}),
         ], spacing=15)
         
-        # Search and filter row
+        # Search field — expands to fill the search row
         self._search_field = ft.TextField(
             hint_text="Search by name or email...",
-            width=260 if _mobile else 250,
+            expand=True,
             prefix_icon=ft.Icons.SEARCH,
             border_radius=8,
             on_change=lambda e: self._refresh_users(),
         )
-        
+
+        # Role filter — will be full-width in the BottomSheet
         self._role_filter = ft.Dropdown(
             hint_text="Filter by role",
-            width=130 if _mobile else 140,
             options=[
                 ft.dropdown.Option("all", "All Roles"),
                 ft.dropdown.Option("admin", "Admin"),
@@ -100,73 +100,54 @@ class UserManagementPage:
             border_radius=8,
             on_change=lambda e: self._refresh_users(),
         )
-        
+
         self._include_disabled = ft.Checkbox(
             label="Show disabled",
             value=True,
             on_change=lambda e: self._refresh_users(),
         )
-        
-        # Refresh button
-        refresh_btn = ft.IconButton(
+
+        # Compact icon action buttons
+        refresh_icon = ft.IconButton(
             ft.Icons.REFRESH,
             tooltip="Refresh list",
             icon_color=ft.Colors.TEAL_600,
             on_click=lambda e: self.build(page),
         )
-        
-        # Export button
-        export_btn = create_action_button(
-            "Export",
+        export_icon = ft.IconButton(
+            ft.Icons.DOWNLOAD,
+            tooltip="Export as CSV",
+            icon_color=ft.Colors.TEAL_600,
             on_click=lambda e: self._export_csv(),
-            icon=ft.Icons.DOWNLOAD,
-            width=110,
-        )
-        
-        add_user_btn = create_action_button(
-            "Add User",
-            on_click=lambda e: self._show_create_dialog(),
-            icon=ft.Icons.PERSON_ADD,
-            width=130
         )
 
-        filter_row = ft.Container(
-            ft.Column([
-                ft.Row([
-                    self._search_field,
-                    self._role_filter,
-                    self._include_disabled,
-                ],
-                    spacing=12,
-                    wrap=_mobile,
-                    run_spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-                ft.Row([
-                    ft.Text(f"{len(self._users)} user(s)", size=13, color=ft.Colors.BLACK54),
-                    refresh_btn,
-                    export_btn,
-                    add_user_btn,
-                ],
-                    spacing=12,
-                    wrap=True,
-                    run_spacing=8,
-                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-            ], spacing=8),
-            padding=ft.padding.symmetric(vertical=15),
+        # FAB for adding a new user
+        add_user_fab = ft.FloatingActionButton(
+            icon=ft.Icons.PERSON_ADD,
+            bgcolor=ft.Colors.TEAL_600,
+            tooltip="Add User",
+            on_click=lambda e: self._show_create_dialog(),
+        )
+
+        count_text = ft.Text(f"{len(self._users)} user(s)", size=13, color=ft.Colors.BLACK54)
+
+        filter_row = create_page_control_bar(
+            title="User Management",
+            search_field=self._search_field,
+            filters=[self._role_filter, self._include_disabled],
+            actions=[refresh_icon, export_icon],
+            count_text=count_text,
+            is_mobile=_mobile,
+            page=page,
+            post_title=stats_row,
         )
         
         self._refresh_users()
         
         self._table_container = ft.Container(content=self._user_table)
         
-        # Main content
+        # Main content — title → stat cards → search/filter (via post_title in filter_row)
         content_items = [
-            create_page_title("User Management"),
-            ft.Container(height=10),
-            stats_row,
             filter_row,
             create_section_card(
                 title="Users",
@@ -175,15 +156,21 @@ class UserManagementPage:
             ),
             ft.Container(height=30),
         ]
-        
+
         main_content = ft.Container(
-            ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=responsive_padding(page),
+            ft.Column(
+                [ft.Container(
+                    ft.Column(content_items, spacing=0, horizontal_alignment="center"),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
         )
         
-        # Layout with sidebar
-        layout = create_responsive_layout(page, sidebar, main_content, drawer, title="User Management")
+        # Layout with sidebar — FAB is set/cleared via create_responsive_layout
+        layout = create_responsive_layout(page, sidebar, main_content, drawer, title="User Management", fab=add_user_fab)
         
         finish_page_loading(page, _gradient_ref, layout)
     

@@ -111,7 +111,7 @@ class UserDashboard:
         impact_insight_data = self.analytics_service.get_user_impact_insights(user_id) if user_id else []
         
         # Render insights using frontend component
-        insight_widgets = create_impact_insight_widgets(impact_insight_data)
+        insight_widgets = create_impact_insight_widgets(impact_insight_data, page=page, mobile=_mobile)
         
         def create_impact_stat(icon, value, label, color):
             return ft.Container(
@@ -146,7 +146,7 @@ class UserDashboard:
                     ft.Container(create_impact_stat(ft.Icons.PENDING, user_activity_stats.get("pending_adoption_requests", 0), "Pending\nRequests", ft.Colors.BLUE_600), col={"xs": 6, "sm": 3}),
                 ], spacing=0, run_spacing=0),
                 ft.Container(height=7),
-                ft.Row(insight_widgets, spacing=10, alignment=ft.MainAxisAlignment.CENTER, wrap=True),
+                ft.Column(insight_widgets, spacing=10, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
             padding=20,
             bgcolor=ft.Colors.WHITE,
@@ -582,7 +582,10 @@ class UserDashboard:
                     dot_containers.append(dot)
 
             carousel_content = ft.Container(
-                create_featured_animal_card(carousel_animals[0], 0),
+                ft.Container(
+                    create_featured_animal_card(carousel_animals[0], 0),
+                    width=280,
+                ),
                 alignment=ft.alignment.center,
                 animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
                 opacity=1.0,
@@ -603,7 +606,10 @@ class UserDashboard:
                 page.update()
                 
                 def update_content():
-                    carousel_content.content = create_featured_animal_card(carousel_animals[new_index], new_index)
+                    carousel_content.content = ft.Container(
+                        create_featured_animal_card(carousel_animals[new_index], new_index),
+                        width=280,
+                    )
                     carousel_content.opacity = 1.0
                     page.update()
                 
@@ -802,20 +808,20 @@ class UserDashboard:
 
         main_content = ft.Container(
             ft.Column([
-                # Welcome section
-                welcome_section,
-                ft.Container(height=20),
-                # Your Impact section
-                impact_section,
-                ft.Container(height=20),
-                # Activity section
-                activity_section,
-                ft.Container(height=20),
-                # Map
-                map_card,
-                ft.Container(height=30),
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=_content_padding,
+                ft.Container(
+                    ft.Column([
+                        welcome_section,
+                        ft.Container(height=20),
+                        impact_section,
+                        ft.Container(height=20),
+                        activity_section,
+                        ft.Container(height=20),
+                        map_card,
+                        ft.Container(height=30),
+                    ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=_content_padding,
+                ),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
             expand=True,
         )
 

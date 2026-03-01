@@ -20,6 +20,7 @@ from components import (
     show_page_loading, finish_page_loading,
     is_mobile, create_responsive_layout, responsive_padding,
     create_admin_drawer, create_user_drawer,
+    create_page_control_bar,
 )
 
 
@@ -154,45 +155,29 @@ class AnimalsListPage:
         
         self._species_filter = getattr(self, '_species_filter_value', 'all')
         
-        # Search field - search by name or breed
+        # Search field — expands to fill the search row
         search_field = ft.TextField(
             hint_text="Search by name or breed...",
-            width=270,
+            expand=True,
             border_radius=8,
             prefix_icon=ft.Icons.SEARCH,
             value=self.current_search,
             on_change=lambda e: self._on_search(page, user_role, filter_status, e.control.value),
         )
-        
-        # Refresh button
-        refresh_btn = ft.IconButton(
+
+        # Compact icon action buttons
+        refresh_icon = ft.IconButton(
             ft.Icons.REFRESH,
             tooltip="Refresh list",
             icon_color=ft.Colors.TEAL_600,
             on_click=lambda e: self.build(page, user_role=user_role, filter_status=filter_status),
         )
-        
-        # Export button (admin only)
-        export_btn = create_action_button(
-            "Export",
+        export_icon = ft.IconButton(
+            ft.Icons.DOWNLOAD,
+            tooltip="Export as CSV",
+            icon_color=ft.Colors.TEAL_600,
             on_click=lambda e: self._export_csv(animals),
-            icon=ft.Icons.DOWNLOAD,
-            width=110,
-        ) if is_admin else ft.Container()
-        
-        add_animal_btn = ft.Container(
-            ft.Row([
-                ft.Icon(ft.Icons.ADD, size=18, color=ft.Colors.WHITE),
-                ft.Text("Add Animal", size=14, weight="w600", color=ft.Colors.WHITE),
-            ], spacing=6),
-            padding=ft.padding.symmetric(horizontal=16, vertical=10),
-            bgcolor=ft.Colors.TEAL_600,
-            border_radius=8,
-            on_click=lambda e: page.go("/add_animal"),
-            on_hover=lambda e: self._on_btn_hover(e),
-            ink=True,
-            tooltip="Add a new animal",
-        ) if is_admin else ft.Container()
+        ) if is_admin else None
 
         def create_card_for_animal(animal):
             aid = animal.get("id")
@@ -289,52 +274,56 @@ class AnimalsListPage:
             ))
         
         self._animal_cards_container = ft.ResponsiveRow(
-            [ft.Container(c, col={"xs": 12, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
-            spacing=15,
-            run_spacing=15,
+            [ft.Container(c, col={"xs": 6, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
+            spacing=16,
+            run_spacing=16,
         )
         
         self._count_text = ft.Text(f"Showing {len(animals)} animal(s)", size=13, color=ft.Colors.BLACK54)
 
-        # Main content area
-        main_content = ft.Container(
-            ft.Column([
-                # Page title row with Add Animal button
-                ft.Row([
-                    create_page_title("Animal List"),
-                    add_animal_btn,
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                
-                # Filters row
-                ft.Container(
-                    ft.Row([
-                        filter_dropdown,
-                        species_filter,
-                        search_field,
-                    ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
-                    padding=ft.padding.only(bottom=5, top=5),
-                ),
-                
-                # Actions row (count, refresh, export)
-                ft.Container(
-                    ft.Row([
-                        self._count_text,
-                        refresh_btn,
-                        export_btn,
-                    ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.END),
-                    padding=ft.padding.only(bottom=10),
-                ),
-                
-                # Animal cards grid
-                self._animal_cards_container,
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            expand=True,
-            padding=responsive_padding(page),
+        # FAB for adding a new animal (admin only)
+        add_animal_fab = ft.FloatingActionButton(
+            icon=ft.Icons.ADD,
+            bgcolor=ft.Colors.TEAL_600,
+            tooltip="Add Animal",
+            on_click=lambda e: page.go("/add_animal"),
+        ) if is_admin else None
+
+        # Action icons list
+        action_icons = [refresh_icon]
+        if export_icon:
+            action_icons.append(export_icon)
+
+        # Compact control bar: title → search+filter-icon → count+actions
+        control_bar = create_page_control_bar(
+            title="Animal List",
+            search_field=search_field,
+            filters=[filter_dropdown, species_filter],
+            actions=action_icons,
+            count_text=self._count_text,
+            is_mobile=_mobile,
+            page=page,
         )
 
-        # Layout with or without sidebar
+        # Main content area
+        main_content = ft.Container(
+            ft.Column(
+                [ft.Container(
+                    ft.Column([
+                        control_bar,
+                        self._animal_cards_container,
+                    ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
+            expand=True,
+        )
+
+        # Layout with or without sidebar — FAB is passed so it is set/cleared correctly
         if sidebar:
-            layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Animals")
+            layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Animals", fab=add_animal_fab)
         else:
             layout = main_content
 

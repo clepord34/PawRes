@@ -218,16 +218,19 @@ class CheckStatusPage:
         # Main content area
         main_content = ft.Container(
             ft.Column([
-                create_page_title("Application Status"),
-                ft.Text("Track your adoption requests and rescue mission reports",
-                       size=14, color=ft.Colors.BLACK54),
-                ft.Container(height=16),
-                control_bar,
-                ft.Container(height=15),
-                content,
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=responsive_padding(page),
-            alignment=ft.alignment.top_center,
+                ft.Container(
+                    ft.Column([
+                        create_page_title("Application Status", page=page),
+                        ft.Text("Track your adoption requests and rescue mission reports",
+                               size=14, color=ft.Colors.BLACK54),
+                        ft.Container(height=16),
+                        control_bar,
+                        ft.Container(height=15),
+                        content,
+                    ], spacing=0, horizontal_alignment="center"),
+                    padding=responsive_padding(page),
+                ),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
             expand=True,
         )
 
@@ -468,21 +471,21 @@ class CheckStatusPage:
                                                         removal_reason=removal_reason, archive_note=archive_note)
             
             reason = a.get("reason", "")
-            reason_display = reason[:30] + "..." if len(reason) > 30 else reason
+            reason_display = reason
             
             breed = animal_breed or "Not Specified"
-            breed_display = breed[:15] + "..." if len(breed) > 15 else breed
+            breed_display = breed
             
             adoption_rows.append([
                 animal_name_display,
                 ft.Text(animal_type, size=12, color=ft.Colors.GREY_500 if animal_was_deleted else ft.Colors.BLACK87),
                 ft.Container(
                     ft.Text(breed_display, size=12, color=ft.Colors.GREY_500 if animal_was_deleted else ft.Colors.BLACK87),
-                    tooltip=breed if len(breed) > 15 else None,
+                    tooltip=breed,
                 ),
                 ft.Container(
                     ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
-                    tooltip=reason if len(reason) > 30 else None,
+                    tooltip=reason,
                 ),
                 status_display,
                 actions,
@@ -555,10 +558,10 @@ class CheckStatusPage:
             mission_id = r.get("id")
             animal_type = r.get("animal_type") or "Unknown"
             breed = r.get("breed") or "Not Specified"
-            breed_display = breed[:15] + "..." if len(breed) > 15 else breed
+            breed_display = breed
             location = r.get("location") or "Unknown"
             details = r.get("notes", "")
-            details_display = details[:25] + "..." if len(details) > 25 else details
+            details_display = details
             
             status = r.get("status", "pending")
             admin_message = r.get("admin_message", "")
@@ -583,16 +586,16 @@ class CheckStatusPage:
                 ft.Text(animal_type, size=12, color=ft.Colors.BLACK87),
                 ft.Container(
                     ft.Text(breed_display, size=12, color=ft.Colors.BLACK87),
-                    tooltip=breed if len(breed) > 15 else None,
+                    tooltip=breed,
                 ),
                 ft.Container(
-                    ft.Text(location[:20] + "..." if len(location) > 20 else location, size=12, color=ft.Colors.BLACK87),
-                    tooltip=location if len(location) > 20 else None,
+                    ft.Text(location, size=12, color=ft.Colors.BLACK87),
+                    tooltip=location,
                 ),
                 self._create_urgency_badge(ft, r.get("urgency")),
                 ft.Container(
                     ft.Text(details_display, size=12, color=ft.Colors.BLACK87),
-                    tooltip=details if len(details) > 25 else None,
+                    tooltip=details,
                 ),
                 self._make_status_badge(ft, status, admin_message, is_rescue=True,
                                        removal_reason=removal_reason, archive_note=archive_note),

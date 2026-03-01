@@ -180,7 +180,7 @@ class AdoptionFormPage:
         self._error_text = ft.Text("", color=ft.Colors.RED_600, size=12, text_align=ft.TextAlign.CENTER)
 
         # Submit and cancel buttons with improved styling
-        submit_text = "Update Application" if edit_request_id else "Submit Application"
+        submit_text = "Update" if edit_request_id else "Submit"
         submit_icon = ft.Icons.EDIT if edit_request_id else ft.Icons.SEND
         
         self._submit_btn = ft.ElevatedButton(
@@ -188,6 +188,7 @@ class AdoptionFormPage:
                 [ft.Icon(submit_icon, size=18), ft.Text(submit_text, size=14, weight="w500")],
                 spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
             ),
             expand=True,
             height=48,
@@ -219,12 +220,10 @@ class AdoptionFormPage:
         
         title_section = ft.Container(
             ft.Column([
-                ft.Row([
-                    ft.Icon(title_icon, color=ft.Colors.TEAL_700, size=28),
-                    ft.Text(title_text, size=24, weight="bold", color=ft.Colors.BLACK87),
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
-                ft.Text(subtitle_text, size=13, color=ft.Colors.GREY_600),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                ft.Icon(title_icon, color=ft.Colors.TEAL_700, size=28),
+                ft.Text(title_text, size=22, weight="bold", color=ft.Colors.BLACK87, text_align=ft.TextAlign.CENTER),
+                ft.Text(subtitle_text, size=13, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
             padding=ft.padding.only(bottom=10),
         )
         
@@ -281,12 +280,12 @@ class AdoptionFormPage:
                 # Action buttons
                 ft.Row(
                     [self._submit_btn, cancel_btn],
-                    spacing=16,
-                    alignment=ft.MainAxisAlignment.CENTER
+                    spacing=12,
+                    alignment=ft.MainAxisAlignment.CENTER,
                 ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             width=480,  # acts as max-width in centered layout
-            padding=30,
+            padding=ft.padding.symmetric(horizontal=24, vertical=28),
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
             shadow=ft.BoxShadow(
@@ -297,10 +296,12 @@ class AdoptionFormPage:
             ),
         )
 
-        # Main layout
+        # Main layout - margin wrapper so card doesn't touch screen edges
+        card_with_margin = ft.Container(card, margin=ft.margin.symmetric(horizontal=16))
+
         layout = ft.Column([
             header,
-            card,
+            card_with_margin,
             ft.Container(height=20),  # Bottom padding
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=15, scroll=ft.ScrollMode.AUTO)
 

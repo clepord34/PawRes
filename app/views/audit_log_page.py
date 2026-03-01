@@ -132,7 +132,7 @@ class AuditLogPage:
         
         # Main content
         content_items = [
-            create_page_title("Audit Logs"),
+            create_page_title("Audit Logs", page=page),
             ft.Container(height=10),
             filter_row,
             create_section_card(
@@ -145,8 +145,14 @@ class AuditLogPage:
         ]
         
         main_content = ft.Container(
-            ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=responsive_padding(page),
+            ft.Column(
+                [ft.Container(
+                    ft.Column(content_items, spacing=0, horizontal_alignment="center"),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
         )
         

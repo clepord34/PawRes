@@ -46,6 +46,7 @@ class ProfilePage:
         # UI fields
         self._name_field = None
         self._phone_field = None
+        self._email_field = None
         self._current_password_field = None
         self._new_password_field = None
         self._confirm_password_field = None
@@ -97,42 +98,45 @@ class ProfilePage:
         else:
             sidebar = create_user_sidebar(page, app_state.auth.user_name, current_route="/profile")
         
-        # Header
-        header = ft.Container(
-            ft.Row([
-                ft.Column([
-                    ft.Text("My Profile", size=28, weight="bold", color=ft.Colors.BLACK87),
-                    ft.Text(
-                        f"Manage your account settings",
-                        size=14, color=ft.Colors.BLACK54
-                    ),
-                ], spacing=5),
-            ]),
-            padding=ft.padding.only(bottom=30),
-        )
-        
         # Profile Info Card
+        self._build_edit_card()  # initialise edit fields in advance
         profile_card = self._build_profile_card()
-        
-        # Edit Profile Card
-        edit_card = self._build_edit_card()
-        
+
         # Linked Accounts Card
         linked_accounts_card = self._build_linked_accounts_card()
         
         # Change Password Card
         password_card = self._build_password_card()
+
+        # Account details footer (metadata moved from profile card)
+        metadata_card = self._build_metadata_card()
         
         # Main content
+        header = ft.Container(
+            ft.Column([
+                ft.Text("My Profile", size=28, weight="bold", color=ft.Colors.BLACK87),
+                ft.Text("Manage your account settings", size=14, color=ft.Colors.BLACK54),
+            ], spacing=5),
+            padding=ft.padding.only(bottom=20),
+            visible=not _mobile,
+        )
+
         content = ft.Container(
             ft.Column([
-                header,
-                ft.ResponsiveRow([
-                    ft.Container(ft.Column([profile_card]), col={"xs": 12, "md": 4}),
-                    ft.Container(ft.Column([edit_card, linked_accounts_card, password_card], spacing=20), col={"xs": 12, "md": 8}),
-                ], spacing=20, run_spacing=20),
-            ], spacing=20, scroll=ft.ScrollMode.AUTO, expand=True),
-            padding=responsive_padding(page),
+                ft.Container(
+                    ft.Column([
+                        header,
+                        ft.ResponsiveRow([
+                            ft.Container(
+                                ft.Column([profile_card], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                                col={"xs": 12, "md": 4},
+                            ),
+                            ft.Container(ft.Column([linked_accounts_card, password_card, metadata_card], spacing=20), col={"xs": 12, "md": 8}),
+                        ], spacing=20, run_spacing=20),
+                    ], spacing=20),
+                    padding=responsive_padding(page),
+                ),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
             expand=True,
         )
         
@@ -210,16 +214,38 @@ class ProfilePage:
             bgcolor=ft.Colors.GREY_100,
         )
         
-        # Photo upload button
-        photo_upload_btn = ft.TextButton(
-            "Change Photo",
-            icon=ft.Icons.CAMERA_ALT,
-            on_click=lambda e: self._file_picker.pick_files(
+        # Camera badge overlaid on the avatar (bottom-right corner)
+        def pick_photo(e):
+            self._file_picker.pick_files(
                 allowed_extensions=["jpg", "jpeg", "png", "gif"],
                 dialog_title="Select Profile Photo"
-            ),
+            )
+
+        camera_badge = ft.Container(
+            content=ft.Icon(ft.Icons.CAMERA_ALT, size=15, color=ft.Colors.WHITE),
+            width=30, height=30,
+            bgcolor=ft.Colors.TEAL_600,
+            border_radius=15,
+            border=ft.border.all(2, ft.Colors.WHITE),
+            alignment=ft.alignment.center,
+            on_click=pick_photo,
+            tooltip="Change photo",
         )
-        
+
+        avatar_stack = ft.Stack([
+            ft.GestureDetector(
+                content=self._photo_widget,
+                on_tap=pick_photo,
+                mouse_cursor=ft.MouseCursor.CLICK,
+            ),
+            ft.Container(
+                content=camera_badge,
+                alignment=ft.alignment.bottom_right,
+                width=110,
+                height=110,
+            ),
+        ], width=110, height=110)
+
         # Role badge
         role = user.get("role", "user")
         role_color = ft.Colors.PURPLE_600 if role == "admin" else ft.Colors.BLUE_600
@@ -230,32 +256,25 @@ class ProfilePage:
             border_radius=4,
         )
         
-        # OAuth badge
-        oauth = user.get("oauth_provider")
-        auth_method = oauth.title() if oauth else "Password"
-        
-        created = user.get("created_at", "")
-        if isinstance(created, str) and created:
-            created = created[:10]
-        
-        last_login = user.get("last_login", "")
-        if isinstance(last_login, str) and last_login:
-            last_login = last_login[:16].replace("T", " ")
-        else:
-            last_login = "Never"
-        
+        # Edit-toggle button (pencil in top-right of card)
+        def toggle_edit(e):
+            self._open_edit_dialog()
+
+        edit_toggle_btn = ft.IconButton(
+            icon=ft.Icons.EDIT_OUTLINED,
+            on_click=toggle_edit,
+            tooltip="Edit profile",
+            icon_color=ft.Colors.TEAL_600,
+            icon_size=20,
+        )
+
         return ft.Container(
             ft.Column([
-                self._photo_widget,
-                photo_upload_btn,
+                ft.Row([edit_toggle_btn], alignment=ft.MainAxisAlignment.END),
+                avatar_stack,
                 ft.Text(user.get("name", ""), size=20, weight="bold", color=ft.Colors.BLACK87),
                 ft.Text(user.get("email", ""), size=14, color=ft.Colors.BLACK54),
                 role_badge,
-                ft.Divider(height=20),
-                self._info_row("Phone", user.get("phone") or "Not set"),
-                self._info_row("Auth Method", auth_method),
-                self._info_row("Member Since", str(created)),
-                self._info_row("Last Login", str(last_login)),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10),
             bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.WHITE),
             border_radius=12,
@@ -276,52 +295,55 @@ class ProfilePage:
             width=240,
         )
     
-    def _build_edit_card(self) -> object:
-        """Build the edit profile card."""
+    def _build_edit_card(self) -> None:
+        """Initialise edit profile fields (called once during build)."""
         import flet as ft
-        
+
         user = self._user
-        
+
         self._name_field = ft.TextField(
             label="Name",
             value=user.get("name", ""),
-            width=300,
         )
-        
+
         self._phone_field = ft.TextField(
             label="Phone",
             value=user.get("phone", "") or "",
-            width=300,
         )
-        
-        email_field = ft.TextField(
+
+        self._email_field = ft.TextField(
             label="Email",
             value=user.get("email", ""),
-            width=300,
             disabled=True,
-            helper_text="Email cannot be changed",
+            suffix_icon=ft.Icons.LOCK_OUTLINED,
         )
-        
-        save_btn = create_action_button(
-            "Save Changes",
-            on_click=lambda e: self._save_profile(),
-            width=150,
-        )
-        
-        return ft.Container(
-            ft.Column([
-                ft.Text("Edit Profile", size=18, weight="bold", color=ft.Colors.BLACK87),
-                ft.Divider(height=15),
+
+    def _open_edit_dialog(self) -> None:
+        """Open the Edit Profile dialog."""
+        import flet as ft
+
+        def save_and_close(e):
+            self._page.close(dialog)
+            self._save_profile()
+
+        def cancel(e):
+            self._page.close(dialog)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Edit Profile", weight="bold"),
+            content=ft.Column([
                 self._name_field,
-                email_field,
+                self._email_field,
                 self._phone_field,
-                ft.Container(save_btn, padding=ft.padding.only(top=10)),
-            ], spacing=15),
-            bgcolor=ft.Colors.with_opacity(0.9, ft.Colors.WHITE),
-            border_radius=12,
-            padding=25,
-            border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
+            ], spacing=14, tight=True, width=300),
+            actions=[
+                ft.TextButton("Cancel", on_click=cancel),
+                create_action_button("Save Changes", on_click=save_and_close, width=130),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
+        self._page.open(dialog)
     
     def _build_password_card(self) -> object:
         """Build the change password card."""
@@ -573,6 +595,49 @@ class ProfilePage:
             border=ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.BLACK)),
         )
     
+    def _build_metadata_card(self) -> object:
+        """Build a compact read-only metadata card shown at the bottom of the right column."""
+        import flet as ft
+
+        user = self._user
+        oauth = user.get("oauth_provider")
+        auth_method = oauth.title() if oauth else "Password"
+
+        created = user.get("created_at", "")
+        if isinstance(created, str) and created:
+            created = created[:10]
+
+        last_login = user.get("last_login", "")
+        if isinstance(last_login, str) and last_login:
+            last_login = last_login[:16].replace("T", " ")
+        else:
+            last_login = "Never"
+
+        rows = [
+            ("Phone", user.get("phone") or "Not set"),
+            ("Auth Method", auth_method),
+            ("Member Since", str(created)),
+            ("Last Login", str(last_login)),
+        ]
+
+        return ft.Container(
+            ft.Column([
+                ft.Text("Account Details", size=13, weight="w500", color=ft.Colors.BLACK54),
+                ft.Divider(height=8),
+                *[
+                    ft.Row([
+                        ft.Text(label + ":", size=11, color=ft.Colors.BLACK38, width=100),
+                        ft.Text(value, size=11, color=ft.Colors.BLACK54),
+                    ], spacing=6)
+                    for label, value in rows
+                ],
+            ], spacing=6),
+            bgcolor=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+            border_radius=10,
+            padding=ft.padding.symmetric(horizontal=20, vertical=14),
+            border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.BLACK)),
+        )
+
     def _link_google(self) -> None:
         """Link Google account to current user."""
         import flet as ft

@@ -426,9 +426,9 @@ class Urgency:
     HIGH = "high"
     
     # Display labels
-    LOW_LABEL = "Low - Animal appears safe"
-    MEDIUM_LABEL = "Medium - Needs attention soon"
-    HIGH_LABEL = "High - Immediate help needed"
+    LOW_LABEL = "Low - Appears safe"
+    MEDIUM_LABEL = "Medium - Needs attention"
+    HIGH_LABEL = "High - Immediate help"
     
     @classmethod
     def get_label(cls, urgency: str) -> str:

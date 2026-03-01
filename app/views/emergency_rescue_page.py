@@ -85,8 +85,8 @@ class EmergencyRescuePage:
         # Urgency level dropdown - default to High for emergency
         self._urgency_dropdown = create_form_dropdown(
             label="Urgency Level",
-            options=["Low - Animal appears safe", "Medium - Needs attention soon", "High - Immediate help needed"],
-            value="High - Immediate help needed",
+            options=["Low - Appears safe", "Medium - Needs attention", "High - Immediate help"],
+            value="High - Immediate help",
         )
         
         # Breed field (optional - can help with rescue)
@@ -188,9 +188,10 @@ class EmergencyRescuePage:
         # Submit and back buttons
         self._submit_btn = ft.ElevatedButton(
             content=ft.Row(
-                [ft.Icon(ft.Icons.EMERGENCY, size=15), ft.Text("Submit Emergency Report", size=12, weight="w600")],
-                spacing=8,
+                [ft.Icon(ft.Icons.EMERGENCY, size=16), ft.Text("Submit", size=14, weight="w600")],
+                spacing=6,
                 alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
             ),
             height=48,
             expand=True,
@@ -204,7 +205,7 @@ class EmergencyRescuePage:
         )
         
         back_btn = ft.OutlinedButton(
-            content=ft.Text("Back to Login", size=14, weight="w500"),
+            content=ft.Text("Back to Login", size=13, weight="w500"),
             expand=True,
             height=48,
             on_click=lambda e: page.go("/"),
@@ -270,12 +271,10 @@ class EmergencyRescuePage:
                 # Title section with emergency styling
                 ft.Container(
                     ft.Column([
-                        ft.Row([
-                            ft.Icon(ft.Icons.EMERGENCY, color=ft.Colors.RED_700, size=32),
-                            ft.Text("Emergency Rescue Report", size=24, weight="bold", color=ft.Colors.RED_700),
-                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
-                        ft.Text("Report an animal in immediate danger - No login required", size=13, color=ft.Colors.GREY_600),
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                        ft.Icon(ft.Icons.EMERGENCY, color=ft.Colors.RED_700, size=28),
+                        ft.Text("Emergency Rescue Report", size=22, weight="bold", color=ft.Colors.RED_700, text_align=ft.TextAlign.CENTER),
+                        ft.Text("Report an animal in immediate danger - No login required", size=13, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
                     padding=ft.padding.only(bottom=10),
                 ),
                 ft.Container(
@@ -304,12 +303,12 @@ class EmergencyRescuePage:
                 # Action buttons
                 ft.Row(
                     [self._submit_btn, back_btn], 
-                    spacing=16, 
-                    alignment=ft.MainAxisAlignment.CENTER
+                    spacing=12, 
+                    alignment=ft.MainAxisAlignment.CENTER,
                 ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            width=500,  # acts as max-width in centered layout
-            padding=30,
+            width=480,  # acts as max-width in centered layout
+            padding=ft.padding.symmetric(horizontal=24, vertical=28),
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
             border=ft.border.all(2, ft.Colors.RED_200),
@@ -321,10 +320,12 @@ class EmergencyRescuePage:
             ),
         )
 
-        # Main layout
+        # Main layout - margin wrapper so card doesn't touch screen edges
+        card_with_margin = ft.Container(card, margin=ft.margin.symmetric(horizontal=16))
+
         layout = ft.Column([
             header,
-            card,
+            card_with_margin,
             ft.Container(height=20),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.START, expand=True, spacing=15, scroll=ft.ScrollMode.AUTO)
 

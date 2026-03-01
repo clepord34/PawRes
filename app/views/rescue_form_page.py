@@ -197,11 +197,12 @@ class RescueFormPage:
         # Submit and cancel buttons
         self._submit_btn = ft.ElevatedButton(
             content=ft.Row(
-                [ft.Icon(ft.Icons.SEND, size=18), ft.Text("Submit Report", size=14, weight="w500")],
+                [ft.Icon(ft.Icons.SEND, size=18), ft.Text("Submit", size=14, weight="w500")],
                 spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
             ),
-            width=160,
+            expand=True,
             height=48,
             on_click=lambda e: self._on_submit(page),
             style=ft.ButtonStyle(
@@ -213,7 +214,7 @@ class RescueFormPage:
         )
         cancel_btn = ft.OutlinedButton(
             content=ft.Text("Cancel", size=14, weight="w500"),
-            width=120,
+            expand=True,
             height=48,
             on_click=lambda e: page.go("/user"),
             style=ft.ButtonStyle(
@@ -282,12 +283,10 @@ class RescueFormPage:
                 # Title section
                 ft.Container(
                     ft.Column([
-                        ft.Row([
-                            ft.Icon(ft.Icons.EMERGENCY, color=ft.Colors.ORANGE_700, size=28),
-                            ft.Text("Report Rescue Mission", size=24, weight="bold", color=ft.Colors.BLACK87),
-                        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
-                        ft.Text("Help us locate and rescue animals in need", size=13, color=ft.Colors.GREY_600),
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                        ft.Icon(ft.Icons.EMERGENCY, color=ft.Colors.ORANGE_700, size=28),
+                        ft.Text("Report Rescue Mission", size=22, weight="bold", color=ft.Colors.BLACK87, text_align=ft.TextAlign.CENTER),
+                        ft.Text("Help us locate and rescue animals in need", size=13, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
+                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
                     padding=ft.padding.only(bottom=10),
                 ),
                 ft.Divider(height=1, color=ft.Colors.GREY_300),
@@ -312,12 +311,12 @@ class RescueFormPage:
                 # Action buttons
                 ft.Row(
                     [self._submit_btn, cancel_btn], 
-                    spacing=16, 
-                    alignment=ft.MainAxisAlignment.CENTER
+                    spacing=12, 
+                    alignment=ft.MainAxisAlignment.CENTER,
                 ),
             ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
             width=480,  # acts as max-width in centered layout
-            padding=30,
+            padding=ft.padding.symmetric(horizontal=24, vertical=28),
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
             shadow=ft.BoxShadow(
@@ -328,10 +327,12 @@ class RescueFormPage:
             ),
         )
 
-        # Main layout
+        # Main layout - margin wrapper so card doesn't touch screen edges
+        card_with_margin = ft.Container(card, margin=ft.margin.symmetric(horizontal=16))
+
         layout = ft.Column([
             header,
-            card,
+            card_with_margin,
             ft.Container(height=20),  # Bottom padding
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.START, expand=True, spacing=15, scroll=ft.ScrollMode.AUTO)
 

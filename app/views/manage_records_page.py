@@ -53,7 +53,7 @@ class ManageRecordsPage:
             create_interactive_map,
             show_page_loading, finish_page_loading,
             is_mobile, create_responsive_layout, responsive_padding,
-            create_admin_drawer,
+            create_admin_drawer, create_page_control_bar,
         )
         
         self._page = page
@@ -119,10 +119,10 @@ class ManageRecordsPage:
                 filtered_missions = [m for m in filtered_missions 
                                     if (m.get("urgency") or "medium").lower() == self._rescue_urgency_filter]
             
-            filter_controls = ft.Row([
+            filter_items = [
                 ft.Dropdown(
                     hint_text="Status",
-                    width=130 if _mobile else 140,
+                    border_radius=8,
                     value=self._rescue_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -132,12 +132,11 @@ class ManageRecordsPage:
                         ft.dropdown.Option(RescueStatus.FAILED, "Failed"),
                         ft.dropdown.Option(RescueStatus.CANCELLED, "Cancelled"),
                     ],
-                    border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, "status", e.control.value),
                 ),
                 ft.Dropdown(
                     hint_text="Urgency",
-                    width=140 if _mobile else 160,
+                    border_radius=8,
                     value=self._rescue_urgency_filter,
                     options=[
                         ft.dropdown.Option("all", "All Urgency"),
@@ -145,10 +144,9 @@ class ManageRecordsPage:
                         ft.dropdown.Option("medium", "Medium"),
                         ft.dropdown.Option("high", "High"),
                     ],
-                    border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, "urgency", e.control.value),
                 ),
-            ], spacing=10, wrap=_mobile, run_spacing=8)
+            ]
             
             count_text = f"{len(filtered_missions)} mission(s)"
             export_action = lambda e: self._export_rescue_csv(filtered_missions)
@@ -165,10 +163,10 @@ class ManageRecordsPage:
                 filtered_requests = [r for r in all_requests 
                                     if AdoptionStatus.normalize(r.get("status", "")) == self._adoption_status_filter]
             
-            filter_controls = ft.Row([
+            filter_items = [
                 ft.Dropdown(
                     hint_text="Status",
-                    width=130 if _mobile else 140,
+                    border_radius=8,
                     value=self._adoption_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -177,10 +175,9 @@ class ManageRecordsPage:
                         ft.dropdown.Option(AdoptionStatus.DENIED, "Denied"),
                         ft.dropdown.Option(AdoptionStatus.CANCELLED, "Cancelled"),
                     ],
-                    border_radius=8,
                     on_change=lambda e: self._on_adoption_filter_change(page, e.control.value),
                 ),
-            ], spacing=10, wrap=_mobile, run_spacing=8)
+            ]
             
             count_text = f"{len(filtered_requests)} request(s)"
             export_action = lambda e: self._export_adoption_csv(filtered_requests)
@@ -188,50 +185,39 @@ class ManageRecordsPage:
             
         else:
             # Hidden Items tab - no filters needed
-            filter_controls = ft.Container()
+            filter_items = []
             count_text = ""
             export_action = None
             show_export = False
         
-        right_controls = []
-
-        if count_text:
-            right_controls.append(ft.Text(count_text, size=13, color=ft.Colors.BLACK54))
-        right_controls.append(
-            ft.IconButton(
-                ft.Icons.REFRESH,
-                tooltip="Refresh",
-                icon_color=ft.Colors.TEAL_600,
-                on_click=lambda e: self.build(page),
-            )
+        # Compact icon action buttons
+        refresh_icon = ft.IconButton(
+            ft.Icons.REFRESH,
+            tooltip="Refresh",
+            icon_color=ft.Colors.TEAL_600,
+            on_click=lambda e: self.build(page),
         )
-        if show_export:
-            right_controls.append(
-                create_action_button(
-                    "Export",
-                    on_click=export_action,
-                    icon=ft.Icons.DOWNLOAD,
-                    width=110,
-                )
-            )
-        
-        # Unified control bar: Tabs | Filters | Count | Refresh | Export
-        control_bar = ft.Container(
-            ft.Column([
-                ft.Container(tabs, width=None if _mobile else 280),
-                ft.Row([
-                    filter_controls,
-                    *right_controls,
-                ],
-                    spacing=12,
-                    wrap=True,
-                    run_spacing=8,
-                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-            ], spacing=8),
-            padding=ft.padding.symmetric(horizontal=5, vertical=5),
-            border_radius=10,
+        export_icon = ft.IconButton(
+            ft.Icons.DOWNLOAD,
+            tooltip="Export as CSV",
+            icon_color=ft.Colors.TEAL_600,
+            on_click=export_action,
+        ) if show_export else None
+
+        action_icons = [refresh_icon]
+        if export_icon:
+            action_icons.append(export_icon)
+
+        count_text_widget = ft.Text(count_text, size=13, color=ft.Colors.BLACK54) if count_text else None
+
+        control_bar = create_page_control_bar(
+            title="Manage Records",
+            filters=filter_items,
+            actions=action_icons,
+            count_text=count_text_widget,
+            tabs=tabs,
+            is_mobile=_mobile,
+            page=page,
         )
         
         if self._tab_index == 0:
@@ -248,17 +234,18 @@ class ManageRecordsPage:
         
         # Main content area
         main_content = ft.Container(
-            ft.Column([
-                create_page_title("Manage Records"),
-                ft.Text("View and manage rescue missions, adoption requests, and hidden items", 
-                       size=14, color=ft.Colors.BLACK54),
-                ft.Container(height=16),
-                control_bar,
-                ft.Container(height=15),
-                content,
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=responsive_padding(page),
-            alignment=ft.alignment.top_center,
+            ft.Column(
+                [ft.Container(
+                    ft.Column([
+                        control_bar,
+                        ft.Container(height=12),
+                        content,
+                    ], spacing=0, horizontal_alignment="center"),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
         )
         
@@ -393,11 +380,11 @@ class ManageRecordsPage:
             reporter_phone = m.get("reporter_phone") or "N/A"
             details = notes
             
-            location_display = location[:30] + "..." if len(location) > 30 else location
-            details_display = details[:40] + "..." if len(details) > 40 else details
+            location_display = location
+            details_display = details
             
             breed = m.get('breed') or ''
-            breed_display = (breed[:15] + "...") if len(breed) > 15 else (breed if breed else 'Not Specified')
+            breed_display = breed if breed else 'Not Specified'
             
             urgency = (m.get("urgency") or "medium").lower()
             urgency_colors = {
@@ -429,12 +416,12 @@ class ManageRecordsPage:
                 ft.Text(name, size=11, color=ft.Colors.BLACK87, weight="w500"),
                 ft.Text(animal_type, size=11, color=ft.Colors.BLACK87, weight="w500"),
                 ft.Container(ft.Text(breed_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
-                            tooltip=breed if breed and len(breed) > 15 else None),
+                            tooltip=breed if breed else None),
                 ft.Text(reporter_phone, size=11, color=ft.Colors.BLACK87, weight="w500"),
                 ft.Container(ft.Text(location_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
-                            tooltip=location if len(location) > 30 else None),
+                            tooltip=location),
                 ft.Container(ft.Text(details_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
-                            tooltip=details if len(details) > 40 else None),
+                            tooltip=details),
                 urgency_badge,
                 source_cell,
                 make_status_badge(status, mid),
@@ -665,7 +652,7 @@ class ManageRecordsPage:
             status = req.get("status") or "pending"
             
             breed = req.get('animal_breed') or ''
-            breed_display = (breed[:15] + "...") if len(breed) > 15 else (breed if breed else 'Not Specified')
+            breed_display = breed if breed else 'Not Specified'
             
             animal_id = req.get("animal_id")
             animal_name = req.get("animal_name")
@@ -693,16 +680,16 @@ class ManageRecordsPage:
                 final_status_widget = status_widget
                 animal_name_widget = ft.Text(animal_name, size=12, color=ft.Colors.BLACK87)
             
-            reason_display = reason[:40] + "..." if len(reason) > 40 else reason
+            reason_display = reason
             
             row_data = [
                 ft.Text(user_name, size=12, color=ft.Colors.BLACK87),
                 animal_name_widget,
                 ft.Container(ft.Text(breed_display, size=12, color=ft.Colors.BLACK87),
-                            tooltip=breed if breed and len(breed) > 15 else None),
+                            tooltip=breed if breed else None),
                 ft.Text(contact, size=12, color=ft.Colors.BLACK87),
                 ft.Container(ft.Text(reason_display, size=12, color=ft.Colors.BLACK87),
-                            tooltip=reason if len(reason) > 40 else None),
+                            tooltip=reason),
                 final_status_widget,
                 make_admin_actions(request_id, user_name),
             ]

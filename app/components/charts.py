@@ -1234,7 +1234,7 @@ def create_chart_card(
     )
 
 
-def create_impact_insight_widgets(insight_data: List[Dict[str, Any]]) -> List[Any]:
+def create_impact_insight_widgets(insight_data: List[Dict[str, Any]], page=None, mobile: bool = False) -> List[Any]:
     """Create styled insight widgets from service-generated insight data.
     
     Converts backend insight data (from AnalyticsService.get_user_impact_insights)
@@ -1276,23 +1276,36 @@ def create_impact_insight_widgets(insight_data: List[Dict[str, Any]]) -> List[An
             font_weight = ft.FontWeight.BOLD if weight == "bold" else ft.FontWeight.NORMAL
             text_color = _get_flet_color(part_color) if part_color else icon_color
             
-            spans.append(
-                ft.TextSpan(
-                    text,
-                    ft.TextStyle(
-                        weight=font_weight,
-                        color=text_color,
-                    )
+            route = part.get("route")
+            span_kwargs = dict(
+                style=ft.TextStyle(
+                    weight=font_weight,
+                    color=text_color,
                 )
             )
+            if route and page is not None:
+                def _make_handler(r):
+                    return lambda e: page.go(r)
+                span_kwargs["on_click"] = _make_handler(route)
+            spans.append(ft.TextSpan(text, **span_kwargs))
         
-        text_control = ft.Text(spans=spans, size=12)
-        
-        widget = ft.Container(
-            ft.Row([
+        if mobile:
+            # Mobile: text expands to fill available width and wraps
+            text_control = ft.Text(spans=spans, size=12, expand=True)
+            inner = ft.Row([
                 ft.Icon(flet_icon, size=16, color=icon_color),
                 text_control,
-            ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        else:
+            # Desktop: tight row so icon + text stay together, centered by parent
+            text_control = ft.Text(spans=spans, size=12)
+            inner = ft.Row([
+                ft.Icon(flet_icon, size=16, color=icon_color),
+                text_control,
+            ], spacing=8, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+        
+        widget = ft.Container(
+            inner,
             bgcolor=bg_color,
             padding=ft.padding.symmetric(horizontal=16, vertical=8),
             border_radius=20,

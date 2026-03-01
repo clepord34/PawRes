@@ -94,6 +94,9 @@ def main(page) -> None:
 
 	def route_change(route) -> None:
 		"""Handle route changes using the route registry with authorization."""
+		# Clear FAB so it doesn't bleed from the previous page
+		page.floating_action_button = None
+
 		r = page.route
 		route_path = r.split("?")[0] if "?" in r else r
 		

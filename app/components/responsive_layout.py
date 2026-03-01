@@ -69,7 +69,7 @@ def responsive_col(
 # Page-level responsive layout
 # ---------------------------------------------------------------------------
 
-def create_responsive_layout(page, sidebar, content, drawer=None, title="PawRes") -> object:
+def create_responsive_layout(page, sidebar, content, drawer=None, title="PawRes", fab=None) -> object:
     """Build the top-level page layout that collapses the sidebar on mobile.
 
     On **desktop** (>= md):  ``ft.Row([sidebar, content])``
@@ -82,9 +82,14 @@ def create_responsive_layout(page, sidebar, content, drawer=None, title="PawRes"
         drawer:  An ``ft.NavigationDrawer`` shown on mobile.  If *None* the
                  sidebar is always visible (no collapse).
         title:   AppBar title shown on mobile (default: "PawRes").
+        fab:     Optional FloatingActionButton.  Set on ``page.floating_action_button``;
+                 pass ``None`` to clear any FAB set by a previous page.
     """
     if ft is None:
         raise RuntimeError("Flet is required")
+
+    # Always sync the FAB — clears it when None so it doesn't bleed between pages
+    page.floating_action_button = fab
 
     mobile = is_mobile(page)
 

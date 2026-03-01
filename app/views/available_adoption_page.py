@@ -14,7 +14,7 @@ from components import (
     create_page_title, create_animal_card, create_empty_state,
     show_page_loading, finish_page_loading,
     is_mobile, create_responsive_layout, responsive_padding,
-    create_user_drawer,
+    create_user_drawer, create_page_control_bar,
 )
 
 
@@ -87,52 +87,54 @@ class AvailableAdoptionPage:
             ))
         
         self._animal_cards_container = ft.ResponsiveRow(
-            [ft.Container(c, col={"xs": 12, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
-            spacing=15,
-            run_spacing=15,
+            [ft.Container(c, col={"xs": 6, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
+            spacing=16,
+            run_spacing=16,
+        )
+
+        # Species filter — will be expanded to full width in the BottomSheet
+        species_dropdown = ft.Dropdown(
+            hint_text="Filter by Species",
+            value=self._species_filter,
+            options=[
+                ft.dropdown.Option("all", text="All Species")
+            ] + [ft.dropdown.Option(s, text=s) for s in sorted(set(a.get("species", "Unknown") for a in self._app_state.animals.animals))],
+            on_change=lambda e: self._on_species_filter(page, e.control.value),
+            border_radius=8,
+        )
+
+        # Search field — expands to fill the search row
+        search_field = ft.TextField(
+            hint_text="Search by animal name or breed...",
+            prefix_icon=ft.Icons.SEARCH,
+            expand=True,
+            value=self.current_search,
+            on_change=lambda e: self._on_search(page, e.control.value),
+        )
+
+        # Compact control bar: title → search+filter-icon
+        control_bar = create_page_control_bar(
+            title="Available for Adoption",
+            search_field=search_field,
+            filters=[species_dropdown],
+            is_mobile=_mobile,
+            page=page,
         )
 
         # Main content area
         main_content = ft.Container(
-            ft.Column([
-                # Page title
-                create_page_title("Available for Adoption"),
-                ft.Container(
-                    ft.Row([
-                        # Species filter dropdown
-                        ft.Dropdown(
-                            hint_text="Filter by Species",
-                            width=150 if _mobile else 180,
-                            value=self._species_filter,
-                            options=[
-                                ft.dropdown.Option("all", text="All Species")
-                            ] + [ft.dropdown.Option(s, text=s) for s in sorted(set(a.get("species", "Unknown") for a in self._app_state.animals.animals))],
-                            on_change=lambda e: self._on_species_filter(page, e.control.value),
-                            border_radius=8,
-                        ),
-                        # Search field
-                        ft.TextField(
-                            hint_text="Search by animal name or breed...",
-                            prefix_icon=ft.Icons.SEARCH,
-                            width=260 if _mobile else 300,
-                            value=self.current_search,
-                            on_change=lambda e: self._on_search(page, e.control.value),
-                        ),
-                    ], spacing=10, wrap=True, run_spacing=8),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
-                    border_radius=12,
-                ),
-                # Animal cards grid
-                ft.Container(
-                    self._animal_cards_container,
-                    padding=20,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=12,
-                    shadow=ft.BoxShadow(blur_radius=15, spread_radius=2, color=ft.Colors.BLACK12, offset=(0, 3)),
-                ),
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ft.Column(
+                [ft.Container(
+                    ft.Column([
+                        control_bar,
+                        self._animal_cards_container,
+                    ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
-            padding=responsive_padding(page),
         )
 
         # Layout with sidebar
@@ -194,7 +196,7 @@ class AvailableAdoptionPage:
         
         if self._animal_cards_container:
             self._animal_cards_container.controls = [
-                ft.Container(c, col={"xs": 12, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards
+                ft.Container(c, col={"xs": 6, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards
             ]
             self._animal_cards_container.update()
 

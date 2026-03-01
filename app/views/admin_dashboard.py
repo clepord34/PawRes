@@ -405,19 +405,13 @@ class AdminDashboard:
         _content_padding = responsive_padding(page)
 
         header_controls = (
-            ft.Column(
+            ft.Row(
                 [
-                    create_page_title("Admin Dashboard Overview"),
-                    ft.Row(
-                        [
-                            create_ai_download_button(
-                                on_click=lambda e: create_ai_download_dialog(page),
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.END,
+                    create_ai_download_button(
+                        on_click=lambda e: create_ai_download_dialog(page),
                     ),
                 ],
-                spacing=8,
+                alignment=ft.MainAxisAlignment.END,
             )
             if _mobile
             else ft.Row(
@@ -437,25 +431,27 @@ class AdminDashboard:
         main_content = ft.Container(
             ft.Column([
                 ft.Container(
-                    header_controls,
-                    padding=ft.padding.only(bottom=15),
+                    ft.Column([
+                        ft.Container(
+                            header_controls,
+                            padding=ft.padding.only(bottom=15),
+                        ),
+                        stat_cards,
+                        ft.Container(height=15),
+                        ft.ResponsiveRow([
+                            rescued_chart_container,
+                            breed_chart_container,
+                        ], spacing=12, run_spacing=12),
+                        ft.Container(height=12),
+                        ft.ResponsiveRow([
+                            health_chart_container,
+                            map_container,
+                        ], spacing=12, run_spacing=12),
+                    ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=_content_padding,
                 ),
-                stat_cards,
-                ft.Container(height=15),
-                # Row 1: Rescued vs Adopted + Breed Distribution
-                ft.ResponsiveRow([
-                    rescued_chart_container,
-                    breed_chart_container,
-                ], spacing=12, run_spacing=12),
-                ft.Container(height=12),
-                # Row 2: Health status + Map
-                ft.ResponsiveRow([
-                    health_chart_container,
-                    map_container,
-                ], spacing=12, run_spacing=12),
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
             expand=True,
-            padding=_content_padding,
         )
 
         layout = create_responsive_layout(page, sidebar, main_content, drawer, title="Admin Dashboard")

@@ -140,18 +140,29 @@ def create_page_title(
     size: int = 28,
     padding_bottom: int = 20,
     opacity: float = 0.6,
+    page: object = None,
 ) -> object:
     """Create a standard page title.
+    
+    On mobile the title is hidden because the AppBar already shows it.
     
     Args:
         title: Title text
         size: Font size
         padding_bottom: Bottom padding
         opacity: Text opacity
+        page: Flet page object. When provided and the viewport is mobile-width,
+              an invisible zero-height container is returned instead.
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
-    
+
+    # On mobile the AppBar already displays the page title — skip the duplicate.
+    if page is not None:
+        from components.responsive_layout import is_mobile
+        if is_mobile(page):
+            return ft.Container(height=0, visible=False)
+
     return ft.Container(
         ft.Text(
             title, 
@@ -161,6 +172,7 @@ def create_page_title(
         ),
         padding=ft.padding.only(bottom=padding_bottom),
         alignment=ft.alignment.center,
+        width=float('inf'),
     )
 
 
@@ -430,7 +442,7 @@ def create_scrollable_data_table(
         empty_message: Message when no rows
         column_spacing: Spacing between columns
         heading_row_height: Height of the header row
-        data_row_height: Height of each data row
+        data_row_height: Minimum height of each data row (rows can grow for wrapped text)
         horizontal_lines: Whether to show horizontal divider lines
         show_checkbox_column: Whether to show checkbox column (unused, for API compat)
         min_width: Optional minimum table width before horizontal scrolling.
@@ -478,7 +490,7 @@ def create_scrollable_data_table(
                 expand = columns[i].get("expand", 1) if i < len(columns) else 1
                 
                 if isinstance(cell, str):
-                    cell_widget = ft.Text(cell, size=12, color=ft.Colors.BLACK87)
+                    cell_widget = ft.Text(cell, size=12, color=ft.Colors.BLACK87, no_wrap=False)
                 else:
                     cell_widget = cell
                 
@@ -495,8 +507,7 @@ def create_scrollable_data_table(
             
             row_widget = ft.Container(
                 ft.Row(row_cells, spacing=column_spacing, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                height=data_row_height,
-                padding=ft.padding.symmetric(horizontal=15, vertical=0),
+                padding=ft.padding.symmetric(horizontal=15, vertical=8),
                 bgcolor=row_bg,
                 border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_200)) if horizontal_lines else None,
             )
@@ -766,30 +777,22 @@ def create_animal_card(
     # Determine if animal is adoptable (only healthy animals can be adopted, not processing)
     is_adoptable = status_lower in ("healthy", "available", "adoptable", "ready")
     
-    # Animal image - full width with golden ratio height
-    # Golden ratio: if card is 360px total content, image should be ~222px (0.618) and description ~138px (0.382)
-    # Adjusting to 200px image height for better golden ratio with description area
-    image_height = 250
-    
+    # Animal image - fixed 3:4 aspect ratio with COVER fit for uniform grid
     if photo_base64:
         animal_image = ft.Container(
             content=ft.Image(
                 src_base64=photo_base64,
-                width=250,
-                height=image_height,
                 fit=ft.ImageFit.COVER,
                 border_radius=ft.border_radius.only(top_left=14, top_right=14),
             ),
-            width=250,
-            height=image_height,
+            aspect_ratio=3/4,
             border_radius=ft.border_radius.only(top_left=14, top_right=14),
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         )
     else:
         animal_image = ft.Container(
             ft.Icon(ft.Icons.PETS, size=70, color=ft.Colors.GREY_400),
-            width=250,
-            height=image_height,
+            aspect_ratio=3/4,
             bgcolor=ft.Colors.GREY_200,
             border_radius=ft.border_radius.only(top_left=14, top_right=14),
             alignment=ft.alignment.center,
@@ -878,43 +881,41 @@ def create_animal_card(
             buttons = ft.Row(action_buttons, spacing=4, alignment=ft.MainAxisAlignment.CENTER)
     elif show_adopt_button and on_adopt:
         if is_adoptable:
-            buttons = ft.Row([
-                ft.ElevatedButton(
-                    content=ft.Row([
-                        ft.Icon(ft.Icons.FAVORITE_BORDER, size=16, color=ft.Colors.WHITE),
-                        ft.Text("Adopt Me", size=13, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
-                    ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
-                    on_click=lambda e: on_adopt(animal_id),
-                    width=130,
-                    style=ft.ButtonStyle(
-                        bgcolor={
-                            ft.ControlState.DEFAULT: ft.Colors.TEAL_500,
-                            ft.ControlState.HOVERED: ft.Colors.TEAL_600,
-                        },
-                        color=ft.Colors.WHITE,
-                        shape=ft.RoundedRectangleBorder(radius=17),
-                        elevation={"default": 2, "hovered": 4},
-                        animation_duration=200,
-                        padding=ft.padding.symmetric(vertical=5)
-                    )
-                ),
-            ], spacing=8, alignment=ft.MainAxisAlignment.CENTER)
+            buttons = ft.ElevatedButton(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.PETS, size=12, color=ft.Colors.WHITE),
+                    ft.Text("Adopt Me", size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+                ], spacing=6, alignment=ft.MainAxisAlignment.CENTER, tight=True),
+                expand=True,
+                on_click=lambda e: on_adopt(animal_id),
+                style=ft.ButtonStyle(
+                    bgcolor={
+                        ft.ControlState.DEFAULT: ft.Colors.TEAL_500,
+                        ft.ControlState.HOVERED: ft.Colors.TEAL_600,
+                    },
+                    color=ft.Colors.WHITE,
+                    shape=ft.RoundedRectangleBorder(radius=20),
+                    elevation={"default": 2, "hovered": 4},
+                    animation_duration=200,
+                    padding=ft.padding.symmetric(vertical=2),
+                )
+            )
         else:
             if status_lower == "adopted":
                 buttons = ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.FAVORITE, size=16, color=ft.Colors.PURPLE_600),
-                        ft.Text("Already Adopted", size=13, color=ft.Colors.PURPLE_600, weight=ft.FontWeight.W_500),
+                        ft.Icon(ft.Icons.FAVORITE, size=12, color=ft.Colors.PURPLE_600),
+                        ft.Text("Already Adopted", size=10, color=ft.Colors.PURPLE_600, weight=ft.FontWeight.W_500),
                     ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(vertical=5),
+                    padding=ft.padding.symmetric(vertical=2),
                 )
             else:
                 buttons = ft.Container(
                     content=ft.Row([
-                        ft.Icon(ft.Icons.BLOCK, size=16, color=ft.Colors.GREY_500),
-                        ft.Text("Not Available", size=13, color=ft.Colors.GREY_500, weight=ft.FontWeight.W_500),
+                        ft.Icon(ft.Icons.BLOCK, size=12, color=ft.Colors.GREY_500),
+                        ft.Text("Not Available", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.W_500),
                     ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
-                    padding=ft.padding.symmetric(vertical=5),
+                    padding=ft.padding.symmetric(vertical=2),
                 )
     else:
         buttons = ft.Container()
@@ -1060,13 +1061,13 @@ def create_animal_card(
     if age is None:
         age_display = ""
     elif age == 0:
-        age_display = ", Under 1 yr"
+        age_display = "Under 1 yr"
     elif age > 20:
-        age_display = ", 20+ yrs"
+        age_display = "20+ yrs"
     elif age == 1:
-        age_display = ", 1 yr old"
+        age_display = "1 yr old"
     else:
-        age_display = f", {age} yrs old"
+        age_display = f"{age} yrs old"
     
     species_text = species.capitalize()
     if breed and breed.lower() not in ("not specified", "unknown", "not applicable", "n/a", ""):
@@ -1074,10 +1075,17 @@ def create_animal_card(
     else:
         species_breed_text = species_text
     
-    # Info section with separated name/age and reduced spacing for golden ratio
+    # Combine age and species into one subtitle line to save vertical space
+    subtitle_parts = []
+    if age_display:
+        subtitle_parts.append(age_display)
+    subtitle_parts.append(species_breed_text)
+    subtitle_text = " · ".join(subtitle_parts)
+    
+    # Compact info section - name + subtitle + status badge
     info_section = ft.Container(
         ft.Column([
-            # Animal name - bold and prominent
+            # Animal name
             ft.Text(
                 name, 
                 size=14, 
@@ -1087,51 +1095,40 @@ def create_animal_card(
                 max_lines=1,
                 overflow=ft.TextOverflow.ELLIPSIS,
             ),
-            # Age - separate line, lighter
+            # Age + Species/breed combined
             ft.Text(
-                age_display.lstrip(", ") if age_display else "Age unknown", 
+                subtitle_text, 
                 size=12, 
-                weight=ft.FontWeight.W_400,
                 color=ft.Colors.BLACK54, 
                 text_align=ft.TextAlign.CENTER,
-            ),
-            # Species/breed
-            ft.Text(
-                species_breed_text, 
-                size=11, 
-                color=ft.Colors.BLACK54, 
-                text_align=ft.TextAlign.CENTER,
-                max_lines=1,
+                max_lines=2,
                 overflow=ft.TextOverflow.ELLIPSIS,
             ),
             # Status badge with icon
             ft.Container(
                 ft.Row([
-                    ft.Icon(status_icon, size=14, color=status_color),
-                    ft.Text(status_display, size=12, color=status_color, weight=ft.FontWeight.W_600),
-                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+                    ft.Icon(status_icon, size=12, color=status_color),
+                    ft.Text(status_display, size=11, color=status_color, weight=ft.FontWeight.W_600),
+                ], spacing=3, alignment=ft.MainAxisAlignment.CENTER),
                 bgcolor=status_bg,
-                padding=ft.padding.symmetric(horizontal=10, vertical=5),  
-                border_radius=16,
+                padding=ft.padding.symmetric(horizontal=8, vertical=3),  
+                border_radius=12,
                 border=ft.border.all(1, status_color),
             ),
-            ft.Container(
-                ft.Divider(height=2, color=ft.Colors.GREY_300, thickness=1),
-                padding=ft.padding.symmetric(vertical=5),
-            ),
-        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=1),  
-        padding=ft.padding.only(left=14, right=14, top=5, bottom=0),  
+        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=3),  
+        padding=ft.padding.symmetric(horizontal=10, vertical=8),
     )
     
     if show_adopt_button and on_adopt:
         button_container = ft.Container(
             buttons,
-            padding=ft.padding.only(bottom=10),
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
         )
     else:
         button_container = ft.Container(
             buttons,
-            padding=ft.padding.only(bottom=5),
+            padding=ft.padding.only(bottom=4),
+            alignment=ft.alignment.center,
         )
     
     card_content = [
@@ -1141,26 +1138,11 @@ def create_animal_card(
     ]
     
     card = ft.Container(
-        ft.Column(card_content, horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
-        width=250,
+        ft.Column(card_content, horizontal_alignment=ft.CrossAxisAlignment.STRETCH, spacing=0),
         bgcolor=ft.Colors.GREY_50,  # Nicer subtle background instead of pure white
         border_radius=14,
-        border=ft.border.all(1.5, ft.Colors.GREY_300),
-        shadow=[
-            # Multiple shadows for depth - static to avoid re-render
-            ft.BoxShadow(
-                blur_radius=16,
-                spread_radius=0,
-                color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
-                offset=(0, 6),
-            ),
-            ft.BoxShadow(
-                blur_radius=8,
-                spread_radius=0,
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
-                offset=(0, 3),
-            ),
-        ],
+        border=ft.border.all(1, ft.Colors.GREY_300),
+        shadow=_get_card_shadow(),
         animate_scale=175,  # Animate scale changes over 200ms
         on_hover=lambda e: _handle_card_hover(e, card),
     )
@@ -1181,6 +1163,188 @@ def _handle_card_hover(e, card):
     card.update()
 
 
+def create_page_control_bar(
+    title: str,
+    search_field=None,
+    filters: Optional[List] = None,
+    actions: Optional[List] = None,
+    count_text: Optional[object] = None,
+    tabs: Optional[object] = None,
+    is_mobile: bool = False,
+    page=None,
+    post_title=None,
+) -> object:
+    """Compact page control bar: centered title, full-width search, BottomSheet filters.
+
+    Layout (top to bottom):
+        1. Page title  (centered, always visible)
+        2. Tab strip   (if tabs provided)
+        3. [SearchField ─── expand ───] [⚙ Filter]  (if search_field / filters)
+        4. [count_text ── expand ──]    [icon…]      (if count_text / actions)
+
+    Filters open in a BottomSheet modal when the ⚙ icon is tapped.
+    Pass FABs (Add Animal / Add User) through create_responsive_layout(fab=...).
+
+    Args:
+        title:        Page title text, always centered at top.
+        search_field: Optional ft.TextField placed in the search row.
+        filters:      Optional list of filter controls shown inside the BottomSheet.
+        actions:      Optional list of compact IconButtons (refresh, export, …).
+        count_text:   Optional ft.Text widget showing an item count.
+        tabs:         Optional ft.Tabs widget shown below the title.
+        is_mobile:    Whether the current view is at mobile width.
+        page:         Flet page reference — required when filters is non-empty.
+
+    Returns:
+        ft.Column with the complete control bar layout.
+    """
+    if ft is None:
+        raise RuntimeError("Flet must be installed to create containers")
+
+    sections = []
+
+    # 1. Centered page title — hidden on mobile (app bar already shows it)
+    if not is_mobile:
+        sections.append(create_page_title(title))
+
+    # 1b. Optional content between title and search (e.g. stat cards)
+    if post_title is not None:
+        sections.append(ft.Container(content=post_title, padding=ft.padding.only(bottom=12)))
+
+    # 2. Build BottomSheet / filter icon FIRST so it can be slotted into the tabs row
+    filter_icon_btn = None
+    if filters and page:
+        _sheet_ref = [None]
+
+        def _open_sheet(e):
+            page.open(_sheet_ref[0])
+
+        def _close_sheet(e):
+            page.close(_sheet_ref[0])
+
+        # Remove fixed widths so items fill the sheet width
+        sheet_rows = []
+        for f in filters:
+            if hasattr(f, "width"):
+                f.width = None
+            if hasattr(f, "expand"):
+                f.expand = True
+            sheet_rows.append(ft.Container(content=f, padding=ft.padding.only(bottom=12)))
+
+        _sheet_ref[0] = ft.BottomSheet(
+            content=ft.Container(
+                ft.Column(
+                    [
+                        ft.Row(
+                            [
+                                ft.Text(
+                                    "Filters",
+                                    size=18,
+                                    weight=ft.FontWeight.W_600,
+                                    color=ft.Colors.BLACK87,
+                                ),
+                                ft.IconButton(
+                                    ft.Icons.CLOSE,
+                                    on_click=_close_sheet,
+                                    icon_color=ft.Colors.BLACK54,
+                                    icon_size=20,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Divider(height=1, color=ft.Colors.GREY_200),
+                        ft.Container(height=6),
+                        *sheet_rows,
+                        ft.ElevatedButton(
+                            "Apply",
+                            on_click=_close_sheet,
+                            style=ft.ButtonStyle(
+                                bgcolor={
+                                    ft.ControlState.DEFAULT: ft.Colors.TEAL_600,
+                                    ft.ControlState.HOVERED: ft.Colors.TEAL_700,
+                                },
+                                color=ft.Colors.WHITE,
+                                shape=ft.RoundedRectangleBorder(radius=8),
+                                padding=ft.padding.symmetric(vertical=14),
+                            ),
+                            width=float("inf"),
+                        ),
+                    ],
+                    tight=True,
+                    spacing=0,
+                ),
+                padding=ft.padding.symmetric(horizontal=24, vertical=20),
+            ),
+            enable_drag=True,
+        )
+
+        filter_icon_btn = ft.IconButton(
+            icon=ft.Icons.TUNE,
+            tooltip="Filters",
+            icon_color=ft.Colors.TEAL_600,
+            on_click=_open_sheet,
+            style=ft.ButtonStyle(
+                bgcolor={ft.ControlState.HOVERED: ft.Colors.TEAL_50},
+                shape=ft.CircleBorder(),
+            ),
+        )
+
+    # 3. Tab strip — if filter icon exists, inline it at the trailing edge of the tabs row
+    if tabs:
+        if filter_icon_btn:
+            sections.append(
+                ft.Container(
+                    ft.Row(
+                        [ft.Container(content=tabs, expand=True), filter_icon_btn],
+                        spacing=0,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    padding=ft.padding.only(bottom=8),
+                )
+            )
+        else:
+            sections.append(ft.Container(tabs, padding=ft.padding.only(bottom=8)))
+
+    # 4. Search row: [TextField ─── expand ───] [filter icon?]
+    # Filter icon is only added here if it was NOT already placed in the tabs row
+    _filter_for_search = filter_icon_btn if not tabs else None
+    if search_field or _filter_for_search:
+        row_items = []
+        if search_field:
+            row_items.append(ft.Container(content=search_field, expand=True))
+        if _filter_for_search:
+            row_items.append(_filter_for_search)
+        sections.append(
+            ft.Container(
+                ft.Row(row_items, spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                padding=ft.padding.only(bottom=6),
+            )
+        )
+
+    # 5. Count + action icons row
+    bottom_row: list = []
+    if count_text:
+        bottom_row.append(ft.Container(content=count_text, expand=True))
+    if actions:
+        bottom_row.extend(actions)
+
+    if bottom_row:
+        sections.append(
+            ft.Container(
+                ft.Row(
+                    bottom_row,
+                    spacing=4,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    alignment=ft.MainAxisAlignment.START,
+                ),
+                padding=ft.padding.only(bottom=12),
+            )
+        )
+
+    return ft.Column(sections, spacing=0)
+
+
 __all__ = [
     "create_section_card",
     "create_chart_container",
@@ -1191,4 +1355,5 @@ __all__ = [
     "create_stat_card",
     "create_map_container",
     "create_animal_card",
+    "create_page_control_bar",
 ]

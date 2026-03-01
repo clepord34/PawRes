@@ -1568,9 +1568,9 @@ class AnalyticsService:
                     "icon": "PETS",
                     "parts": [
                         {"text": "Start your journey - ", "weight": "normal", "color": "TEAL_700"},
-                        {"text": "report a rescue", "weight": "bold", "color": "ORANGE_600"},
+                        {"text": "report a rescue", "weight": "bold", "color": "ORANGE_600", "route": "/rescue_form"},
                         {"text": " or ", "weight": "normal", "color": "TEAL_700"},
-                        {"text": "apply to adopt", "weight": "bold", "color": "TEAL_600"},
+                        {"text": "apply to adopt", "weight": "bold", "color": "TEAL_600", "route": "/available_adoption"},
                         {"text": "!", "weight": "normal", "color": "TEAL_700"},
                     ],
                     "color": "TEAL_700",

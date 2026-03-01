@@ -211,10 +211,9 @@ class RescueMissionListPage:
                 reporter_phone = m.get("reporter_phone") or "N/A"
                 details = notes  # Notes now contains only situation description
                 
-                # Truncate long text for table display
-                location_display = location[:30] + "..." if len(location) > 30 else location
-                details_display = details[:40] + "..." if len(details) > 40 else details
-                breed_display = breed[:20] + "..." if len(breed) > 20 else breed
+                location_display = location
+                details_display = details
+                breed_display = breed
 
                 row_data = [
                     ft.Text(f"#{mid}", size=11, color=ft.Colors.TEAL_700, weight="w600"),
@@ -222,16 +221,16 @@ class RescueMissionListPage:
                     ft.Text(animal_type, size=11, color=ft.Colors.BLACK87, weight="w500"),
                     ft.Container(
                         ft.Text(breed_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
-                        tooltip=breed if len(breed) > 20 else None,
+                        tooltip=breed,
                     ),
                     ft.Text(reporter_phone, size=11, color=ft.Colors.BLACK87, weight="w500"),
                     ft.Container(
-                        ft.Text(location_display, size=11, color=ft.Colors.BLACK87, weight="w500", tooltip=location if len(location) > 30 else None),
-                        tooltip=location if len(location) > 30 else None,
+                        ft.Text(location_display, size=11, color=ft.Colors.BLACK87, weight="w500", tooltip=location),
+                        tooltip=location,
                     ),
                     ft.Container(
                         ft.Text(details_display, size=11, color=ft.Colors.BLACK87, weight="w500"),
-                        tooltip=details if len(details) > 40 else None,
+                        tooltip=details,
                     ),
                 ]
                 
@@ -346,7 +345,7 @@ class RescueMissionListPage:
                 )
 
         content_items = [
-            create_page_title("Rescue Mission List"),
+            create_page_title("Rescue Mission List", page=page),
             ft.Container(height=20),
             # Rescue Mission List Section
             create_section_card(
@@ -362,8 +361,14 @@ class RescueMissionListPage:
 
         # Main content area
         main_content = ft.Container(
-            ft.Column(content_items, spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment="center"),
-            padding=responsive_padding(page),
+            ft.Column(
+                [ft.Container(
+                    ft.Column(content_items, spacing=0, horizontal_alignment="center"),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
         )
 

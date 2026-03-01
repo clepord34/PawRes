@@ -533,22 +533,29 @@ class UserAnalyticsPage:
         # Main content area
         main_content = ft.Container(
             ft.Column([
-                ft.Text("Your Analytics", size=28, weight="bold", color=ft.Colors.with_opacity(0.6, ft.Colors.BLACK)),
-                ft.Container(height=15),
-                stats_row,
-                ft.Container(height=20),
-                activity_chart_container,
-                ft.Container(height=20),
-                charts_row,
-                ft.Container(height=20),
-                insights_container,
-                ft.Container(height=20),
-                map_container,
-                ft.Container(height=20),
-                ft.Row([refresh_btn, back_btn], alignment="center", spacing=15),
-                ft.Container(height=30),
-            ], spacing=0, scroll=ft.ScrollMode.AUTO, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-            padding=responsive_padding(page),
+                ft.Container(
+                    ft.Column([
+                        ft.Container(
+                            ft.Text("Your Analytics", size=28, weight="bold", color=ft.Colors.with_opacity(0.6, ft.Colors.BLACK)),
+                            visible=not _mobile,
+                        ),
+                        ft.Container(height=15),
+                        stats_row,
+                        ft.Container(height=20),
+                        activity_chart_container,
+                        ft.Container(height=20),
+                        charts_row,
+                        ft.Container(height=20),
+                        insights_container,
+                        ft.Container(height=20),
+                        map_container,
+                        ft.Container(height=20),
+                        ft.Row([refresh_btn, back_btn], alignment="center", spacing=15),
+                        ft.Container(height=30),
+                    ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                    padding=responsive_padding(page),
+                ),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
             expand=True,
         )
 

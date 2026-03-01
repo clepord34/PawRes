@@ -123,21 +123,28 @@ class HiddenItemsPage:
         sidebar = create_admin_sidebar(page, current_route=page.route)
         
         # Main layout
+        _hidden_items = [
+            create_page_title("Hidden Items", page=page),
+            ft.Text("Manage archived and removed items", size=14, color=ft.Colors.BLACK54),
+            ft.Container(height=16),
+            ft.Container(
+                content=self._tabs,
+                bgcolor=ft.Colors.WHITE,
+                border_radius=12,
+                padding=ft.padding.only(left=16, right=16, top=8),
+            ),
+            self._content_area,
+        ]
         main_content = ft.Container(
-            content=ft.Column([
-                create_page_title("Hidden Items"),
-                ft.Text("Manage archived and removed items", size=14, color=ft.Colors.BLACK54),
-                ft.Container(height=16),
-                ft.Container(
-                    content=self._tabs,
-                    bgcolor=ft.Colors.WHITE,
-                    border_radius=12,
-                    padding=ft.padding.only(left=16, right=16, top=8),
-                ),
-                self._content_area,
-            ], scroll=ft.ScrollMode.AUTO),
+            ft.Column(
+                [ft.Container(
+                    ft.Column(_hidden_items),
+                    padding=responsive_padding(page),
+                )],
+                scroll=ft.ScrollMode.AUTO,
+                expand=True,
+            ),
             expand=True,
-            padding=responsive_padding(page),
         )
         
         # Page layout

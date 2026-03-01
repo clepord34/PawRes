@@ -99,12 +99,10 @@ class AnimalFormWidget:
         
         title_section = ft.Container(
             ft.Column([
-                ft.Row([
-                    ft.Icon(title_icon, color=ft.Colors.TEAL_700, size=28),
-                    ft.Text(title_text, size=24, weight="bold", color=ft.Colors.BLACK87),
-                ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
-                ft.Text(subtitle_text, size=13, color=ft.Colors.GREY_600),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+                ft.Icon(title_icon, color=ft.Colors.TEAL_700, size=28),
+                ft.Text(title_text, size=22, weight="bold", color=ft.Colors.BLACK87, text_align=ft.TextAlign.CENTER),
+                ft.Text(subtitle_text, size=13, color=ft.Colors.GREY_600, text_align=ft.TextAlign.CENTER),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=6),
             padding=ft.padding.only(bottom=10),
         )
         
@@ -117,8 +115,8 @@ class AnimalFormWidget:
         # Animal details section
         details_section = self._build_details_section()
         
-        # Error text
-        self._error_text = ft.Text("", color=ft.Colors.RED_600, size=12, text_align=ft.TextAlign.CENTER)
+        # Error text (hidden until there is a validation error)
+        self._error_text = ft.Text("", color=ft.Colors.RED_600, size=12, text_align=ft.TextAlign.CENTER, visible=False)
         
         # Action buttons
         buttons_section = self._build_buttons_section()
@@ -126,20 +124,20 @@ class AnimalFormWidget:
         card_content = ft.Column([
             title_section,
             ft.Divider(height=1, color=ft.Colors.GREY_300),
-            ft.Container(height=15),
+            ft.Container(height=12),
             photo_section,
             ft.Container(height=8),
             self._ai_suggestion_container,
             details_section,
-            ft.Container(height=15),
             self._error_text,
+            ft.Container(height=4),
             buttons_section,
         ], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
         
         # Card container
         card = ft.Container(
             card_content,
-            padding=30,
+            padding=ft.padding.symmetric(horizontal=24, vertical=28),
             bgcolor=ft.Colors.WHITE,
             border_radius=16,
             shadow=ft.BoxShadow(
@@ -484,8 +482,9 @@ class AnimalFormWidget:
                 [ft.Icon(submit_icon, size=18), ft.Text(submit_text, size=14, weight="w500")],
                 spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
             ),
-            width=160,
+            expand=True,
             height=48,
             on_click=lambda e: self._handle_submit(),
             style=ft.ButtonStyle(
@@ -497,10 +496,10 @@ class AnimalFormWidget:
         )
         
         # Cancel button
-        cancel_text = "Back to List" if is_edit else "Cancel"
+        cancel_text = "Back" if is_edit else "Cancel"
         cancel_btn = ft.OutlinedButton(
             content=ft.Text(cancel_text, size=14, weight="w500"),
-            width=140,
+            expand=True,
             height=48,
             on_click=lambda e: self._handle_cancel(),
             style=ft.ButtonStyle(
@@ -512,8 +511,8 @@ class AnimalFormWidget:
         
         buttons_row = ft.Row(
             [self._submit_btn, cancel_btn],
-            spacing=16,
-            alignment=ft.MainAxisAlignment.CENTER
+            spacing=12,
+            alignment=ft.MainAxisAlignment.CENTER,
         )
         
         if not is_edit and self.on_bulk_import_callback:
@@ -645,10 +644,12 @@ class AnimalFormWidget:
         
         if not is_valid:
             self._error_text.value = error_msg
+            self._error_text.visible = True
             self.page.update()
             return
         
         self._error_text.value = ""
+        self._error_text.visible = False
         
         # Collect form data
         age_selection = (self._age_dropdown.value or "").strip()
