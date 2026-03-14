@@ -16,8 +16,9 @@ class Database:
 		"""Create a fresh connection for this operation."""
 		# Note: We don't use PARSE_DECLTYPES because we store ISO format timestamps
 		# (with 'T' separator) which aren't compatible with SQLite's built-in converter
-		conn = sqlite3.connect(self.db_path)
+		conn = sqlite3.connect(self.db_path, timeout=30)
 		conn.row_factory = sqlite3.Row
+		conn.execute("PRAGMA journal_mode=WAL;")
 		conn.execute("PRAGMA foreign_keys = ON;")
 		return conn
 

@@ -102,11 +102,11 @@ class AuditLogPage:
                 ft.Row([
                     self._level_filter,
                     refresh_btn,
-                    create_action_button(
-                        "Export CSV",
+                    ft.IconButton(
+                        ft.Icons.DOWNLOAD,
+                        tooltip="Export CSV",
+                        icon_color=ft.Colors.TEAL_600,
                         on_click=lambda e: self._export_csv(),
-                        icon=ft.Icons.DOWNLOAD,
-                        width=140
                     ),
                 ],
                     wrap=True,
@@ -203,7 +203,7 @@ class AuditLogPage:
             empty_message="No log entries found. Logs will appear here as security events occur.",
             column_spacing=15,
             heading_row_height=45,
-            data_row_height=55,
+            data_row_height=55, page=self._page
         )
     
     def _create_log_row_data(self, entry: Dict[str, Any]) -> List[object]:
@@ -258,7 +258,7 @@ class AuditLogPage:
             # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{self._log_type}_logs_{timestamp}.csv"
-            filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
+            filepath = app_config.ASSETS_DIR / "exports" / filename
             
             # Ensure exports directory exists
             filepath.parent.mkdir(parents=True, exist_ok=True)

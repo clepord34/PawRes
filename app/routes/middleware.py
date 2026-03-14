@@ -67,7 +67,7 @@ class AuthorizationMiddleware:
         """
         from state import get_app_state
         
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         
         # Check if route requires authentication
         requires_auth = route_config.get("requires_auth", False)

@@ -33,7 +33,7 @@ class AnimalsListPage:
     
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
-        self._app_state = get_app_state(self._db_path)
+        self._app_state = None
         self._rescue_service = RescueService(self._db_path)
         self.page = None  # Store page reference
         self.user_role = "user"  # Store user role
@@ -53,11 +53,12 @@ class AnimalsListPage:
         self.user_role = user_role
         self.current_filter = filter_status
         page.title = "Animals List"
+        self._app_state = get_app_state(page, self._db_path)
 
         is_admin = user_role == "admin"
         _mobile = is_mobile(page)
         
-        user_name = page.session.get("user_name") or "User"
+        user_name = self._app_state.auth.user_name or "User"
 
         if is_admin:
             sidebar = create_admin_sidebar(page, current_route=page.route)
@@ -263,18 +264,29 @@ class AnimalsListPage:
             )
 
         animal_cards = []
+        animal_card_controls = []
         if animals:
             for animal in animals:
                 animal_cards.append(create_card_for_animal(animal))
+            animal_card_controls = [
+                ft.Container(card, col={"xs": 6, "sm": 6, "md": 4, "lg": 3})
+                for card in animal_cards
+            ]
         else:
-            animal_cards.append(create_empty_state(
-                message="No animals found",
-                icon=ft.Icons.PETS,
-                padding=40
-            ))
+            animal_card_controls = [
+                ft.Container(
+                    create_empty_state(
+                        message="No animals found",
+                        icon=ft.Icons.PETS,
+                        padding=40,
+                    ),
+                    col={"xs": 12, "sm": 12, "md": 12, "lg": 12},
+                    alignment=ft.alignment.center,
+                )
+            ]
         
         self._animal_cards_container = ft.ResponsiveRow(
-            [ft.Container(c, col={"xs": 6, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
+            animal_card_controls,
             spacing=16,
             run_spacing=16,
         )
@@ -312,6 +324,7 @@ class AnimalsListPage:
                     ft.Column([
                         control_bar,
                         self._animal_cards_container,
+                        ft.Container(height=80),  # Padding for FAB to avoid clipping at the bottom
                     ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     padding=responsive_padding(page),
                 )],
@@ -469,15 +482,25 @@ class AnimalsListPage:
                     rescue_info=rescue_info,
                     breed=animal.get("breed"),
                 ))
+            animal_card_controls = [
+                ft.Container(card, col={"xs": 6, "sm": 6, "md": 4, "lg": 3})
+                for card in animal_cards
+            ]
         else:
-            animal_cards.append(create_empty_state(
-                message="No animals found",
-                icon=ft.Icons.PETS,
-                padding=40
-            ))
+            animal_card_controls = [
+                ft.Container(
+                    create_empty_state(
+                        message="No animals found",
+                        icon=ft.Icons.PETS,
+                        padding=40,
+                    ),
+                    col={"xs": 12, "sm": 12, "md": 12, "lg": 12},
+                    alignment=ft.alignment.center,
+                )
+            ]
         
         if self._animal_cards_container:
-            self._animal_cards_container.controls = animal_cards
+            self._animal_cards_container.controls = animal_card_controls
             self._animal_cards_container.update()
         
         if self._count_text:
@@ -503,7 +526,7 @@ class AnimalsListPage:
             # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"animals_export_{timestamp}.csv"
-            filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
+            filepath = app_config.ASSETS_DIR / "exports" / filename
             
             # Ensure exports directory exists
             filepath.parent.mkdir(parents=True, exist_ok=True)
@@ -527,7 +550,8 @@ class AnimalsListPage:
                         "rescue_mission_id": animal.get("rescue_mission_id", ""),
                     })
             
-            show_snackbar(self.page, f"Exported {len(animals)} animals to {filename}")
+            self.page.launch_url(f"/exports/{filename}")
+            show_snackbar(self.page, f"Exported {len(animals)} animals to your device")
             
         except Exception as e:
             show_snackbar(self.page, f"Export failed: {e}", error=True)

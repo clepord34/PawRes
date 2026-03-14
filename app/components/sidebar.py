@@ -52,7 +52,7 @@ def _handle_logout(page: object) -> None:
     """
     try:
         from state import get_app_state
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         app_state.reset()
     except Exception as e:
         print(f"[WARN] Logout: Could not reset AppState: {e}")
@@ -77,7 +77,7 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
     
     try:
         from state import get_app_state
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_name = app_state.auth.user_name or "Admin"
         user_id = app_state.auth.user_id
     except Exception:
@@ -159,7 +159,7 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
     
     try:
         from state import get_app_state
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_id = app_state.auth.user_id
         if user_name == "User":
             user_name = app_state.auth.user_name or "User"
@@ -256,7 +256,7 @@ def _build_drawer(page, current_route: str, is_admin: bool) -> object:
 
     try:
         from state import get_app_state
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_name = app_state.auth.user_name or ("Admin" if is_admin else "User")
         user_id = app_state.auth.user_id
     except Exception:

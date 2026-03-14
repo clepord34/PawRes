@@ -14,13 +14,14 @@ from app_config import RescueStatus, AdoptionStatus
 from services.map_service import MapService
 from state import get_app_state
 from components import (
-    create_user_sidebar, create_gradient_background,
-    create_page_title, create_section_card, show_snackbar, create_confirmation_dialog,
-    create_scrollable_data_table, create_action_button,
+    create_user_sidebar,
+    create_section_card, show_snackbar, create_confirmation_dialog,
+    create_scrollable_data_table,
     create_interactive_map,
     show_page_loading, finish_page_loading,
     is_mobile, create_responsive_layout, responsive_padding,
     create_user_drawer,
+    create_page_control_bar,
 )
 
 
@@ -33,7 +34,6 @@ class CheckStatusPage:
     
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
-        self._app_state = get_app_state(self._db_path)
         self.map_service = MapService()
         self._page = None
         self._user_id = None
@@ -61,6 +61,7 @@ class CheckStatusPage:
 
         self._page = page
         self._user_id = user_id
+        self._app_state = get_app_state(page)
         page.title = "Application Status"
         
         # Only set tab from parameter if explicitly provided (not None)
@@ -112,10 +113,10 @@ class CheckStatusPage:
                                  if self._adoption_status_filter == "all" or 
                                  AdoptionStatus.normalize(a.get("status", "")) == self._adoption_status_filter])
             
-            filter_controls = ft.Row([
+            filter_dropdowns = [
                 ft.Dropdown(
                     hint_text="Status",
-                    width=130 if _mobile else 140,
+                    width=160,
                     value=self._adoption_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -127,13 +128,13 @@ class CheckStatusPage:
                     border_radius=8,
                     on_change=lambda e: self._on_adoption_filter_change(page, user_id, e.control.value),
                 ),
-            ], spacing=10, wrap=_mobile, run_spacing=8)
+            ]
             
             export_action = lambda e: self._export_adoption_csv(
                 [a for a in all_adoptions if self._adoption_status_filter == "all" or 
                  AdoptionStatus.normalize(a.get("status", "")) == self._adoption_status_filter]
             )
-            count_text = f"{filtered_count} request(s)"
+            count_label = f"{filtered_count} request(s)"
         else:
             # Rescue filters
             filtered_rescues = all_rescues
@@ -145,10 +146,10 @@ class CheckStatusPage:
                                    if (r.get("urgency") or "medium").lower() == self._rescue_urgency_filter]
             filtered_count = len(filtered_rescues)
             
-            filter_controls = ft.Row([
+            filter_dropdowns = [
                 ft.Dropdown(
                     hint_text="Status",
-                    width=130 if _mobile else 140,
+                    width=160,
                     value=self._rescue_status_filter,
                     options=[
                         ft.dropdown.Option("all", "All Status"),
@@ -163,7 +164,7 @@ class CheckStatusPage:
                 ),
                 ft.Dropdown(
                     hint_text="Urgency",
-                    width=130 if _mobile else 150,
+                    width=160,
                     value=self._rescue_urgency_filter,
                     options=[
                         ft.dropdown.Option("all", "All Urgency"),
@@ -174,40 +175,36 @@ class CheckStatusPage:
                     border_radius=8,
                     on_change=lambda e: self._on_rescue_filter_change(page, user_id, "urgency", e.control.value),
                 ),
-            ], spacing=10, wrap=_mobile, run_spacing=8)
+            ]
             
             export_action = lambda e: self._export_rescue_csv(filtered_rescues)
-            count_text = f"{filtered_count} mission(s)"
+            count_label = f"{filtered_count} mission(s)"
 
-        # Unified control bar: Tabs + responsive controls
-        control_bar = ft.Container(
-            ft.Column([
-                ft.Container(tabs, width=None if _mobile else 250),
-                ft.Row([
-                    filter_controls,
-                    ft.Text(count_text, size=13, color=ft.Colors.BLACK54),
-                    ft.IconButton(
-                        ft.Icons.REFRESH,
-                        tooltip="Refresh",
-                        icon_color=ft.Colors.TEAL_600,
-                        on_click=lambda e: self.build(page, user_id),
-                    ),
-                    create_action_button(
-                        "Export",
-                        on_click=export_action,
-                        icon=ft.Icons.DOWNLOAD,
-                        width=110,
-                    ),
-                ],
-                    spacing=12,
-                    wrap=True,
-                    run_spacing=8,
-                    alignment=ft.MainAxisAlignment.END if _mobile else ft.MainAxisAlignment.START,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                ),
-            ], spacing=8),
-            padding=ft.padding.symmetric(horizontal=5, vertical=5),
-            border_radius=10,
+        # Action icon buttons
+        refresh_icon = ft.IconButton(
+            ft.Icons.REFRESH,
+            tooltip="Refresh",
+            icon_color=ft.Colors.TEAL_600,
+            on_click=lambda e: self.build(page, user_id),
+        )
+        export_icon = ft.IconButton(
+            ft.Icons.DOWNLOAD,
+            tooltip="Export as CSV",
+            icon_color=ft.Colors.TEAL_600,
+            on_click=export_action,
+        )
+
+        count_text_widget = ft.Text(count_label, size=13, color=ft.Colors.BLACK54)
+
+        # Use create_page_control_bar for consistent BottomSheet filter style
+        control_bar = create_page_control_bar(
+            title="Application Status",
+            filters=filter_dropdowns,
+            actions=[refresh_icon, export_icon],
+            count_text=count_text_widget,
+            tabs=ft.Container(tabs, width=None if _mobile else 250),
+            is_mobile=_mobile,
+            page=page,
         )
 
         if self._tab_index == 1:
@@ -220,11 +217,9 @@ class CheckStatusPage:
             ft.Column([
                 ft.Container(
                     ft.Column([
-                        create_page_title("Application Status", page=page),
+                        control_bar,
                         ft.Text("Track your adoption requests and rescue mission reports",
                                size=14, color=ft.Colors.BLACK54),
-                        ft.Container(height=16),
-                        control_bar,
                         ft.Container(height=15),
                         content,
                     ], spacing=0, horizontal_alignment="center"),
@@ -507,7 +502,7 @@ class CheckStatusPage:
             empty_message="No adoption requests yet",
             column_spacing=20,
             heading_row_height=45,
-            data_row_height=55,
+            data_row_height=55, page=self._page
         )
 
         return ft.Column([
@@ -619,7 +614,7 @@ class CheckStatusPage:
             empty_message="No rescue missions yet",
             column_spacing=15,
             heading_row_height=45,
-            data_row_height=55,
+            data_row_height=55, page=self._page
         )
 
         # Rescue Mission Map

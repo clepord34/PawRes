@@ -27,7 +27,7 @@ class AdoptionRequestListPage:
     
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
-        self._app_state = get_app_state(self._db_path)
+        self._app_state = None
 
     def build(self, page, user_role: str = "admin") -> None:
         try:
@@ -36,6 +36,7 @@ class AdoptionRequestListPage:
             raise RuntimeError("Flet must be installed to build the UI") from exc
 
         page.title = "Adoption Requests"
+        self._app_state = get_app_state(page, self._db_path)
 
         is_admin = user_role == "admin"
         _mobile = is_mobile(page)
@@ -279,7 +280,7 @@ class AdoptionRequestListPage:
             empty_message="No adoption requests found",
             column_spacing=20,
             heading_row_height=45,
-            data_row_height=55,
+            data_row_height=55, page=page
         )
 
         content_items = [

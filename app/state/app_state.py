@@ -14,7 +14,13 @@ import app_config
 
 
 class AppState(Observable):
-    """Singleton that coordinates all state managers."""
+    """Coordinates all state managers.
+    
+    In single-user / desktop / test mode the global singleton returned by
+    ``get_instance()`` is used.  In multi-user web mode each Flet page
+    session gets its own isolated instance created via
+    ``create_session_instance()`` and stored in ``page.session``.
+    """
     
     _instance: Optional["AppState"] = None
     _lock = threading.Lock()
@@ -29,7 +35,10 @@ class AppState(Observable):
     def __init__(self, db_path: Optional[str] = None):
         if hasattr(self, "_initialized") and self._initialized:
             return
-        
+        self._init_state(db_path)
+
+    def _init_state(self, db_path: Optional[str] = None) -> None:
+        """Shared initialisation logic (used by both singleton and per-session paths)."""
         super().__init__()
         
         self._db_path = db_path or app_config.DB_PATH
@@ -44,6 +53,18 @@ class AppState(Observable):
         
         self._setup_state_subscriptions()
         self._initialized = True
+
+    @classmethod
+    def create_session_instance(cls, db_path: Optional[str] = None) -> "AppState":
+        """Create a fresh, isolated AppState for a single Flet page session.
+        
+        Bypasses the singleton ``__new__`` so every connected client gets its
+        own auth/animal/rescue/adoption state and sessions cannot bleed into
+        each other.
+        """
+        instance = object.__new__(cls)  # skip the singleton __new__
+        instance._init_state(db_path)
+        return instance
     
     @classmethod
     def get_instance(cls, db_path: Optional[str] = None) -> "AppState":
@@ -268,14 +289,47 @@ class AppState(Observable):
         }
 
 
-# Convenience function to get the app state
-def get_app_state(db_path: Optional[str] = None) -> AppState:
-    """Get the global AppState instance.
-    
+_SESSION_STATE_KEY = "__pawres_app_state__"
+
+
+def get_app_state(page_or_db_path=None, db_path: Optional[str] = None) -> AppState:
+    """Get the AppState for the current user session.
+
+    When *page* is provided (Flet web / multi-user), the AppState is stored
+    inside ``page.session`` so that every connected client has its own
+    completely isolated state and sessions cannot bleed across devices.
+
+    When called without a page (tests, single-user desktop fallback) the
+    legacy global singleton is returned.
+
     Args:
-        db_path: Optional database path (only used on first call)
-    
+        page_or_db_path: A Flet ``Page`` object for session-scoped state,
+            **or** a ``db_path`` string for the legacy singleton call.
+        db_path: Database path when *page_or_db_path* is a Page.
+
     Returns:
-        The AppState singleton
+        The AppState instance for this session.
     """
+    # Legacy call: get_app_state("path/to/db")
+    if isinstance(page_or_db_path, str):
+        return AppState.get_instance(page_or_db_path)
+
+    page = page_or_db_path
+
+    if page is not None:
+        try:
+            state = page.session.get(_SESSION_STATE_KEY)
+            if state is None:
+                state = AppState.create_session_instance(db_path or app_config.DB_PATH)
+                page.session.set(_SESSION_STATE_KEY, state)
+            # Always ensure auth._page is set so _sync_to_page_session() can
+            # write to page.session even when called from a background thread
+            # (e.g. Google OAuth callback) before initialize() has been called.
+            if state._auth._page is None:
+                state._auth.set_page(page)
+            return state
+        except Exception:
+            pass  # session unavailable – fall through to singleton
+
+    # No page supplied: global singleton (tests / single-user desktop)
     return AppState.get_instance(db_path)

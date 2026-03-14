@@ -44,7 +44,7 @@ class UserAnalyticsPage:
 
         page.title = "Your Analytics"
 
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_name = app_state.auth.user_name or "User"
         user_id = app_state.auth.user_id
 
@@ -135,7 +135,14 @@ class UserAnalyticsPage:
                 {"label": "Adoptions Approved", "color": CHART_COLORS["secondary"], "value": sum(adoptions_approved)},
             ], horizontal=False, line_refs=user_line_refs)
         else:
-            line_chart = create_empty_chart_message("No activity in the last 30 days", width=300 if _mobile else 420, height=220)
+            line_chart = create_empty_chart_message(
+                "No activity in the last 30 days",
+                width=300 if _mobile else 420,
+                height=220,
+                button_text="Report Rescue",
+                button_icon=ft.Icons.PETS,
+                on_click=lambda e: page.go("/rescue_form"),
+            )
             line_legend = ft.Container()
 
         activity_chart_container = ft.Container(
@@ -185,7 +192,14 @@ class UserAnalyticsPage:
                 for s in status_order if user_rescue_status_dist.get(s, 0) > 0
             ]
         else:
-            rescue_pie_chart = create_empty_chart_message("No rescue data", width=180, height=180)
+            rescue_pie_chart = create_empty_chart_message(
+                "No rescue data",
+                width=180,
+                height=180,
+                button_text="Report Rescue",
+                button_icon=ft.Icons.PETS,
+                on_click=lambda e: page.go("/rescue_form"),
+            )
             rescue_legend = ft.Container()
             rescue_data_for_dialog = []
 
@@ -253,7 +267,14 @@ class UserAnalyticsPage:
                 for s in status_order if user_adoption_status_dist.get(s, 0) > 0
             ]
         else:
-            adoption_pie_chart = create_empty_chart_message("No adoption data", width=180, height=180)
+            adoption_pie_chart = create_empty_chart_message(
+                "No adoption data",
+                width=180,
+                height=180,
+                button_text="Apply to Adopt",
+                button_icon=ft.Icons.FAVORITE,
+                on_click=lambda e: page.go("/available_adoption"),
+            )
             adoption_legend = ft.Container()
             adoption_data_for_dialog = []
 
@@ -335,7 +356,10 @@ class UserAnalyticsPage:
             breed_bar_chart = create_empty_chart_message(
                 "Start adopting to build your preferences!",
                 width=200,
-                height=180
+                height=180,
+                button_text="Apply to Adopt",
+                button_icon=ft.Icons.FAVORITE,
+                on_click=lambda e: page.go("/available_adoption"),
             )
             breed_legend = ft.Container()
             breed_data_for_dialog = []

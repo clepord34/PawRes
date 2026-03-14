@@ -24,11 +24,6 @@ def render_emergency_rescue(page, params: Dict[str, Any]) -> None:
     from views.emergency_rescue_page import EmergencyRescuePage
     EmergencyRescuePage(db_path=app_config.DB_PATH).build(page)
 
-
-# ============================================================================
-# AUTH ROUTES - Add new authentication routes here
-# ============================================================================
-
 ROUTES: Dict[str, Dict[str, Any]] = {
     "/": {
         "handler": render_login,
@@ -47,5 +42,5 @@ ROUTES: Dict[str, Dict[str, Any]] = {
         "description": "Emergency rescue report (no login required)",
         "requires_auth": False,
         "allowed_roles": None,
-    },
+    }
 }

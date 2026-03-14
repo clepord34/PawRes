@@ -100,7 +100,7 @@ class RescueFormPage:
         )
 
         # Reporter name field - pre-fill with user name if logged in
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_name_value = app_state.auth.user_name or ""
         user_contact_value = app_state.auth.user_contact or ""
         
@@ -647,7 +647,7 @@ class RescueFormPage:
                 if animal_photo:
                     print(f"[INFO] Saved rescue photo: {animal_photo}")
 
-            app_state = get_app_state()
+            app_state = get_app_state(page)
             user_id = app_state.auth.user_id
             if not user_id:
                 self._error_text.value = "Session expired. Please log in again."

@@ -408,7 +408,13 @@ def create_data_table(
                 ], spacing=0)
             )
     else:
-        table_content.append(create_empty_state(empty_message))
+        table_content.append(
+            ft.Container(
+                create_empty_state(empty_message, padding=0),
+                height=120,
+                alignment=ft.alignment.center,
+            )
+        )
     
     return ft.Container(
         ft.Column(table_content, spacing=0),
@@ -430,6 +436,7 @@ def create_scrollable_data_table(
     show_checkbox_column: bool = False,
     min_width: Optional[int] = None,
     scroll_indicator_text: str = "Scroll horizontally to view more columns",
+    page: Optional[object] = None,
 ) -> object:
     """Create a scrollable data table with fixed height.
     
@@ -482,18 +489,31 @@ def create_scrollable_data_table(
         border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.TEAL_200)),
     )
     
+    if min_width is None:
+        total_expand = sum(max(int(col.get("expand", 1)), 1) for col in columns)
+        min_width = max(680, total_expand * 95)
+        
+    available_width = min_width
+    if hasattr(page, 'session') and hasattr(page.session, 'get'):
+        pw = page.session.get("page_width")
+        if pw:
+            # subtract sidebar & padding roughly dependent on breakpoint
+            from components.responsive_layout import is_mobile
+            offset = 60 if is_mobile(page) else 320
+            available_width = max(min_width, pw - offset)
+
     data_row_widgets = []
     if rows:
         for row_idx, row_data in enumerate(rows):
             row_cells = []
             for i, cell in enumerate(row_data):
                 expand = columns[i].get("expand", 1) if i < len(columns) else 1
-                
+
                 if isinstance(cell, str):
                     cell_widget = ft.Text(cell, size=12, color=ft.Colors.BLACK87, no_wrap=False)
                 else:
                     cell_widget = cell
-                
+
                 row_cells.append(
                     ft.Container(
                         cell_widget,
@@ -501,10 +521,9 @@ def create_scrollable_data_table(
                         alignment=ft.alignment.center_left,
                     )
                 )
-            
-            # Alternating row background for better readability
+
             row_bg = ft.Colors.with_opacity(0.02, ft.Colors.TEAL) if row_idx % 2 == 0 else ft.Colors.WHITE
-            
+
             row_widget = ft.Container(
                 ft.Row(row_cells, spacing=column_spacing, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 padding=ft.padding.symmetric(horizontal=15, vertical=8),
@@ -512,48 +531,52 @@ def create_scrollable_data_table(
                 border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_200)) if horizontal_lines else None,
             )
             data_row_widgets.append(row_widget)
-    
+
     if data_row_widgets:
-        # Scrollable body for data rows
         scrollable_body = ft.Column(
             data_row_widgets,
             spacing=0,
             scroll=ft.ScrollMode.AUTO,
-            height=height - heading_row_height,  # Subtract header height
+            height=height - heading_row_height,
         )
-        
+
         table_content = ft.Column(
             [header_row, scrollable_body],
             spacing=0,
         )
-    else:
-        # Empty state
-        table_content = ft.Column(
+        content_layout = ft.Row(
             [
-                header_row,
                 ft.Container(
-                    create_empty_state(empty_message),
-                    height=height - heading_row_height,
-                    alignment=ft.alignment.center,
-                ),
+                    table_content,
+                    width=available_width,
+                )
             ],
+            scroll=ft.ScrollMode.AUTO,
             spacing=0,
         )
-    
-    if min_width is None:
-        total_expand = sum(max(int(col.get("expand", 1)), 1) for col in columns)
-        min_width = max(680, total_expand * 95)
+    else:
+        header_scroll = ft.Row(
+            [
+                ft.Container(
+                    header_row,
+                    width=available_width,
+                )
+            ],
+            scroll=ft.ScrollMode.AUTO,
+            spacing=0,
+        )
 
-    horizontal_scroll_content = ft.Row(
-        [
-            ft.Container(
-                table_content,
-                width=min_width,
-            )
-        ],
-        scroll=ft.ScrollMode.AUTO,
-        spacing=0,
-    )
+        empty_body = ft.Container(
+            create_empty_state(empty_message, padding=0),
+            height=height - heading_row_height,
+            alignment=ft.alignment.center,
+            expand=True,
+        )
+
+        content_layout = ft.Column(
+            [header_scroll, empty_body],
+            spacing=0,
+        )
 
     scroll_indicator = ft.Container(
         ft.Row([
@@ -567,7 +590,7 @@ def create_scrollable_data_table(
     return ft.Container(
         ft.Column([
             scroll_indicator,
-            horizontal_scroll_content,
+            content_layout,
         ], spacing=0),
         bgcolor=ft.Colors.WHITE,
         border_radius=8,
@@ -887,6 +910,7 @@ def create_animal_card(
                     ft.Text("Adopt Me", size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
                 ], spacing=6, alignment=ft.MainAxisAlignment.CENTER, tight=True),
                 expand=True,
+                height=32,
                 on_click=lambda e: on_adopt(animal_id),
                 style=ft.ButtonStyle(
                     bgcolor={
@@ -908,6 +932,7 @@ def create_animal_card(
                         ft.Text("Already Adopted", size=10, color=ft.Colors.PURPLE_600, weight=ft.FontWeight.W_500),
                     ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
                     padding=ft.padding.symmetric(vertical=2),
+                    height=32,
                 )
             else:
                 buttons = ft.Container(
@@ -916,6 +941,7 @@ def create_animal_card(
                         ft.Text("Not Available", size=10, color=ft.Colors.GREY_500, weight=ft.FontWeight.W_500),
                     ], spacing=6, alignment=ft.MainAxisAlignment.CENTER),
                     padding=ft.padding.symmetric(vertical=2),
+                    height=32,
                 )
     else:
         buttons = ft.Container()
@@ -1096,13 +1122,17 @@ def create_animal_card(
                 overflow=ft.TextOverflow.ELLIPSIS,
             ),
             # Age + Species/breed combined
-            ft.Text(
-                subtitle_text, 
-                size=12, 
-                color=ft.Colors.BLACK54, 
-                text_align=ft.TextAlign.CENTER,
-                max_lines=2,
-                overflow=ft.TextOverflow.ELLIPSIS,
+            ft.Container(
+                content=ft.Text(
+                    subtitle_text, 
+                    size=12, 
+                    color=ft.Colors.BLACK54, 
+                    text_align=ft.TextAlign.CENTER,
+                    max_lines=2,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+                height=32,
+                alignment=ft.alignment.top_center,
             ),
             # Status badge with icon
             ft.Container(
@@ -1116,13 +1146,13 @@ def create_animal_card(
                 border=ft.border.all(1, status_color),
             ),
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=3),  
-        padding=ft.padding.symmetric(horizontal=10, vertical=8),
+        padding=ft.padding.only(left=10, right=10, top=8, bottom=0),
     )
     
     if show_adopt_button and on_adopt:
         button_container = ft.Container(
             buttons,
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            padding=ft.padding.only(left=10, right=10, top=6, bottom=8),
         )
     else:
         button_container = ft.Container(

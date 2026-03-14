@@ -26,7 +26,7 @@ class AvailableAdoptionPage:
     
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
-        self._app_state = get_app_state(self._db_path)
+        self._app_state = None
         self.current_search = ""  # Track search query for filtering
         self._species_filter = "all"  # Track species filter
         self._animal_cards_container = None  # Store reference to cards container
@@ -38,8 +38,9 @@ class AvailableAdoptionPage:
             raise RuntimeError("Flet must be installed to build the UI") from exc
 
         page.title = "Available for Adoption"
+        self._app_state = get_app_state(page, self._db_path)
 
-        user_name = page.session.get("user_name") or "User"
+        user_name = self._app_state.auth.user_name or "User"
 
         _mobile = is_mobile(page)
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
@@ -76,18 +77,29 @@ class AvailableAdoptionPage:
             )
 
         animal_cards = []
+        animal_card_controls = []
         if animals:
             for animal in animals:
                 animal_cards.append(create_card_for_animal(animal))
+            animal_card_controls = [
+                ft.Container(card, col={"xs": 6, "sm": 6, "md": 4, "lg": 3})
+                for card in animal_cards
+            ]
         else:
-            animal_cards.append(create_empty_state(
-                message="No animals available for adoption",
-                icon=ft.Icons.PETS,
-                padding=40
-            ))
+            animal_card_controls = [
+                ft.Container(
+                    create_empty_state(
+                        message="No animals available for adoption",
+                        icon=ft.Icons.PETS,
+                        padding=40,
+                    ),
+                    col={"xs": 12, "sm": 12, "md": 12, "lg": 12},
+                    alignment=ft.alignment.center,
+                )
+            ]
         
         self._animal_cards_container = ft.ResponsiveRow(
-            [ft.Container(c, col={"xs": 6, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards],
+            animal_card_controls,
             spacing=16,
             run_spacing=16,
         )
@@ -187,17 +199,25 @@ class AvailableAdoptionPage:
                     show_adopt_button=True,
                     breed=animal.get("breed"),
                 ))
+            animal_card_controls = [
+                ft.Container(card, col={"xs": 6, "sm": 6, "md": 4, "lg": 3})
+                for card in animal_cards
+            ]
         else:
-            animal_cards.append(create_empty_state(
-                message="No animals found",
-                icon=ft.Icons.PETS,
-                padding=40
-            ))
+            animal_card_controls = [
+                ft.Container(
+                    create_empty_state(
+                        message="No animals found",
+                        icon=ft.Icons.PETS,
+                        padding=40,
+                    ),
+                    col={"xs": 12, "sm": 12, "md": 12, "lg": 12},
+                    alignment=ft.alignment.center,
+                )
+            ]
         
         if self._animal_cards_container:
-            self._animal_cards_container.controls = [
-                ft.Container(c, col={"xs": 6, "sm": 6, "md": 4, "lg": 3}) for c in animal_cards
-            ]
+            self._animal_cards_container.controls = animal_card_controls
             self._animal_cards_container.update()
 
 

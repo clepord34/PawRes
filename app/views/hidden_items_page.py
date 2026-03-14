@@ -39,11 +39,11 @@ class HiddenItemsPage:
         self._adoption_state = None
         self._animal_state = None
     
-    def _get_states(self):
+    def _get_states(self, page):
         """Lazy-load state managers."""
         if self._rescue_state is None:
             from state import get_app_state
-            app_state = get_app_state()
+            app_state = get_app_state(page)
             self._rescue_state = app_state.rescues
             self._adoption_state = app_state.adoptions
             self._animal_state = app_state.animals
@@ -70,10 +70,10 @@ class HiddenItemsPage:
         from state import get_app_state
         
         self._page = page
-        self._get_states()
+        self._get_states(page)
         
         # Auth check
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         if not app_state.auth.is_authenticated or app_state.auth.user_role != "admin":
             page.go("/login")
             return
@@ -308,7 +308,6 @@ class HiddenItemsPage:
         
         def handle_restore(e):
             def on_confirm():
-                app_state = get_app_state()
                 success = self._rescue_state.restore_mission(mission_id)
                 if success:
                     show_snackbar(self._page, "Mission restored successfully!")

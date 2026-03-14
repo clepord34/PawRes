@@ -50,6 +50,7 @@ class UserManagementPage:
         self._user_table = None
         self._table_container = None  # Container holding the table for updates
         self._page = None
+        self._app_state = None
     
     def build(self, page) -> None:
         """Build the user management UI.
@@ -62,7 +63,8 @@ class UserManagementPage:
         self._page = page
         page.title = "User Management"
         
-        app_state = get_app_state()
+        self._app_state = get_app_state(page)
+        app_state = self._app_state
         
         _mobile = is_mobile(page)
         sidebar = create_admin_sidebar(page, current_route="/user_management")
@@ -211,7 +213,7 @@ class UserManagementPage:
             empty_message="No users found",
             column_spacing=15,
             heading_row_height=45,
-            data_row_height=55,
+            data_row_height=55, page=self._page
         )
         
         if self._table_container:
@@ -226,7 +228,7 @@ class UserManagementPage:
         
         user_id = user.get("id")
         is_disabled = user.get("is_disabled", False)
-        is_current_user = get_app_state().auth.user_id == user_id
+        is_current_user = self._app_state.auth.user_id == user_id
         
         # Status badge
         if is_disabled:
@@ -362,7 +364,7 @@ class UserManagementPage:
         
         def on_create(e):
             try:
-                admin_id = get_app_state().auth.user_id
+                admin_id = self._app_state.auth.user_id
                 user_id = self.service.create_user(
                     admin_id=admin_id,
                     name=name_field.value,
@@ -403,7 +405,7 @@ class UserManagementPage:
         import flet as ft
         
         user_id = user.get("id")
-        is_current_user = get_app_state().auth.user_id == user_id
+        is_current_user = self._app_state.auth.user_id == user_id
         
         name_field = ft.TextField(
             label="Name",
@@ -429,7 +431,7 @@ class UserManagementPage:
         
         def on_save(e):
             try:
-                admin_id = get_app_state().auth.user_id
+                admin_id = self._app_state.auth.user_id
                 self.service.update_user(
                     admin_id=admin_id,
                     user_id=user_id,
@@ -498,7 +500,7 @@ class UserManagementPage:
                 return
             
             try:
-                admin_id = get_app_state().auth.user_id
+                admin_id = self._app_state.auth.user_id
                 self.service.reset_password(
                     admin_id=admin_id,
                     user_id=user_id,
@@ -535,7 +537,7 @@ class UserManagementPage:
         
         def on_delete(e):
             try:
-                admin_id = get_app_state().auth.user_id
+                admin_id = self._app_state.auth.user_id
                 self.service.delete_user(admin_id, user_id)
                 self._page.close(dialog)
                 show_snackbar(self._page, "User deleted successfully")
@@ -565,7 +567,7 @@ class UserManagementPage:
     def _disable_user(self, user: Dict[str, Any]) -> None:
         """Disable a user account."""
         try:
-            admin_id = get_app_state().auth.user_id
+            admin_id = self._app_state.auth.user_id
             self.service.disable_user(admin_id, user.get("id"))
             show_snackbar(self._page, f"User '{user.get('name')}' has been disabled")
             self._refresh_users()
@@ -575,7 +577,7 @@ class UserManagementPage:
     def _enable_user(self, user: Dict[str, Any]) -> None:
         """Enable a disabled user account."""
         try:
-            admin_id = get_app_state().auth.user_id
+            admin_id = self._app_state.auth.user_id
             self.service.enable_user(admin_id, user.get("id"))
             show_snackbar(self._page, f"User '{user.get('name')}' has been enabled")
             self._refresh_users()
@@ -592,7 +594,7 @@ class UserManagementPage:
             # Generate filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"users_export_{timestamp}.csv"
-            filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
+            filepath = app_config.ASSETS_DIR / "exports" / filename
             
             # Ensure exports directory exists
             filepath.parent.mkdir(parents=True, exist_ok=True)

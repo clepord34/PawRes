@@ -162,7 +162,7 @@ class AdoptionFormPage:
         )
 
         # Pre-fill user info from state for logged-in users
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         if app_state.auth.user_name:
             self._name_field.value = app_state.auth.user_name
         
@@ -385,7 +385,7 @@ class AdoptionFormPage:
                     page.update()
                     return
 
-            app_state = get_app_state()
+            app_state = get_app_state(page)
             user_id = app_state.auth.user_id
             if not user_id:
                 self._error_text.value = "Session expired. Please log in again."

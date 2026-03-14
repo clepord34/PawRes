@@ -46,7 +46,8 @@ def render_rescue_form(page, params: Dict[str, Any]) -> None:
 def render_check_status(page, params: Dict[str, Any]) -> None:
     """Render the check status page."""
     from views.check_status_page import CheckStatusPage
-    user_id = page.session.get("user_id")
+    from state import get_app_state
+    user_id = get_app_state(page).auth.user_id or page.session.get("user_id")
     if not user_id:
         print("[WARNING] No user_id in session, redirecting to login")
         page.go("/")
@@ -64,7 +65,8 @@ def render_check_status(page, params: Dict[str, Any]) -> None:
 def render_user_analytics(page, params: Dict[str, Any]) -> None:
     """Render the user analytics page."""
     from views.user_analytics_page import UserAnalyticsPage
-    user_id = page.session.get("user_id")
+    from state import get_app_state
+    user_id = get_app_state(page).auth.user_id or page.session.get("user_id")
     if not user_id:
         print("[WARNING] No user_id in session, redirecting to login")
         page.go("/")

@@ -129,9 +129,14 @@ def create_scrollable_chart_content(
         legend is None or (hasattr(legend, "content") and legend.content is None)
     )
 
+    chart_panel_width = None
+    if has_legend:
+        explicit_chart_width = getattr(chart, "width", None)
+        chart_panel_width = explicit_chart_width if explicit_chart_width is not None else chart_width
+
     chart_panel = ft.Container(
         chart,
-        width=chart_width if has_legend else None,
+        width=chart_panel_width,
         alignment=ft.alignment.center_left if has_legend else ft.alignment.center,
     )
 
@@ -148,7 +153,7 @@ def create_scrollable_chart_content(
     if has_legend:
         scroll_row = ft.Row(
             row_controls,
-            spacing=6,
+            spacing=0,
             scroll=ft.ScrollMode.AUTO,
             alignment=ft.MainAxisAlignment.START,
             vertical_alignment=ft.CrossAxisAlignment.START,

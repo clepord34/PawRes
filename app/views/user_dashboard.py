@@ -65,7 +65,7 @@ class UserDashboard:
 
         page.title = "User Dashboard"
 
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_name = app_state.auth.user_name or "User"
         user_id = app_state.auth.user_id
 
@@ -241,19 +241,28 @@ class UserDashboard:
             adoption_legend = create_chart_legend(adoption_legend_items, horizontal=False, pie_refs=adoption_pie_refs)
             adoption_data_for_dialog = [{"label": status.capitalize(), "value": user_adoption_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])} for status in status_order if status in user_adoption_status_dist]
         else:
-            adoption_pie = ft.Container(
-                ft.Column([
-                    ft.Icon(ft.Icons.PIE_CHART, size=48, color=ft.Colors.GREY_400),
-                    ft.Text("No data", size=12, color=ft.Colors.GREY_500),
-                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-                width=150, height=150, alignment=ft.alignment.center,
+            adoption_pie = create_empty_chart_message(
+                "No applications yet",
+                width=160,
+                height=150,
+                button_text="Apply to Adopt",
+                button_icon=ft.Icons.FAVORITE,
+                on_click=lambda e: page.go("/available_adoption"),
             )
-            adoption_legend = ft.Text("No applications yet", size=13, color=ft.Colors.BLACK54)
+            adoption_legend = ft.Container()
             adoption_data_for_dialog = []
         
         def show_adoption_details(e):
             if adoption_data_for_dialog:
                 show_chart_details_dialog(page, "My Adoption Status Details", adoption_data_for_dialog, "pie")
+
+        stacked_card_spacing = 15
+        uniform_chart_card_height = 280 if not _mobile else None
+        featured_stack_height = (
+            (uniform_chart_card_height * 2) + stacked_card_spacing
+            if uniform_chart_card_height
+            else None
+        )
 
         adoptions_card = ft.Container(
             ft.Column([
@@ -280,15 +289,20 @@ class UserDashboard:
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Divider(height=5),
                 # Content: Chart + Legend side by side
-                create_scrollable_chart_content(
-                    adoption_pie,
-                    adoption_legend,
-                    chart_width=160,
-                    legend_width=170,
-                    legend_height=150,
+                ft.Container(
+                    create_scrollable_chart_content(
+                        adoption_pie,
+                        adoption_legend,
+                        chart_width=160,
+                        legend_width=170,
+                        legend_height=150,
+                    ),
+                    expand=True,
+                    alignment=ft.alignment.center,
                 ),
-                
-            ], spacing=0),
+
+            ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            height=uniform_chart_card_height,
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
@@ -319,7 +333,14 @@ class UserDashboard:
             rescue_legend = create_chart_legend(rescue_legend_items, horizontal=False, pie_refs=rescue_pie_refs)
             rescue_data_for_dialog = [{"label": status.capitalize(), "value": user_rescue_status_dist.get(status, 0), "color": STATUS_COLORS.get(status, STATUS_COLORS["default"])} for status in status_order if status in user_rescue_status_dist]
         else:
-            rescue_pie = create_empty_chart_message("No reports yet", width=160, height=150)
+            rescue_pie = create_empty_chart_message(
+                "No reports yet",
+                width=160,
+                height=150,
+                button_text="Report Rescue",
+                button_icon=ft.Icons.PETS,
+                on_click=lambda e: page.go("/rescue_form"),
+            )
             rescue_legend = ft.Container()
             rescue_data_for_dialog = []
         
@@ -352,14 +373,19 @@ class UserDashboard:
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Divider(height=5),
                 # Content: Chart + Legend side by side
-                create_scrollable_chart_content(
-                    rescue_pie,
-                    rescue_legend,
-                    chart_width=160,
-                    legend_width=170,
-                    legend_height=150,
+                ft.Container(
+                    create_scrollable_chart_content(
+                        rescue_pie,
+                        rescue_legend,
+                        chart_width=160,
+                        legend_width=170,
+                        legend_height=150,
+                    ),
+                    expand=True,
+                    alignment=ft.alignment.center,
                 ),
-            ], spacing=0),
+            ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            height=uniform_chart_card_height,
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
@@ -425,14 +451,19 @@ class UserDashboard:
                         ),
                     ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                     ft.Divider(height=5),
-                    create_scrollable_chart_content(
-                        popular_breeds_bar_chart,
-                        breed_legend,
-                        chart_width=180,
-                        legend_width=170,
-                        legend_height=150,
+                    ft.Container(
+                        create_scrollable_chart_content(
+                            popular_breeds_bar_chart,
+                            breed_legend,
+                            chart_width=180,
+                            legend_width=170,
+                            legend_height=150,
+                        ),
+                        expand=True,
+                        alignment=ft.alignment.center,
                     ),
-                ], spacing=0),
+                ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                height=uniform_chart_card_height,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -448,14 +479,19 @@ class UserDashboard:
                     ], spacing=10),
                     ft.Divider(height=5),
                     ft.Container(
-                        ft.Column([
-                            ft.Icon(ft.Icons.PETS, size=48, color=ft.Colors.GREY_400),
-                            ft.Text("No adoptable animals yet", size=13, color=ft.Colors.BLACK54),
-                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                        create_empty_chart_message(
+                            "No adoptable animals yet",
+                            width=180,
+                            height=140,
+                            button_text="Browse Animals",
+                            button_icon=ft.Icons.PETS,
+                            on_click=lambda e: page.go("/animals_list"),
+                        ),
                         expand=True,
                         alignment=ft.alignment.center,
                     ),
-                ], spacing=0),
+                ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                height=uniform_chart_card_height,
                 padding=20,
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -493,7 +529,14 @@ class UserDashboard:
             ]
             breed_legend = create_chart_legend(breed_legend_items, horizontal=False, pie_refs=breed_pie_refs, text_size=10)
         else:
-            breed_pie = create_empty_chart_message("No animals available", width=160, height=150)
+            breed_pie = create_empty_chart_message(
+                "No animals available",
+                width=160,
+                height=150,
+                button_text="Apply to Adopt",
+                button_icon=ft.Icons.FAVORITE,
+                on_click=lambda e: page.go("/available_adoption"),
+            )
             breed_legend = ft.Container()
             breed_data_for_dialog = []
         
@@ -521,14 +564,19 @@ class UserDashboard:
                     ) if breed_data_for_dialog else ft.Container(),
                 ], spacing=10, vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 ft.Divider(height=5),
-                create_scrollable_chart_content(
-                    breed_pie,
-                    breed_legend,
-                    chart_width=160,
-                    legend_width=170,
-                    legend_height=150,
+                ft.Container(
+                    create_scrollable_chart_content(
+                        breed_pie,
+                        breed_legend,
+                        chart_width=160,
+                        legend_width=170,
+                        legend_height=150,
+                    ),
+                    expand=True,
+                    alignment=ft.alignment.center,
                 ),
-            ], spacing=0),
+            ], spacing=0, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            height=uniform_chart_card_height,
             padding=20,
             bgcolor=ft.Colors.WHITE,
             border_radius=12,
@@ -584,7 +632,7 @@ class UserDashboard:
             carousel_content = ft.Container(
                 ft.Container(
                     create_featured_animal_card(carousel_animals[0], 0),
-                    width=280,
+                    width=250,
                 ),
                 alignment=ft.alignment.center,
                 animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
@@ -608,7 +656,7 @@ class UserDashboard:
                 def update_content():
                     carousel_content.content = ft.Container(
                         create_featured_animal_card(carousel_animals[new_index], new_index),
-                        width=280,
+                        width=250,
                     )
                     carousel_content.opacity = 1.0
                     page.update()
@@ -691,6 +739,7 @@ class UserDashboard:
                     ft.Container(height=1),
                     nav_row,
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                height=featured_stack_height,
                 padding=ft.padding.symmetric(vertical=10, horizontal=30),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -715,6 +764,7 @@ class UserDashboard:
                         alignment=ft.alignment.center,
                     ),
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                height=featured_stack_height,
                 padding=ft.padding.symmetric(vertical=30, horizontal=30),
                 bgcolor=ft.Colors.WHITE,
                 border_radius=12,
@@ -786,7 +836,7 @@ class UserDashboard:
                 ft.Column([
                     adoptions_card,
                     rescues_card,
-                ], spacing=15),
+                ], spacing=stacked_card_spacing),
                 col=_card_col,
             ),
             # Middle: Breed charts stacked vertically
@@ -794,7 +844,7 @@ class UserDashboard:
                 ft.Column([
                     popular_breeds_card,
                     adoptable_breeds_card,
-                ], spacing=15),
+                ], spacing=stacked_card_spacing),
                 col=_card_col,
             ),
             # Right: Featured Adoptables

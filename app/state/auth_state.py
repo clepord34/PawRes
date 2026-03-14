@@ -58,11 +58,20 @@ class AuthState(StateManager[Dict[str, Any]]):
         # Load existing session if available
         self._load_from_page_session()
     
+    _CLIENT_STORAGE_KEY = "pawres_auth_session"
+
     def _load_from_page_session(self) -> None:
-        """Load auth state from Flet's page.session."""
+        """Load auth state from Flet's page.session, falling back to client_storage.
+        
+        Safe to call multiple times – returns immediately if already authenticated
+        or if page.session already contains a valid user_id.
+        """
         if self._page is None:
             return
-        
+
+        # Already authenticated in memory – nothing to do.
+        if self.is_authenticated:
+            return
         try:
             user_id = self._page.session.get("user_id")
             if user_id is not None:
@@ -76,11 +85,34 @@ class AuthState(StateManager[Dict[str, Any]]):
                     is_authenticated=True
                 )
                 self.update_state(session.to_dict(), notify=True)
+                return
         except Exception as e:
-            print(f"[ERROR] Failed to load session: {e}")
+            print(f"[ERROR] Failed to load page.session: {e}")
+
+        # page.session is empty (new WebSocket / reconnect) – try client_storage.
+        # client_storage is backed by browser localStorage and survives reconnects.
+        try:
+            import json
+            raw = self._page.client_storage.get(self._CLIENT_STORAGE_KEY)
+            if raw:
+                data = json.loads(raw)
+                session = UserSession(
+                    user_id=data.get("user_id"),
+                    email=data.get("email", ""),
+                    phone=data.get("phone", ""),
+                    name=data.get("name", ""),
+                    role=data.get("role", "user"),
+                    oauth_provider=data.get("oauth_provider"),
+                    is_authenticated=True,
+                )
+                self.update_state(session.to_dict(), notify=True)
+                # Re-populate page.session so route handlers that read it work.
+                self._sync_to_page_session()
+        except Exception as e:
+            print(f"[WARN] Could not restore session from client_storage: {e}")
     
     def _sync_to_page_session(self) -> None:
-        """Sync auth state to Flet's page.session."""
+        """Sync auth state to Flet's page.session and client_storage."""
         if self._page is None:
             return
         
@@ -93,9 +125,30 @@ class AuthState(StateManager[Dict[str, Any]]):
                 self._page.session.set("user_name", state.get("name"))
                 self._page.session.set("user_role", state.get("role"))
                 self._page.session.set("oauth_provider", state.get("oauth_provider"))
+                # Persist to client_storage (browser localStorage) so sessions
+                # survive WebSocket reconnects when browser tabs are switched.
+                try:
+                    import json
+                    self._page.client_storage.set(
+                        self._CLIENT_STORAGE_KEY,
+                        json.dumps({
+                            "user_id": state.get("user_id"),
+                            "email": state.get("email"),
+                            "phone": state.get("phone"),
+                            "name": state.get("name"),
+                            "role": state.get("role"),
+                            "oauth_provider": state.get("oauth_provider"),
+                        })
+                    )
+                except Exception:
+                    pass
             else:
                 # Clear session on logout
                 self._page.session.clear()
+                try:
+                    self._page.client_storage.remove(self._CLIENT_STORAGE_KEY)
+                except Exception:
+                    pass
         except Exception as e:
             print(f"[ERROR] Failed to sync session: {e}")
     

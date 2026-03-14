@@ -68,7 +68,7 @@ class ProfilePage:
         self._page = page
         page.title = "My Profile"
         
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         user_id = app_state.auth.user_id
         
         if not user_id:
@@ -363,7 +363,6 @@ class ProfilePage:
             label="Current Password",
             password=True,
             can_reveal_password=True,
-            width=300,
             disabled=is_oauth and not has_password,
         )
         
@@ -371,14 +370,12 @@ class ProfilePage:
             label="New Password",
             password=True,
             can_reveal_password=True,
-            width=300,
         )
         
         self._confirm_password_field = ft.TextField(
             label="Confirm New Password",
             password=True,
             can_reveal_password=True,
-            width=300,
         )
         
         requirements = ft.Text(
@@ -403,7 +400,7 @@ class ProfilePage:
                             size=13,
                             color=ft.Colors.BLUE_600,
                         ),
-                    ], spacing=10),
+                    ], spacing=10, wrap=True),
                     bgcolor=ft.Colors.BLUE_50,
                     padding=15,
                     border_radius=8,
@@ -434,7 +431,7 @@ class ProfilePage:
                             size=13,
                             color=ft.Colors.GREEN_700,
                         ),
-                    ], spacing=10),
+                    ], spacing=10, wrap=True),
                     bgcolor=ft.Colors.GREEN_50,
                     padding=15,
                     border_radius=8,
@@ -638,56 +635,63 @@ class ProfilePage:
             border=ft.border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.BLACK)),
         )
 
+    def _on_flet_link_google(self, e):
+        """Handle Flet's page.on_login for linking accounts."""
+        if e.error:
+            print(f"[ERROR] Google sign-in failed: {e.error}")
+            show_snackbar(self._page, f"Google Sign-In failed: {e.error}", error=True)
+            return
+            
+        try:
+            import flet as ft
+            if not self._page.auth or not self._page.auth.user:
+                show_snackbar(self._page, "Failed to retrieve user information from Google.", error=True)
+                return
+                
+            user_info = self._page.auth.user
+            user_id = self._user.get("id")
+            user_email = self._user.get("email")
+
+            google_email = user_info.get("email") if isinstance(user_info, dict) or hasattr(user_info, "get") else getattr(user_info, "email", None)
+
+            # Verify it's the same email as the account
+            if user_email and google_email != user_email:
+                show_snackbar(
+                    self._page,
+                    f"Google email ({google_email}) doesn't match your account email ({user_email})",
+                    error=True
+                )
+                return
+
+            # Link the account
+            success, msg = self.auth_service.link_google_account(user_id, "google")
+
+            if success:
+                app_state = get_app_state(self._page)
+                app_state.auth.patch_state({"oauth_provider": "google"})
+
+                show_snackbar(self._page, "Google account linked successfully!")
+                # Refresh the page
+                self.build(self._page)
+            else:
+                show_snackbar(self._page, msg, error=True)
+
+        except Exception as ex:
+            print(f"[ERROR] Google linking failed: {ex}")
+            show_snackbar(self._page, f"Failed to link Google account: {ex}", error=True)
+
     def _link_google(self) -> None:
         """Link Google account to current user."""
-        import flet as ft
+        if not self.google_auth.is_configured:
+            show_snackbar(self._page, "Google Sign-In not configured", error=True)
+            return
+
+        self._page.on_login = self._on_flet_link_google
+        show_snackbar(self._page, "Opening Google Sign-In...")
         
-        user_id = self._user.get("id")
-        user_email = self._user.get("email")
-        
-        show_snackbar(self._page, "Opening Google Sign-In... Please check your browser.")
-        
-        def on_google_complete(user_info):
-            """Called when Google Sign-In succeeds."""
-            try:
-                google_email = user_info.get("email")
-                
-                # Verify it's the same email as the account
-                if user_email and google_email != user_email:
-                    show_snackbar(
-                        self._page, 
-                        f"Google email ({google_email}) doesn't match your account email ({user_email})",
-                        error=True
-                    )
-                    return
-                
-                # Link the account
-                success, msg = self.auth_service.link_google_account(user_id, "google")
-                
-                if success:
-                    app_state = get_app_state()
-                    app_state.auth.patch_state({"oauth_provider": "google"})
-                    
-                    show_snackbar(self._page, "Google account linked successfully!")
-                    
-                    # Refresh the page
-                    self.build(self._page)
-                else:
-                    show_snackbar(self._page, msg, error=True)
-                    
-            except Exception as ex:
-                print(f"[ERROR] Google linking failed: {ex}")
-                show_snackbar(self._page, f"Failed to link Google account: {ex}", error=True)
-        
-        def on_google_error(error_msg):
-            """Called when Google Sign-In fails."""
-            print(f"[ERROR] Google sign-in failed: {error_msg}")
-            show_snackbar(self._page, f"Google Sign-In failed: {error_msg}", error=True)
-        
-        self.google_auth.sign_in_async(
-            on_complete=on_google_complete,
-            on_error=on_google_error
-        )
+        provider = self.google_auth.get_provider()
+        if provider:
+            self._page.login(provider)
     
     def _unlink_google(self) -> None:
         """Unlink Google account from current user."""
@@ -701,7 +705,7 @@ class ProfilePage:
             success, msg = self.auth_service.unlink_google_account(user_id)
             
             if success:
-                app_state = get_app_state()
+                app_state = get_app_state(self._page)
                 app_state.auth.patch_state({"oauth_provider": None})
                 
                 show_snackbar(self._page, "Google account unlinked successfully")
@@ -784,7 +788,7 @@ class ProfilePage:
             show_snackbar(self._page, str(ex), error=True)
             return
         
-        app_state = get_app_state()
+        app_state = get_app_state(self._page)
         app_state.auth.update_user_info(name=name)
         
         show_snackbar(self._page, "Profile updated successfully")

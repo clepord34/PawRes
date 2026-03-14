@@ -152,7 +152,7 @@ class AddAnimalPage:
                     ft.Text("Download Template:", size=12, color=ft.Colors.GREY_700),
                     csv_btn,
                     excel_btn,
-                ], spacing=5, alignment=ft.MainAxisAlignment.CENTER),
+                ], spacing=5, alignment=ft.MainAxisAlignment.CENTER, wrap=True),
                 import_btn,
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=12, tight=True)
             

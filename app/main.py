@@ -1,7 +1,12 @@
 """Flet app entrypoint with route-based navigation."""
 from __future__ import annotations
 
+import os
 import sys
+
+# Force the Flet secret key in the environment so files can upload via 'flet run' seamlessly
+if "FLET_SECRET_KEY" not in os.environ:
+    os.environ["FLET_SECRET_KEY"] = "my-pawres-secret-key"
 
 try:
 	import flet as ft
@@ -21,8 +26,8 @@ def main(page) -> None:
 	# Initialize auth service and ensure admin user exists
 	auth = AuthService(app_config.DB_PATH)
 
-	# Initialize centralized state management
-	app_state = get_app_state(app_config.DB_PATH)
+	# Initialize per-session state (one AppState per connected client)
+	app_state = get_app_state(page, app_config.DB_PATH)
 	app_state.initialize(page)
 
 	page.title = "Rescue/Adoption App"
@@ -102,7 +107,16 @@ def main(page) -> None:
 		
 		if route_path == "":
 			route_path = "/"
-		
+
+		# Lazy session restore: on WebSocket reconnect, page.client_storage may
+		# not respond in time during initialize().  By the time route_change fires
+		# the connection is fully established, so retry here when needed.
+		if not app_state.auth.is_authenticated:
+			try:
+				app_state.auth._load_from_page_session()
+			except Exception:
+				pass
+
 		try:
 			route_config = get_route_handler(route_path)
 			
@@ -138,7 +152,22 @@ def main(page) -> None:
 
 
 if __name__ == "__main__":
-	if ft is None:
-		print("Flet is required to run the GUI. Install with: python -m pip install flet")
-		sys.exit(1)
-	ft.app(target=main, view=ft.WEB_BROWSER)
+    if ft is None:
+        print("Flet is required to run the GUI. Install with: python -m pip install flet")
+        sys.exit(1)
+        
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=0, help="Port to run the Flet web server on")
+    args = parser.parse_args()
+    
+    run_kwargs = {
+        "target": main,
+        "view": ft.WEB_BROWSER,
+        "upload_dir": "uploads",
+        "assets_dir": "assets"
+    }
+    if args.port > 0:
+        run_kwargs["port"] = args.port
+        
+    ft.app(**run_kwargs)

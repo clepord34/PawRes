@@ -295,7 +295,7 @@ class LoginPage:
         phone = user.get("phone")
         
         # Pass user data as dictionary matching AuthState.login() signature
-        app_state = get_app_state()
+        app_state = get_app_state(page)
         app_state.auth.login({
             "id": user_id,
             "email": email,
@@ -308,124 +308,132 @@ class LoginPage:
         redirect_route = app_state.auth.get_redirect_route()
         page.go(redirect_route)
 
+    def _on_flet_login(self, e) -> None:
+        """Handle Flet's page-level OAuth completion event."""
+        page = e.page
+        if e.error:
+            print(f"[ERROR] Google sign-in failed: {e.error}")
+            show_snackbar(page, f"Google Sign-In failed: {e.error}")
+            return
+
+        try:
+            import flet as ft
+            # Retrieve user info provided by Flet's auth property
+            if not page.auth or not page.auth.user:
+                show_snackbar(page, "Failed to retrieve user information from Google.")
+                return
+
+            user_info = page.auth.user
+
+            # Register/login the user via OAuth
+            email = user_info.get("email") if isinstance(user_info, dict) or hasattr(user_info, "get") else getattr(user_info, "email", None)
+            name = user_info.get("name") if isinstance(user_info, dict) or hasattr(user_info, "get") else getattr(user_info, "name", None)
+            if not name:
+                name = email.split("@")[0] if email else "User"
+
+            picture = user_info.get("picture") if isinstance(user_info, dict) or hasattr(user_info, "get") else getattr(user_info, "picture", None)
+
+            user, result = self.auth.login_oauth(
+                email=email,
+                name=name,
+                oauth_provider="google",
+                profile_picture=picture
+            )
+
+            if result == AuthResult.OAUTH_CONFLICT:
+                def link_account(e_link):
+                    """Link Google account to existing password account."""
+                    success, msg = self.auth.link_google_account(user["id"], "google")
+                    if success:
+                        # Now log them in
+                        app_state = get_app_state(page)
+                        app_state.auth.login({
+                            "id": user["id"],
+                            "email": user.get("email"),
+                            "phone": user.get("phone"),
+                            "name": user.get("name"),
+                            "role": user.get("role", "user"),
+                            "profile_picture": user.get("profile_picture"),
+                            "oauth_provider": "google",
+                        })
+                        page.close(dialog)
+                        redirect_route = app_state.auth.get_redirect_route()
+                        page.go(redirect_route)
+                    else:
+                        page.close(dialog)
+                        show_snackbar(page, msg, error=True)
+
+                def cancel(e_cancel):
+                    page.close(dialog)
+                    show_snackbar(page, "Google Sign-In cancelled")
+
+                dialog = ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Account Already Exists", weight="bold"),
+                    content=ft.Column([
+                        ft.Text(
+                            f"An account with email '{email}' already exists with a password.",
+                            size=14,
+                        ),
+                        ft.Container(height=10),
+                        ft.Text(
+                            "Would you like to link your Google account to this existing account? "
+                            "You'll then be able to sign in with either your password or Google.",
+                            size=13,
+                            color=ft.Colors.GREY_700,
+                        ),
+                    ], tight=True),
+                    actions=[
+                        ft.TextButton("Cancel", on_click=cancel),
+                        ft.ElevatedButton(
+                            "Link Google Account",
+                            on_click=link_account,
+                            style=ft.ButtonStyle(
+                                bgcolor=ft.Colors.TEAL_600,
+                                color=ft.Colors.WHITE,
+                            ),
+                        ),
+                    ],
+                    actions_alignment=ft.MainAxisAlignment.END,
+                )
+                page.open(dialog)
+                return
+
+            # Successful OAuth login
+            app_state = get_app_state(page)
+            app_state.auth.login({
+                "id": user["id"],
+                "email": user.get("email"),
+                "phone": user.get("phone"),
+                "name": user.get("name"),
+                "role": user.get("role", "user"),
+                "profile_picture": user.get("profile_picture"),
+                "oauth_provider": user.get("oauth_provider"),
+            })
+
+            # Navigate to appropriate dashboard (must be done on main thread)
+            redirect_route = app_state.auth.get_redirect_route()
+            page.go(redirect_route)
+
+        except Exception as ex:
+            print(f"[ERROR] Google sign-in processing failed: {ex}")
+            show_snackbar(page, f"Sign-in failed: {ex}")
+
     def _on_google(self, page, e) -> None:
         """Handle Google Sign-In button click."""
         try:
             import flet as ft
         except Exception:
             return
-        
+
         if not self.google_auth.is_configured:
             show_snackbar(page, "Google Sign-In not configured. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to .env")
             return
-        
-        show_snackbar(page, "Opening Google Sign-In... Please check your browser.")
-        
-        def on_google_complete(user_info):
-            """Called when Google Sign-In succeeds."""
-            try:
-                # Register/login the user via OAuth
-                email = user_info.get("email")
-                name = user_info.get("name", email.split("@")[0] if email else "User")
-                picture = user_info.get("picture")
-                
-                user, result = self.auth.login_oauth(
-                    email=email,
-                    name=name,
-                    oauth_provider="google",
-                    profile_picture=picture
-                )
-                
-                if result == AuthResult.OAUTH_CONFLICT:
-                    def link_account(e):
-                        """Link Google account to existing password account."""
-                        success, msg = self.auth.link_google_account(user["id"], "google")
-                        if success:
-                            # Now log them in
-                            app_state = get_app_state()
-                            app_state.auth.login({
-                                "id": user["id"],
-                                "email": user.get("email"),
-                                "phone": user.get("phone"),
-                                "name": user.get("name"),
-                                "role": user.get("role", "user"),
-                                "profile_picture": user.get("profile_picture"),
-                                "oauth_provider": "google",
-                            })
-                            page.close(dialog)
-                            redirect_route = app_state.auth.get_redirect_route()
-                            page.go(redirect_route)
-                        else:
-                            page.close(dialog)
-                            show_snackbar(page, msg, error=True)
-                    
-                    def cancel(e):
-                        page.close(dialog)
-                        show_snackbar(page, "Google Sign-In cancelled")
-                    
-                    dialog = ft.AlertDialog(
-                        modal=True,
-                        title=ft.Text("Account Already Exists", weight="bold"),
-                        content=ft.Column([
-                            ft.Text(
-                                f"An account with email '{email}' already exists with a password.",
-                                size=14,
-                            ),
-                            ft.Container(height=10),
-                            ft.Text(
-                                "Would you like to link your Google account to this existing account? "
-                                "You'll then be able to sign in with either your password or Google.",
-                                size=13,
-                                color=ft.Colors.GREY_700,
-                            ),
-                        ], tight=True),
-                        actions=[
-                            ft.TextButton("Cancel", on_click=cancel),
-                            ft.ElevatedButton(
-                                "Link Google Account",
-                                on_click=link_account,
-                                style=ft.ButtonStyle(
-                                    bgcolor=ft.Colors.TEAL_600,
-                                    color=ft.Colors.WHITE,
-                                ),
-                            ),
-                        ],
-                        actions_alignment=ft.MainAxisAlignment.END,
-                    )
-                    page.open(dialog)
-                    return
-                
-                # Successful OAuth login
-                app_state = get_app_state()
-                app_state.auth.login({
-                    "id": user["id"],
-                    "email": user.get("email"),
-                    "phone": user.get("phone"),
-                    "name": user.get("name"),
-                    "role": user.get("role", "user"),
-                    "profile_picture": user.get("profile_picture"),
-                    "oauth_provider": user.get("oauth_provider"),
-                })
-                
-                # Navigate to appropriate dashboard (must be done on main thread)
-                redirect_route = app_state.auth.get_redirect_route()
-                page.go(redirect_route)
-                
-            except Exception as ex:
-                print(f"[ERROR] Google sign-in processing failed: {ex}")
-                show_snackbar(page, f"Sign-in failed: {ex}")
-        
-        def on_google_error(error_msg):
-            """Called when Google Sign-In fails."""
-            print(f"[ERROR] Google sign-in failed: {error_msg}")
-            show_snackbar(page, f"Google Sign-In failed: {error_msg}")
-        
-        self.google_auth.sign_in_async(
-            on_complete=on_google_complete,
-            on_error=on_google_error
-        )
 
+        # Ensure page level on_login is set securely
+        page.on_login = self._on_flet_login
+        show_snackbar(page, "Opening Google Sign-In...")
 
-__all__ = ["LoginPage"]
-
-
+        provider = self.google_auth.get_provider()
+        if provider:
+            page.login(provider)

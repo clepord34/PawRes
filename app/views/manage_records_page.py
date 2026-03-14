@@ -19,7 +19,7 @@ class ManageRecordsPage:
     
     def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path or app_config.DB_PATH
-        self._app_state = get_app_state(self._db_path)
+        self._app_state = None
         self.map_service = MapService()
         self._page = None
         
@@ -57,6 +57,7 @@ class ManageRecordsPage:
         )
         
         self._page = page
+        self._app_state = get_app_state(page, self._db_path)
         page.title = "Manage Records - PawRes Admin"
         
         # Only set tab from parameter if explicitly provided (not None)
@@ -430,7 +431,7 @@ class ManageRecordsPage:
             table_rows.append(row_data)
         
         table_columns = [
-            {"label": "#", "expand": 0},
+            {"label": "#", "expand": 1},
             {"label": "Reporter", "expand": 2},
             {"label": "Animal", "expand": 1},
             {"label": "Breed", "expand": 2},
@@ -446,7 +447,7 @@ class ManageRecordsPage:
         data_table = create_scrollable_data_table(
             columns=table_columns, rows=table_rows, height=400,
             empty_message="No rescue missions found", column_spacing=13,
-            heading_row_height=45, data_row_height=50)
+            heading_row_height=45, data_row_height=50, page=page)
         
         # Map with rescue mission markers
         is_online = self.map_service.check_map_tiles_available()
@@ -510,7 +511,7 @@ class ManageRecordsPage:
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"rescue_missions_{timestamp}.csv"
-            filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
+            filepath = app_config.ASSETS_DIR / "exports" / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
             fieldnames = ["id", "user_id", "animal_id", "reporter_name", "reporter_phone", "animal_type", 
@@ -542,7 +543,8 @@ class ManageRecordsPage:
                         "animal_photo": m.get("animal_photo", ""),
                     })
             
-            show_snackbar(self._page, f"Exported {len(missions)} missions to {filename}")
+            self._page.launch_url(f"/exports/{filename}")
+            show_snackbar(self._page, f"Exported {len(missions)} missions to your device")
         except Exception as e:
             show_snackbar(self._page, f"Export failed: {e}", error=True)
     
@@ -708,7 +710,7 @@ class ManageRecordsPage:
         data_table = create_scrollable_data_table(
             columns=table_columns, rows=table_rows, height=400,
             empty_message="No adoption requests found", column_spacing=20,
-            heading_row_height=45, data_row_height=55)
+            heading_row_height=45, data_row_height=55, page=page)
         
         return ft.Column([
             create_section_card(title="Adoption Requests", content=data_table, show_divider=True),
@@ -730,7 +732,7 @@ class ManageRecordsPage:
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"adoption_requests_{timestamp}.csv"
-            filepath = app_config.STORAGE_DIR / "data" / "exports" / filename
+            filepath = app_config.ASSETS_DIR / "exports" / filename
             filepath.parent.mkdir(parents=True, exist_ok=True)
             
             fieldnames = ["id", "user_id", "user_name", "animal_id", "animal_name", "animal_species", 
@@ -758,7 +760,8 @@ class ManageRecordsPage:
                         "updated_at": r.get("updated_at", ""),
                     })
             
-            show_snackbar(self._page, f"Exported {len(requests)} requests to {filename}")
+            self._page.launch_url(f"/exports/{filename}")
+            show_snackbar(self._page, f"Exported {len(requests)} requests to your device")
         except Exception as e:
             show_snackbar(self._page, f"Export failed: {e}", error=True)
     
