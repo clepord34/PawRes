@@ -434,6 +434,9 @@ class LoginPage:
         page.on_login = self._on_flet_login
         show_snackbar(page, "Opening Google Sign-In...")
 
-        provider = self.google_auth.get_provider()
+        provider = self.google_auth.get_provider(page)
         if provider:
-            page.login(provider)
+            page.login(
+                provider,
+                complete_page_html=self.google_auth.get_callback_complete_page_html(),
+            )

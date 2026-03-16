@@ -689,7 +689,7 @@ class ProfilePage:
         self._page.on_login = self._on_flet_link_google
         show_snackbar(self._page, "Opening Google Sign-In...")
         
-        provider = self.google_auth.get_provider()
+        provider = self.google_auth.get_provider(self._page)
         if provider:
             self._page.login(provider)
     
