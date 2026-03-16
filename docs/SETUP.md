@@ -185,13 +185,43 @@ PASSWORD_REQUIRE_SPECIAL=true
 PASSWORD_HISTORY_COUNT=5
 ```
 
-### Google OAuth (Optional)
-
-Enable Google Sign-In for users:
+### Map Tile Settings (Optional)
 
 ```dotenv
+MAP_TILE_URL_TEMPLATE=https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png
+MAP_TILE_MAX_ZOOM=19
+MAP_TILE_HEALTHCHECK_HOST=a.basemaps.cartocdn.com
+```
+
+### Runtime/Host Settings (Optional)
+
+```dotenv
+# Example: http://localhost:8550
+BASE_URL=
+
+# Typical values: 8550 (desktop), 8000 (web)
+FLET_SERVER_PORT=
+```
+
+### Google OAuth (Optional)
+
+Enable Google Sign-In for users. You can configure either a generic credential pair or mode-specific credentials:
+
+```dotenv
+# Generic fallback
 GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret_here
+
+# Desktop mode (recommended for desktop app)
+GOOGLE_DESKTOP_CLIENT_ID=
+GOOGLE_DESKTOP_CLIENT_SECRET=
+
+# Web mode (recommended for browser app)
+GOOGLE_WEB_CLIENT_ID=
+GOOGLE_WEB_CLIENT_SECRET=
+
+# Optional explicit redirect override
+GOOGLE_REDIRECT_URL=
 ```
 
 See [Google OAuth Setup](#google-oauth-setup-optional) for detailed configuration steps.
@@ -448,8 +478,7 @@ Enable Google Sign-In for user authentication.
 
 1. In the navigation menu, go to **APIs & Services** → **Library**
 2. Search for and enable:
-   - **Google+ API** (deprecated but may still work)
-   - **Google Identity Services API** (recommended)
+   - **Google Identity Services API**
    - **People API** (for profile information)
 
 ### 3. Configure OAuth Consent Screen
@@ -467,33 +496,34 @@ Enable Google Sign-In for user authentication.
 5. Add test users (your email address for testing)
 6. Click **Save and Continue**
 
-### 4. Create OAuth Client ID
+### 4. Create OAuth Client IDs
 
 1. Go to **APIs & Services** → **Credentials**
 2. Click **Create Credentials** → **OAuth client ID**
-3. Application type: **Desktop app**
-4. Name: "PawRes Desktop Client"
-5. Click **Create**
+3. Create a **Desktop app** client (for `flet run` desktop mode)
+4. Create a **Web application** client (for `flet run --web` mode)
 
 ### 5. Configure Redirect URI
 
-**Important**: Add this exact redirect URI:
+For the **Web application** client, add authorized redirect URIs such as:
 ```
-http://localhost:8085/oauth/callback
+http://localhost:8000/oauth_callback
+http://localhost:8550/oauth_callback
 ```
 
-If the UI doesn't allow editing redirect URIs for Desktop apps:
-1. Download the client configuration JSON
-2. Note the client ID and secret
-3. Or create a **Web application** type instead with the redirect URI
+If your app uses a different host/port, update `FLET_SERVER_PORT` and/or `GOOGLE_REDIRECT_URL` in `.env` and register that exact redirect URI in Google Cloud.
 
 ### 6. Add Credentials to .env
 
 Copy your credentials to the `.env` file:
 
 ```dotenv
-GOOGLE_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=GOCSPX-your_secret_here
+GOOGLE_DESKTOP_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
+GOOGLE_DESKTOP_CLIENT_SECRET=GOCSPX-your_desktop_secret_here
+GOOGLE_WEB_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
+GOOGLE_WEB_CLIENT_SECRET=GOCSPX-your_web_secret_here
+# Optional
+GOOGLE_REDIRECT_URL=http://localhost:8550/oauth_callback
 ```
 
 ### 7. Test OAuth Flow
@@ -506,8 +536,9 @@ GOOGLE_CLIENT_SECRET=GOCSPX-your_secret_here
 ### Troubleshooting OAuth
 
 **Error: redirect_uri_mismatch**
-- Verify the redirect URI is exactly: `http://localhost:8085/oauth/callback`
-- Check for trailing slashes or typos
+- Verify the redirect URI uses `/oauth_callback` and matches your configured host/port
+- Confirm the same URI is registered in Google Cloud Console
+- If set, verify `GOOGLE_REDIRECT_URL`, `BASE_URL`, and `FLET_SERVER_PORT` are consistent
 
 **Error: invalid_client**
 - Verify credentials are correctly copied to `.env`
@@ -688,9 +719,10 @@ Remove-Item -Recurse app\storage\ai_models\*
 **Problem**: Google OAuth redirect URI mismatch.
 
 **Solution**:
-1. In Google Cloud Console, verify redirect URI is: `http://localhost:8085/oauth/callback`
+1. In Google Cloud Console, verify redirect URI matches your runtime and uses `/oauth_callback` (for example: `http://localhost:8000/oauth_callback` or `http://localhost:8550/oauth_callback`)
 2. Check for typos, trailing slashes, or http vs https
 3. Ensure the OAuth client type matches (Desktop or Web)
+4. If set, verify `.env` values for `GOOGLE_REDIRECT_URL`, `BASE_URL`, and `FLET_SERVER_PORT`
 
 #### 6. Session Timeout Too Aggressive
 
@@ -716,15 +748,15 @@ PASSWORD_REQUIRE_SPECIAL=false
 
 #### 8. Port Already in Use (Web Mode)
 
-**Problem**: Port 8080 is occupied.
+**Problem**: Web mode port is occupied.
 
 **Solution**:
 ```powershell
 # Use a different port
 flet run --web --port 3000
 
-# Or find and kill the process using port 8080
-netstat -ano | findstr :8080
+# Or find and kill the process using port 8000
+netstat -ano | findstr :8000
 taskkill /PID <PID> /F
 ```
 

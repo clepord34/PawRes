@@ -8,19 +8,71 @@ Welcome to the comprehensive documentation for **PawRes**, a desktop/web applica
 
 ## 📋 Table of Contents
 
-1. **[Project Overview](#project-overview)** - Problem statement, vision, and objectives
-2. **[Architecture](docs/ARCHITECTURE.md)** - System design, component diagrams, and patterns
-3. **[Database Schema](docs/DATABASE.md)** - ERD, table definitions, and relationships
-4. **[Security Implementation](docs/SECURITY.md)** - Authentication, authorization, and audit logging
-5. **[Project Report](docs/PROJECT_REPORT.md)** - Information assurance and security report
-6. **[Emerging Technologies](docs/EMERGING_TECH.md)** - AI, maps, charts, and integration details
-7. **[Setup & Installation](docs/SETUP.md)** - Environment setup and deployment instructions
-8. **[Testing Documentation](docs/TESTING.md)** - Test plan, coverage, and execution guide
-9. **[User Manual](docs/USER_MANUAL.md)** - Feature guides for admins and regular users
-10. **[API Reference](docs/API_REFERENCE.md)** - Service interfaces and code documentation
-11. **[Team & Contributions](docs/TEAM.md)** - Roles, responsibilities, and individual reflections
-12. **[AI Usage](docs/AI_USAGE.md)** - AI model usage, classification flow, and model handling
+1. **[App Preview](#app-preview)** - High-resolution visual preview of the application
+2. **[What's New in V2.0](#whats-new-in-v20)** - Major updates and improvements in this release
+3. **[Setup (Run Locally)](#setup-run-locally)** - Quick local installation and run instructions
+4. **[Project Overview](#project-overview)** - Problem statement, vision, and objectives
+5. **[Architecture](docs/ARCHITECTURE.md)** - System design, component diagrams, and patterns
+6. **[Database Schema](docs/DATABASE.md)** - ERD, table definitions, and relationships
+7. **[Security Implementation](docs/SECURITY.md)** - Authentication, authorization, and audit logging
+8. **[Project Report](docs/PROJECT_REPORT.md)** - Information assurance and security report
+9. **[Emerging Technologies](docs/EMERGING_TECH.md)** - AI, maps, charts, and integration details
+10. **[Testing Documentation](docs/TESTING.md)** - Test plan, coverage, and execution guide
+11. **[User Manual](docs/USER_MANUAL.md)** - Feature guides for admins and regular users
+12. **[API Reference](docs/API_REFERENCE.md)** - Service interfaces and code documentation
+13. **[Team & Contributions](docs/TEAM.md)** - Roles, responsibilities, and individual reflections
+14. **[AI Usage](docs/AI_USAGE.md)** - AI model usage, classification flow, and model handling
 
+
+---
+
+## 🖼️ App Preview
+
+![PawRes dashboard preview](docs/screenshots/26_admin_dashboard.png)
+
+> High-resolution screenshot of the PawRes analytics dashboard (admin view).
+
+---
+
+## 🆕 What's New in V2.0
+
+- **Loading Indicators**: Added spinners or progress bars to actions that take longer than 300ms.
+- **Empty State Designs**: Replaced blank no-data screens with an illustration and a **Get Started** button.
+- **Responsive Design**: Improved web layout behavior so it stays stable across laptop, large monitor, and tablet screen sizes.
+
+---
+
+## 📦 Setup (Run Locally)
+
+### Prerequisites
+- Python 3.9 or higher
+- pip (Python package manager)
+- 1GB free disk space (for AI models)
+
+### Installation & Run
+
+```powershell
+# Clone repository
+git clone https://github.com/clepord34/PawRes.git
+cd PawRes
+
+# Create virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure environment
+copy .env.example .env
+# Edit .env with your settings
+
+# Run application (must be from app/)
+cd app
+flet run
+```
+
+For full environment configuration details, see **[SETUP.md](docs/SETUP.md)**.
 
 ---
 
@@ -302,40 +354,6 @@ See **[EMERGING_TECH.md](docs/EMERGING_TECH.md)** for detailed integration docum
 
 ---
 
-## 📦 Quick Start
-
-### Prerequisites
-- Python 3.9 or higher
-- pip (Python package manager)
-- 1GB free disk space (for AI models)
-
-### Installation
-
-```powershell
-# Clone repository
-git clone https://github.com/clepord34/PawRes.git
-cd PawRes
-
-# Create virtual environment
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings
-
-# Run application
-cd app
-flet run
-```
-
-For detailed setup instructions, see **[SETUP.md](docs/SETUP.md)**.
-
----
-
 ## 🧪 Testing
 
 ### Run All Tests
@@ -409,6 +427,6 @@ This project is developed as an academic project for Application Development, In
 
 ---
 
-**Last Updated**: December 8, 2025  
-**Version**: 1.0.0  
+**Last Updated**: March 17, 2026  
+**Version**: 2.0.0  
 **Documentation Manager**: kennethb28 (jobanares@my.cspc.edu.ph)
