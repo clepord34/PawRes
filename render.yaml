@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: pawres
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd app; flet run --web --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: FLET_FORCE_WEB_SERVER
+        value: "true"

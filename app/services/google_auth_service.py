@@ -183,7 +183,7 @@ class GoogleAuthService:
         self.desktop_client_id = app_config.get_env("GOOGLE_DESKTOP_CLIENT_ID")
         self.desktop_client_secret = app_config.get_env("GOOGLE_DESKTOP_CLIENT_SECRET")
         redirect_uri = self._clean_env_url(app_config.get_env("GOOGLE_REDIRECT_URL"))
-        self.explicit_redirect_uri = None if self._is_trycloudflare_url(redirect_uri) else redirect_uri
+        self.explicit_redirect_uri = redirect_uri
         base_url = self._clean_env_url(app_config.get_env("BASE_URL"))
         self.base_url = None if self._is_trycloudflare_url(base_url) else base_url
         self._provider = None
