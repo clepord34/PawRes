@@ -108,7 +108,7 @@ MIN_PASSWORD_LENGTH = 6
 MAX_PASSWORD_LENGTH = 128
 
 # Status values
-ANIMAL_STATUS_VALUES = ("healthy", "recovering", "injured", "adopted", "unknown")
+ANIMAL_STATUS_VALUES = ("healthy", "recovering", "injured", "adopted", "unknown", "declined")
 RESCUE_STATUS_VALUES = ("pending", "in_progress", "completed", "cancelled")
 ADOPTION_STATUS_VALUES = ("pending", "approved", "rejected", "completed")
 
@@ -339,6 +339,7 @@ class AnimalStatus:
     ADOPTED = "adopted"
     PROCESSING = "processing"  # Newly rescued, awaiting admin setup
     REMOVED = "removed"  # Admin removed as invalid/duplicate
+    DECLINED = "declined"  # Admin declined a user-posted listing
     
     # Archived status is stored as "original_status|archived" (e.g., "adopted|archived")
     ARCHIVED_SUFFIX = "|archived"
@@ -356,6 +357,7 @@ class AnimalStatus:
         if s in ("adopted",): return cls.ADOPTED
         if s in ("processing",): return cls.PROCESSING
         if s in ("removed",): return cls.REMOVED
+        if s in ("declined", "rejected"): return cls.DECLINED
         return s
     
     @classmethod
@@ -378,11 +380,16 @@ class AnimalStatus:
     def is_removed(cls, status: str) -> bool:
         """Check if a status indicates removed (invalid/duplicate)."""
         return cls.normalize(status) == cls.REMOVED
+
+    @classmethod
+    def is_declined(cls, status: str) -> bool:
+        """Check if a status indicates a declined listing."""
+        return cls.normalize(status) == cls.DECLINED
     
     @classmethod
     def is_hidden(cls, status: str) -> bool:
         """Check if a status is hidden from active lists (archived or removed)."""
-        return cls.is_archived(status) or cls.is_removed(status)
+        return cls.is_archived(status) or cls.is_removed(status) or cls.is_declined(status)
     
     @classmethod
     def get_base_status(cls, status: str) -> str:
@@ -410,13 +417,14 @@ class AnimalStatus:
             cls.ADOPTED: "Adopted",
             cls.PROCESSING: "Processing",
             cls.REMOVED: "Removed",
+            cls.DECLINED: "Declined",
         }
         return labels.get(normalized, status.title())
     
     @classmethod
     def counts_in_analytics(cls, status: str) -> bool:
         """Check if this status should be counted in analytics (not removed)."""
-        return not cls.is_removed(status)
+        return not (cls.is_removed(status) or cls.is_declined(status))
 
 
 class Urgency:

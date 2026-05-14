@@ -19,6 +19,10 @@ class Animal:
     intake_date: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     photo: Optional[str] = None
+    listed_by_user_id: Optional[int] = None
+    listed_contact: Optional[str] = None
+    listed_reason: Optional[str] = None
+    listed_location: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a dict representation."""
@@ -46,6 +50,10 @@ class Animal:
             intake_date=data.get("intake_date"),
             updated_at=data.get("updated_at"),
             photo=data.get("photo"),
+            listed_by_user_id=data.get("listed_by_user_id"),
+            listed_contact=data.get("listed_contact"),
+            listed_reason=data.get("listed_reason"),
+            listed_location=data.get("listed_location"),
         )
 
 

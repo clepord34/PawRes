@@ -13,6 +13,7 @@ import app_config
 from state import get_app_state
 from services.photo_service import load_photo
 from services.rescue_service import RescueService
+from services.animal_service import AnimalService
 from components import (
     create_admin_sidebar, create_user_sidebar, create_gradient_background,
     create_page_title, create_animal_card, create_empty_state, show_snackbar,
@@ -35,6 +36,7 @@ class AnimalsListPage:
         self._db_path = db_path or app_config.DB_PATH
         self._app_state = None
         self._rescue_service = RescueService(self._db_path)
+        self._animal_service = AnimalService(self._db_path)
         self.page = None  # Store page reference
         self.user_role = "user"  # Store user role
         self.current_filter = "all"  # Current filter state
@@ -42,6 +44,7 @@ class AnimalsListPage:
         self._unsubscribe: Optional[Callable] = None
         self._animal_cards_container = None  # Store reference to cards container
         self._count_text = None  # Store reference to count text
+        self._listing_owner_cache: dict[int, dict] = {}
 
     def build(self, page, user_role: str = "user", filter_status: str = "all") -> None:
         try:
@@ -78,13 +81,18 @@ class AnimalsListPage:
             self._app_state.animals.load_active_animals()
         else:
             self._app_state.animals.load_animals()
+
+        self._listing_owner_cache = {}
         
         all_animals = self._app_state.animals.animals
         
         # These are newly rescued animals awaiting admin setup
         if not is_admin:
-            all_animals = [a for a in all_animals 
-                         if (a.get("status") or "").lower() != app_config.AnimalStatus.PROCESSING]
+            all_animals = [
+                a for a in all_animals
+                if not app_config.AnimalStatus.is_hidden(a.get("status", ""))
+                and app_config.AnimalStatus.normalize(a.get("status", "")) != app_config.AnimalStatus.PROCESSING
+            ]
 
         if filter_status == "all":
             animals = all_animals
@@ -200,6 +208,32 @@ class AnimalsListPage:
                         "source": "Emergency" if mission.get("user_id") is None else "User",
                     }
             is_rescued = rescue_mission_id is not None
+
+            listing_info = self._get_listing_info(animal) if is_admin else None
+            if not is_admin and animal.get("listed_by_user_id"):
+                listing_info = {"listing_id": aid}
+            can_approve = (
+                is_admin
+                and listing_info is not None
+                and app_config.AnimalStatus.normalize(animal.get("status", "")) == app_config.AnimalStatus.PROCESSING
+            )
+            can_decline = can_approve
+
+            def handle_approve(animal_id):
+                success = self._animal_service.approve_user_listing(animal_id)
+                if success:
+                    show_snackbar(page, "Listing approved and now visible to adopters")
+                    self.build(page, user_role=user_role, filter_status=self.current_filter)
+                else:
+                    show_snackbar(page, "Unable to approve listing", error=True)
+
+            def handle_decline(animal_id):
+                success = self._animal_service.decline_user_listing(animal_id, self._app_state.auth.user_id)
+                if success:
+                    show_snackbar(page, "Listing declined")
+                    self.build(page, user_role=user_role, filter_status=self.current_filter)
+                else:
+                    show_snackbar(page, "Unable to decline listing", error=True)
             
             # Archive/Remove handlers for admin
             def handle_archive(animal_id):
@@ -254,6 +288,8 @@ class AnimalsListPage:
                 photo_base64=photo_base64,
                 on_adopt=lambda e, id=aid: page.go(f"/adoption_form?animal_id={id}"),
                 on_edit=lambda e, id=aid: self._on_edit(page, id) if is_admin else None,
+                on_approve=handle_approve if can_approve else None,
+                on_decline=handle_decline if can_decline else None,
                 on_archive=handle_archive if is_admin else None,
                 on_remove=handle_remove if is_admin else None,
                 is_admin=is_admin,
@@ -261,6 +297,7 @@ class AnimalsListPage:
                 is_rescued=is_rescued,
                 rescue_info=rescue_info,
                 breed=animal.get("breed"),
+                listing_info=listing_info,
             )
 
         animal_cards = []
@@ -346,6 +383,28 @@ class AnimalsListPage:
     def _on_edit(self, page, animal_id: int) -> None:
         # navigate to edit page with query param
         page.go(f"/edit_animal?id={animal_id}")
+
+    def _get_listing_info(self, animal: dict) -> Optional[dict]:
+        """Build listing info for user-posted animals (admin badge)."""
+        user_id = animal.get("listed_by_user_id")
+        if not user_id:
+            return None
+
+        owner = self._listing_owner_cache.get(user_id)
+        if owner is None:
+            owner = self._animal_service.get_listing_owner_info(user_id) or {}
+            self._listing_owner_cache[user_id] = owner
+
+        return {
+            "listing_id": animal.get("id"),
+            "posted_at": animal.get("intake_date"),
+            "owner_name": owner.get("name"),
+            "owner_email": owner.get("email"),
+            "owner_phone": owner.get("phone"),
+            "listed_contact": animal.get("listed_contact"),
+            "listed_reason": animal.get("listed_reason"),
+            "listed_location": animal.get("listed_location"),
+        }
     
     def _on_species_filter(self, page, user_role: str, status_filter: str, species: str) -> None:
         """Handle species filter change - rebuild with species filter applied."""
@@ -421,6 +480,32 @@ class AnimalsListPage:
                             "source": "Emergency" if mission.get("user_id") is None else "User",
                         }
                 is_rescued = rescue_mission_id is not None
+
+                listing_info = self._get_listing_info(animal) if is_admin else None
+                if not is_admin and animal.get("listed_by_user_id"):
+                    listing_info = {"listing_id": aid}
+                can_approve = (
+                    is_admin
+                    and listing_info is not None
+                    and app_config.AnimalStatus.normalize(animal.get("status", "")) == app_config.AnimalStatus.PROCESSING
+                )
+                can_decline = can_approve
+
+                def handle_approve(animal_id):
+                    success = self._animal_service.approve_user_listing(animal_id)
+                    if success:
+                        show_snackbar(page, "Listing approved and now visible to adopters")
+                        self.build(page, user_role=user_role, filter_status=self.current_filter)
+                    else:
+                        show_snackbar(page, "Unable to approve listing", error=True)
+
+                def handle_decline(animal_id):
+                    success = self._animal_service.decline_user_listing(animal_id, self._app_state.auth.user_id)
+                    if success:
+                        show_snackbar(page, "Listing declined")
+                        self.build(page, user_role=user_role, filter_status=self.current_filter)
+                    else:
+                        show_snackbar(page, "Unable to decline listing", error=True)
                 
                 def handle_archive(animal_id):
                     def on_confirm(note):
@@ -474,6 +559,8 @@ class AnimalsListPage:
                     photo_base64=photo_base64,
                     on_adopt=lambda e, id=aid: page.go(f"/adoption_form?animal_id={id}"),
                     on_edit=lambda e, id=aid: self._on_edit(page, id) if is_admin else None,
+                    on_approve=handle_approve if can_approve else None,
+                    on_decline=handle_decline if can_decline else None,
                     on_archive=handle_archive if is_admin else None,
                     on_remove=handle_remove if is_admin else None,
                     is_admin=is_admin,
@@ -481,6 +568,7 @@ class AnimalsListPage:
                     is_rescued=is_rescued,
                     rescue_info=rescue_info,
                     breed=animal.get("breed"),
+                    listing_info=listing_info,
                 ))
             animal_card_controls = [
                 ft.Container(card, col={"xs": 6, "sm": 6, "md": 4, "lg": 3})

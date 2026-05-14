@@ -150,7 +150,12 @@ class Database:
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			photo TEXT,
 			rescue_mission_id INTEGER,
-			FOREIGN KEY(rescue_mission_id) REFERENCES rescue_missions(id) ON DELETE SET NULL
+			listed_by_user_id INTEGER,
+			listed_contact TEXT,
+			listed_reason TEXT,
+			listed_location TEXT,
+			FOREIGN KEY(rescue_mission_id) REFERENCES rescue_missions(id) ON DELETE SET NULL,
+			FOREIGN KEY(listed_by_user_id) REFERENCES users(id) ON DELETE SET NULL
 		);
 		"""
 
@@ -199,7 +204,24 @@ class Database:
 		);
 		"""
 
-		for stmt in (users_sql, animals_sql, rescue_sql, adoption_sql):
+		user_preferences_sql = """
+		CREATE TABLE IF NOT EXISTS user_preferences (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER UNIQUE NOT NULL,
+			preferred_species TEXT,
+			preferred_breeds TEXT,
+			preferred_age_min INTEGER,
+			preferred_age_max INTEGER,
+			living_situation TEXT,
+			activity_level TEXT,
+			experience_level TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+		"""
+
+		for stmt in (users_sql, animals_sql, rescue_sql, adoption_sql, user_preferences_sql):
 			self.execute(stmt)
 
 		# Then, handle any schema migrations for existing tables
@@ -245,6 +267,18 @@ class Database:
 				conn.commit()
 			if 'breed' not in columns:
 				cur.execute("ALTER TABLE animals ADD COLUMN breed TEXT")
+				conn.commit()
+			if 'listed_by_user_id' not in columns:
+				cur.execute("ALTER TABLE animals ADD COLUMN listed_by_user_id INTEGER")
+				conn.commit()
+			if 'listed_contact' not in columns:
+				cur.execute("ALTER TABLE animals ADD COLUMN listed_contact TEXT")
+				conn.commit()
+			if 'listed_reason' not in columns:
+				cur.execute("ALTER TABLE animals ADD COLUMN listed_reason TEXT")
+				conn.commit()
+			if 'listed_location' not in columns:
+				cur.execute("ALTER TABLE animals ADD COLUMN listed_location TEXT")
 				conn.commit()
 			
 			# Check if admin_message column exists in rescue_missions table

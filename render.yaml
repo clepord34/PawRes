@@ -4,10 +4,20 @@ services:
     runtime: python
     plan: free
     rootDir: .
-    buildCommand: pip install -r requirements.txt
-    startCommand: cd app; flet run --web --port $PORT
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: cd app && python main.py --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
+        value: "3.11.9"
       - key: FLET_FORCE_WEB_SERVER
         value: "true"
+      - key: FLET_SECRET_KEY
+        generateValue: true
+      - key: FLET_WEB_APP_PATH
+        value: ""
+      - key: ADMIN_EMAIL
+        value: "admin@gmail.com"
+      - key: ADMIN_PASSWORD
+        sync: false   # Set this manually in Render dashboard for security
+      - key: PAWRES_DB_PATH
+        value: "/opt/render/project/src/app/storage/data/app.db"

@@ -729,6 +729,8 @@ def create_animal_card(
     photo_base64: Optional[str] = None,
     on_adopt: Optional[Callable] = None,
     on_edit: Optional[Callable] = None,
+    on_approve: Optional[Callable] = None,
+    on_decline: Optional[Callable] = None,
     on_archive: Optional[Callable] = None,
     on_remove: Optional[Callable] = None,
     is_admin: bool = False,
@@ -736,6 +738,9 @@ def create_animal_card(
     is_rescued: bool = False,
     rescue_info: Optional[Dict[str, Any]] = None,
     breed: Optional[str] = None,
+    listing_info: Optional[Dict[str, Any]] = None,
+    status_context: str = "animal",
+    custom_badge: Optional[object] = None,
 ) -> object:
     """Create an animal display card with enhanced visual design.
     
@@ -748,6 +753,8 @@ def create_animal_card(
         photo_base64: Base64 encoded photo
         on_adopt: Callback for adopt button
         on_edit: Callback for edit button (admin)
+        on_approve: Callback for one-click approval (admin)
+        on_decline: Callback for one-click decline (admin)
         on_archive: Callback for archive action (admin)
         on_remove: Callback for remove action (admin)
         is_admin: Whether to show admin controls
@@ -755,6 +762,9 @@ def create_animal_card(
         is_rescued: Whether this animal came from a rescue mission
         rescue_info: Dict with rescue mission details (location, date, reporter, urgency)
         breed: Animal breed (optional)
+        listing_info: Dict with user listing details for admin badge
+        status_context: "animal" (default) or "listing" for user listing status labels
+        custom_badge: Optional custom badge control to overlay on the image
     """
     if ft is None:
         raise RuntimeError("Flet must be installed to create containers")
@@ -773,6 +783,7 @@ def create_animal_card(
         "injured": ft.Colors.RED_600,
         "adopted": ft.Colors.PURPLE_600,
         "processing": ft.Colors.BLUE_600,  # Needs admin setup
+        "declined": ft.Colors.RED_700,
     }
     status_bg_colors = {
         "healthy": ft.Colors.GREEN_50,
@@ -780,6 +791,7 @@ def create_animal_card(
         "injured": ft.Colors.RED_50,
         "adopted": ft.Colors.PURPLE_50,
         "processing": ft.Colors.BLUE_50,
+        "declined": ft.Colors.RED_50,
     }
     status_color = status_colors.get(status_lower, ft.Colors.GREY_600)
     status_bg = status_bg_colors.get(status_lower, ft.Colors.GREY_100)
@@ -791,11 +803,56 @@ def create_animal_card(
         "injured": ft.Icons.LOCAL_HOSPITAL,
         "adopted": ft.Icons.FAVORITE,
         "processing": ft.Icons.HOURGLASS_EMPTY,
+        "declined": ft.Icons.CANCEL,
     }
     status_icon = status_icons.get(status_lower, ft.Icons.INFO)
     
     # Display text for status (show user-friendly text for processing)
     status_display = "Needs Setup" if status_lower == "processing" else clean_status.capitalize()
+
+    status_context = (status_context or "animal").lower()
+    if status_context == "listing":
+        listing_display = {
+            "processing": "Pending",
+            "declined": "Declined",
+            "removed": "Deleted by Admin",
+            "adopted": "Adopted",
+            "healthy": "Approved",
+            "recovering": "Approved",
+            "injured": "Approved",
+        }
+        listing_colors = {
+            "processing": ft.Colors.ORANGE_600,
+            "declined": ft.Colors.RED_700,
+            "removed": ft.Colors.GREY_700,
+            "adopted": ft.Colors.PURPLE_600,
+            "healthy": ft.Colors.GREEN_600,
+            "recovering": ft.Colors.GREEN_600,
+            "injured": ft.Colors.GREEN_600,
+        }
+        listing_bg = {
+            "processing": ft.Colors.ORANGE_50,
+            "declined": ft.Colors.RED_50,
+            "removed": ft.Colors.GREY_200,
+            "adopted": ft.Colors.PURPLE_50,
+            "healthy": ft.Colors.GREEN_50,
+            "recovering": ft.Colors.GREEN_50,
+            "injured": ft.Colors.GREEN_50,
+        }
+        listing_icons = {
+            "processing": ft.Icons.PENDING,
+            "declined": ft.Icons.CANCEL,
+            "removed": ft.Icons.DELETE_FOREVER,
+            "adopted": ft.Icons.FAVORITE,
+            "healthy": ft.Icons.CHECK_CIRCLE,
+            "recovering": ft.Icons.CHECK_CIRCLE,
+            "injured": ft.Icons.CHECK_CIRCLE,
+        }
+
+        status_display = listing_display.get(status_lower, status_display)
+        status_color = listing_colors.get(status_lower, status_color)
+        status_bg = listing_bg.get(status_lower, status_bg)
+        status_icon = listing_icons.get(status_lower, status_icon)
     
     # Determine if animal is adoptable (only healthy animals can be adopted, not processing)
     is_adoptable = status_lower in ("healthy", "available", "adoptable", "ready")
@@ -854,6 +911,36 @@ def create_animal_card(
                 buttons = ft.Container()  # No actions for adopted animals
         else:
             action_buttons = []
+
+            if on_approve:
+                action_buttons.append(
+                    ft.IconButton(
+                        icon=ft.Icons.CHECK_CIRCLE,
+                        icon_color=ft.Colors.GREEN_600,
+                        icon_size=15,
+                        tooltip="Approve listing",
+                        on_click=lambda e: on_approve(animal_id) if on_approve else None,
+                        style=ft.ButtonStyle(
+                            bgcolor={ft.ControlState.HOVERED: ft.Colors.GREEN_50},
+                            shape=ft.CircleBorder(),
+                        ),
+                    )
+                )
+
+            if on_decline:
+                action_buttons.append(
+                    ft.IconButton(
+                        icon=ft.Icons.CANCEL,
+                        icon_color=ft.Colors.RED_600,
+                        icon_size=15,
+                        tooltip="Decline listing",
+                        on_click=lambda e: on_decline(animal_id) if on_decline else None,
+                        style=ft.ButtonStyle(
+                            bgcolor={ft.ControlState.HOVERED: ft.Colors.RED_50},
+                            shape=ft.CircleBorder(),
+                        ),
+                    )
+                )
             
             # Edit icon button
             action_buttons.append(
@@ -946,7 +1033,8 @@ def create_animal_card(
     else:
         buttons = ft.Container()
     
-    # Wrap image with enhanced "Rescued" badge overlay if animal came from rescue mission
+    # Badge overlays (rescue or user-posted listings)
+    badge_content = None
     if is_rescued:
         # For admin, add clickable info button inside the badge
         if is_admin and rescue_info:
@@ -1072,14 +1160,138 @@ def create_animal_card(
                     offset=(0, 2),
                 ),
             )
-        
-        image_with_badge = ft.Stack([
-            animal_image,
+    elif listing_info:
+        listing_id = listing_info.get("listing_id") if listing_info else None
+        badge_text = f"User Posted #{listing_id}" if listing_id and is_admin else "User Posted"
+
+        def _format_date(value: Optional[str]) -> str:
+            if not value:
+                return "Not recorded"
+            try:
+                from datetime import datetime
+                if isinstance(value, str):
+                    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                else:
+                    dt = value
+                return dt.strftime("%b %d, %Y")
+            except Exception:
+                return str(value)
+
+        def show_listing_info(e):
+            page = e.page
+            if not page:
+                return
+
+            owner_name = listing_info.get("owner_name") or "Unknown"
+            owner_email = listing_info.get("owner_email") or "Not provided"
+            owner_phone = listing_info.get("owner_phone") or "Not provided"
+            listed_contact = listing_info.get("listed_contact") or "Not provided"
+            listed_reason = listing_info.get("listed_reason") or "Not provided"
+            listed_location = listing_info.get("listed_location") or "Not provided"
+            posted_at = _format_date(listing_info.get("posted_at"))
+
+            content_items = [
+                ft.Row([ft.Icon(ft.Icons.CALENDAR_TODAY, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Posted Date:", weight="w600", size=13)], spacing=8),
+                ft.Text(posted_at, size=12, color=ft.Colors.BLACK87),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([ft.Icon(ft.Icons.PERSON, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Owner:", weight="w600", size=13)], spacing=8),
+                ft.Text(owner_name, size=12, color=ft.Colors.BLACK87),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([ft.Icon(ft.Icons.EMAIL, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Account Email:", weight="w600", size=13)], spacing=8),
+                ft.Text(owner_email, size=12, color=ft.Colors.BLACK87),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([ft.Icon(ft.Icons.PHONE, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Account Phone:", weight="w600", size=13)], spacing=8),
+                ft.Text(owner_phone, size=12, color=ft.Colors.BLACK87),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([ft.Icon(ft.Icons.CONTACT_PHONE, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Listing Contact:", weight="w600", size=13)], spacing=8),
+                ft.Text(listed_contact, size=12, color=ft.Colors.BLACK87),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([ft.Icon(ft.Icons.LOCATION_ON, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Owner Location:", weight="w600", size=13)], spacing=8),
+                ft.Text(listed_location, size=12, color=ft.Colors.BLACK87),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                ft.Row([ft.Icon(ft.Icons.DESCRIPTION, size=18, color=ft.Colors.TEAL_600),
+                       ft.Text("Reason:", weight="w600", size=13)], spacing=8),
+                ft.Text(listed_reason, size=12, color=ft.Colors.BLACK87),
+            ]
+
+            dlg = ft.AlertDialog(
+                title=ft.Text(f"User Listing Details: {name}", size=16, weight="bold"),
+                content=ft.Container(
+                    ft.Column(content_items, spacing=2, tight=True, scroll=ft.ScrollMode.AUTO),
+                    width=320,
+                    height=380,
+                    padding=10,
+                ),
+                actions=[
+                    ft.TextButton("Close", on_click=lambda e: page.close(dlg)),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            page.open(dlg)
+        if is_admin:
+            badge_content = ft.Container(
+                ft.Row([
+                    ft.Icon(ft.Icons.PERSON_PIN_CIRCLE, size=13, color=ft.Colors.WHITE),
+                    ft.Text(badge_text, size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+                    ft.Icon(ft.Icons.INFO_OUTLINE, size=13, color=ft.Colors.WHITE),
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=ft.Colors.BLUE_600,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=12,
+                on_click=show_listing_info,
+                tooltip="Click for listing details",
+                shadow=ft.BoxShadow(
+                    blur_radius=4,
+                    spread_radius=0,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.BLUE_900),
+                    offset=(0, 2),
+                ),
+            )
+        else:
+            badge_content = ft.Container(
+                ft.Row([
+                    ft.Icon(ft.Icons.PERSON_PIN_CIRCLE, size=13, color=ft.Colors.WHITE),
+                    ft.Text(badge_text, size=10, color=ft.Colors.WHITE, weight=ft.FontWeight.W_600),
+                ], spacing=4, alignment=ft.MainAxisAlignment.CENTER),
+                bgcolor=ft.Colors.BLUE_600,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=12,
+                shadow=ft.BoxShadow(
+                    blur_radius=4,
+                    spread_radius=0,
+                    color=ft.Colors.with_opacity(0.3, ft.Colors.BLUE_900),
+                    offset=(0, 2),
+                ),
+            )
+
+    badge_layers = []
+    if badge_content:
+        badge_layers.append(
             ft.Container(
                 badge_content,
                 right=4,
                 top=4,
-            ),
+            )
+        )
+    if custom_badge:
+        badge_layers.append(
+            ft.Container(
+                custom_badge,
+                left=4,
+                top=4,
+            )
+        )
+
+    if badge_layers:
+        image_with_badge = ft.Stack([
+            animal_image,
+            *badge_layers,
         ])
     else:
         image_with_badge = animal_image

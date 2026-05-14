@@ -172,6 +172,9 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
     nav_items = [
         ("User Dashboard", "/user", ["/user"]),
         ("Apply for Adoption", "/available_adoption", ["/available_adoption", "/adoption_form"]),
+        ("Pet Recommendations", "/pet_recommendations", ["/pet_recommendations", "/pet_preferences"]),
+        ("Post Pet for Adoption", "/post_pet", ["/post_pet"]),
+        ("My Listings", "/my_listings", ["/my_listings", "/edit_listing"]),
         ("Report Rescue Mission", "/rescue_form", ["/rescue_form"]),
         ("Check Application Status", "/check_status", ["/check_status"]),
         ("View Animal List", "/animals_list", ["/animals_list"]),
@@ -239,6 +242,9 @@ _ADMIN_NAV_ITEMS = [
 _USER_NAV_ITEMS = [
     ("User Dashboard", ft.Icons.DASHBOARD if ft else None, "/user", ["/user"]),
     ("Apply for Adoption", ft.Icons.FAVORITE if ft else None, "/available_adoption", ["/available_adoption", "/adoption_form"]),
+    ("Pet Recommendations", ft.Icons.STAR if ft else None, "/pet_recommendations", ["/pet_recommendations", "/pet_preferences"]),
+    ("Post Pet for Adoption", ft.Icons.POST_ADD if ft else None, "/post_pet", ["/post_pet"]),
+    ("My Listings", ft.Icons.LIST_ALT if ft else None, "/my_listings", ["/my_listings", "/edit_listing"]),
     ("Report Rescue", ft.Icons.REPORT if ft else None, "/rescue_form", ["/rescue_form"]),
     ("Check Status", ft.Icons.CHECKLIST if ft else None, "/check_status", ["/check_status"]),
     ("View Animals", ft.Icons.PETS if ft else None, "/animals_list", ["/animals_list"]),

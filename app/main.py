@@ -160,6 +160,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=0, help="Port to run the Flet web server on")
     args = parser.parse_args()
+
+    # Detect if we're running as a web server (Render sets FLET_FORCE_WEB_SERVER=true)
+    is_web_server = os.environ.get("FLET_FORCE_WEB_SERVER", "").lower() == "true"
     
     run_kwargs = {
         "target": main,
@@ -169,5 +172,10 @@ if __name__ == "__main__":
     }
     if args.port > 0:
         run_kwargs["port"] = args.port
+        # Render requires binding to 0.0.0.0 (all interfaces)
+        run_kwargs["host"] = "0.0.0.0"
+    
+    if is_web_server:
+        run_kwargs["host"] = "0.0.0.0"
         
     ft.app(**run_kwargs)

@@ -40,6 +40,10 @@ class AnimalService:
         health_status: str = "unknown",
         photo: Optional[str] = None,
         breed: Optional[str] = None,
+        listed_by_user_id: Optional[int] = None,
+        listed_contact: Optional[str] = None,
+        listed_reason: Optional[str] = None,
+        listed_location: Optional[str] = None,
     ) -> int:
         """Insert a new animal and return its id.
 
@@ -47,10 +51,13 @@ class AnimalService:
         maps to `status`. `photo` should be a filename from FileStore.
         """
         sql = (
-            "INSERT INTO animals (name, species, breed, age, status, photo) "
-            "VALUES (?, ?, ?, ?, ?, ?)"
+            "INSERT INTO animals (name, species, breed, age, status, photo, listed_by_user_id, listed_contact, listed_reason, listed_location) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
-        last_id = self.db.execute(sql, (name, type, breed, age, health_status, photo))
+        last_id = self.db.execute(
+            sql,
+            (name, type, breed, age, health_status, photo, listed_by_user_id, listed_contact, listed_reason, listed_location)
+        )
         return last_id
 
     def get_all_animals(self) -> List[Dict[str, Any]]:
@@ -98,6 +105,9 @@ class AnimalService:
             "age": "age",
             "photo": "photo",
             "breed": "breed",
+            "listed_contact": "listed_contact",
+            "listed_reason": "listed_reason",
+            "listed_location": "listed_location",
         }
 
         set_clauses = []
@@ -128,6 +138,152 @@ class AnimalService:
         sql = f"SELECT * FROM animals WHERE LOWER(status) IN ({placeholders}) ORDER BY id"
         rows = self.db.fetch_all(sql, adoptable_states)
         return rows
+
+    def create_user_listing(
+        self,
+        user_id: int,
+        name: str,
+        type: str,
+        age: Optional[int],
+        contact: str,
+        reason: str,
+        location: str,
+        photo: Optional[str] = None,
+        breed: Optional[str] = None,
+    ) -> int:
+        """Create a user-submitted adoption listing.
+
+        Listings start in 'processing' status for admin review.
+        """
+        return self.add_animal(
+            name=name,
+            type=type,
+            age=age,
+            health_status=AnimalStatus.PROCESSING,
+            photo=photo,
+            breed=breed,
+            listed_by_user_id=user_id,
+            listed_contact=contact,
+            listed_reason=reason,
+            listed_location=location,
+        )
+
+    def get_user_listings(self, user_id: int) -> List[Dict[str, Any]]:
+        """Return animals listed by a specific user, newest first."""
+        return self.db.fetch_all(
+            "SELECT * FROM animals WHERE listed_by_user_id = ? ORDER BY intake_date DESC",
+            (user_id,)
+        )
+
+    def get_user_listing_by_id(self, animal_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get a single user listing by animal ID and owner ID."""
+        return self.db.fetch_one(
+            "SELECT * FROM animals WHERE id = ? AND listed_by_user_id = ?",
+            (animal_id, user_id),
+        )
+
+    def update_user_listing(
+        self,
+        animal_id: int,
+        user_id: int,
+        *,
+        name: str,
+        type: str,
+        age: Optional[int],
+        contact: str,
+        reason: str,
+        location: str,
+        breed: Optional[str] = None,
+        reset_status: bool = True,
+    ) -> bool:
+        """Update a user listing and optionally reset it for review."""
+        listing = self.get_user_listing_by_id(animal_id, user_id)
+        if not listing:
+            return False
+
+        current_status = AnimalStatus.normalize(listing.get("status", ""))
+        if current_status in (AnimalStatus.ADOPTED, AnimalStatus.REMOVED):
+            return False
+
+        fields = {
+            "name": name,
+            "type": type,
+            "age": age,
+            "breed": breed,
+            "listed_contact": contact,
+            "listed_reason": reason,
+            "listed_location": location,
+        }
+
+        if reset_status:
+            fields["health_status"] = AnimalStatus.PROCESSING
+
+        return self.update_animal(animal_id, **fields)
+
+    def approve_user_listing(self, animal_id: int) -> bool:
+        """Approve a user listing by setting status to healthy."""
+        existing = self.db.fetch_one(
+            "SELECT id, status, listed_by_user_id FROM animals WHERE id = ?",
+            (animal_id,)
+        )
+        if not existing:
+            return False
+
+        if not existing.get("listed_by_user_id"):
+            return False
+
+        current_status = AnimalStatus.normalize(existing.get("status", ""))
+        if current_status != AnimalStatus.PROCESSING:
+            return False
+
+        self.db.execute(
+            "UPDATE animals SET status = ?, updated_at = ? WHERE id = ?",
+            (AnimalStatus.HEALTHY, datetime.now(), animal_id)
+        )
+        return True
+
+    def decline_user_listing(self, animal_id: int, admin_id: Optional[int] = None) -> bool:
+        """Decline a user listing by setting status to declined."""
+        existing = self.db.fetch_one(
+            "SELECT id, status, listed_by_user_id FROM animals WHERE id = ?",
+            (animal_id,)
+        )
+        if not existing:
+            return False
+
+        if not existing.get("listed_by_user_id"):
+            return False
+
+        current_status = AnimalStatus.normalize(existing.get("status", ""))
+        if current_status != AnimalStatus.PROCESSING:
+            return False
+
+        self.db.execute(
+            """UPDATE animals
+               SET status = ?, previous_status = ?, updated_at = ?
+               WHERE id = ?""",
+            (AnimalStatus.DECLINED, existing.get("status"), datetime.now(), animal_id)
+        )
+        return True
+
+    def get_listing_owner_info(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """Fetch owner profile details for a listing."""
+        return self.db.fetch_one(
+            "SELECT id, name, email, phone FROM users WHERE id = ?",
+            (user_id,)
+        )
+
+    def remove_user_listing(self, animal_id: int, user_id: int, reason: Optional[str] = None) -> Dict[str, Any]:
+        """Remove a user listing (soft-delete) and auto-deny pending adoptions."""
+        listing = self.get_user_listing_by_id(animal_id, user_id)
+        if not listing:
+            return {"success": False, "adoptions_affected": 0}
+
+        if AnimalStatus.normalize(listing.get("status", "")) == AnimalStatus.ADOPTED:
+            return {"success": False, "adoptions_affected": 0}
+
+        reason_text = reason or "Owner removed listing"
+        return self.remove_animal(animal_id, admin_id=user_id, reason=reason_text, cascade_adoptions=True)
 
     def update_animal_photo(self, animal_id: int, new_photo: str) -> bool:
         """Update an animal's photo, deleting the old photo file if it exists.
@@ -378,7 +534,8 @@ class AnimalService:
         sql = """
             SELECT * FROM animals 
             WHERE status NOT LIKE '%|archived'
-              AND status != 'removed'
+                            AND status != 'removed'
+                            AND status != 'declined'
             ORDER BY id
         """
         return self.db.fetch_all(sql)
@@ -392,6 +549,7 @@ class AnimalService:
             SELECT * FROM animals 
             WHERE status LIKE '%|archived'
                OR status = 'removed'
+               OR status = 'declined'
             ORDER BY 
                 CASE WHEN status = 'removed' THEN removed_at ELSE archived_at END DESC
         """

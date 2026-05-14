@@ -10,6 +10,7 @@ from services.rescue_service import RescueService
 from services.adoption_service import AdoptionService
 from services.analytics_service import AnalyticsService
 from services.map_service import MapService
+from services.recommendation_service import RecommendationService
 from services.photo_service import load_photo
 from state import get_app_state
 from components import (
@@ -38,6 +39,7 @@ class UserDashboard:
         self.adoption_service = AdoptionService(self.db_path)
         self.analytics_service = AnalyticsService(self.db_path)
         self.map_service = MapService()
+        self.recommendation_service = RecommendationService(self.db_path)
 
     def _sync_pending_addresses_background(self) -> None:
         """Sync pending addresses in a background thread.
@@ -100,6 +102,16 @@ class UserDashboard:
         adoptable_animals = self.animal_service.get_adoptable_animals() or []
         if adoptable_animals:
             random.shuffle(adoptable_animals)
+
+        preferences = self.recommendation_service.get_preferences(user_id) if user_id else None
+        has_preferences = bool(preferences)
+        recommendations = []
+        recommended_animals = []
+        if user_id and has_preferences:
+            recommendations = self.recommendation_service.get_recommendations(user_id, limit=3)
+            recommended_animals = [r.get("animal") for r in recommendations if r.get("animal")]
+        elif adoptable_animals:
+            recommended_animals = adoptable_animals[:3]
 
         sidebar = create_user_sidebar(page, user_name, current_route=page.route)
         if _mobile:
@@ -173,6 +185,7 @@ class UserDashboard:
         _quick_actions = ft.Row([
                     create_quick_action_btn(ft.Icons.PETS, "Report Rescue", ft.Colors.ORANGE_600, "/rescue_form"),
                     create_quick_action_btn(ft.Icons.FAVORITE, "Apply to Adopt", ft.Colors.TEAL_500, "/available_adoption"),
+                    create_quick_action_btn(ft.Icons.POST_ADD, "Post a Pet", ft.Colors.BLUE_600, "/post_pet"),
                     create_ai_download_button(
                         on_click=lambda e: create_ai_download_dialog(page),
                         icon_size=14,
@@ -589,9 +602,9 @@ class UserDashboard:
             is_hovered = [False]
             auto_scroll_timer = [None]
             
-            carousel_animals = adoptable_animals[:5]
-            num_animals = len(carousel_animals)
-            has_multiple_animals = num_animals > 1
+            featured_carousel_animals = adoptable_animals[:5]
+            featured_count = len(featured_carousel_animals)
+            has_multiple_animals = featured_count > 1
             
             def create_featured_animal_card(animal: dict, index: int) -> ft.Control:
                 """Create a featured animal card using the standardized component."""
@@ -619,7 +632,7 @@ class UserDashboard:
             # Dot indicators
             dot_containers = []
             if has_multiple_animals:
-                for i in range(num_animals):
+                for i in range(featured_count):
                     dot = ft.Container(
                         width=10,
                         height=10,
@@ -631,7 +644,7 @@ class UserDashboard:
 
             carousel_content = ft.Container(
                 ft.Container(
-                    create_featured_animal_card(carousel_animals[0], 0),
+                    create_featured_animal_card(featured_carousel_animals[0], 0),
                     width=250,
                 ),
                 alignment=ft.alignment.center,
@@ -641,8 +654,8 @@ class UserDashboard:
 
             def update_carousel(new_index: int):
                 if new_index < 0:
-                    new_index = num_animals - 1
-                elif new_index >= num_animals:
+                    new_index = featured_count - 1
+                elif new_index >= featured_count:
                     new_index = 0
                 
                 current_index[0] = new_index
@@ -655,7 +668,7 @@ class UserDashboard:
                 
                 def update_content():
                     carousel_content.content = ft.Container(
-                        create_featured_animal_card(carousel_animals[new_index], new_index),
+                        create_featured_animal_card(featured_carousel_animals[new_index], new_index),
                         width=250,
                     )
                     carousel_content.opacity = 1.0
@@ -772,6 +785,207 @@ class UserDashboard:
                 shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
             )
 
+        if recommended_animals:
+            rec_index = [0]
+            rec_hovered = [False]
+            rec_timer = [None]
+
+            recommended_carousel_animals = recommended_animals[:3]
+            rec_count = len(recommended_carousel_animals)
+            rec_has_multiple = rec_count > 1
+
+            def create_recommended_animal_card(animal: dict, index: int) -> ft.Control:
+                animal_id = animal.get("id")
+                animal_name = animal.get("name", "Unknown")
+                animal_age = animal.get("age", "N/A")
+                animal_species = animal.get("species", "Unknown")
+                animal_breed = animal.get("breed")
+                animal_health = animal.get("status", "Unknown")
+                animal_photo = load_photo(animal.get("photo"))
+
+                return create_animal_card(
+                    animal_id=animal_id,
+                    name=animal_name,
+                    species=animal_species,
+                    age=animal_age if isinstance(animal_age, int) else 0,
+                    status=animal_health,
+                    photo_base64=animal_photo,
+                    on_adopt=lambda e, aid=animal_id: page.go(f"/adoption_form?animal_id={aid}"),
+                    is_admin=False,
+                    show_adopt_button=True,
+                    breed=animal_breed,
+                )
+
+            rec_dots = []
+            if rec_has_multiple:
+                for i in range(rec_count):
+                    dot = ft.Container(
+                        width=10,
+                        height=10,
+                        bgcolor=ft.Colors.TEAL_500 if i == 0 else ft.Colors.GREY_300,
+                        border_radius=5,
+                        animate=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+                    )
+                    rec_dots.append(dot)
+
+            rec_content = ft.Container(
+                ft.Container(
+                    create_recommended_animal_card(recommended_carousel_animals[0], 0),
+                    width=250,
+                ),
+                alignment=ft.alignment.center,
+                animate_opacity=ft.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+                opacity=1.0,
+            )
+
+            def update_recommended(new_index: int):
+                if new_index < 0:
+                    new_index = rec_count - 1
+                elif new_index >= rec_count:
+                    new_index = 0
+
+                rec_index[0] = new_index
+
+                for i, dot in enumerate(rec_dots):
+                    dot.bgcolor = ft.Colors.TEAL_500 if i == new_index else ft.Colors.GREY_300
+
+                rec_content.opacity = 0.0
+                page.update()
+
+                def update_content():
+                    rec_content.content = ft.Container(
+                        create_recommended_animal_card(recommended_carousel_animals[new_index], new_index),
+                        width=250,
+                    )
+                    rec_content.opacity = 1.0
+                    page.update()
+
+                threading.Timer(0.15, update_content).start()
+
+            def on_rec_prev(e):
+                update_recommended(rec_index[0] - 1)
+
+            def on_rec_next(e):
+                update_recommended(rec_index[0] + 1)
+
+            def on_rec_dot(index: int):
+                def handler(e):
+                    update_recommended(index)
+                return handler
+
+            for i, dot in enumerate(rec_dots):
+                dot.on_click = on_rec_dot(i)
+
+            def start_rec_auto_scroll():
+                if not rec_has_multiple:
+                    return
+
+                def auto_scroll():
+                    if not rec_hovered[0]:
+                        update_recommended(rec_index[0] + 1)
+                    if not rec_hovered[0]:
+                        rec_timer[0] = threading.Timer(4.0, auto_scroll)
+                        rec_timer[0].start()
+
+                rec_timer[0] = threading.Timer(4.0, auto_scroll)
+                rec_timer[0].start()
+
+            def on_rec_hover(e):
+                rec_hovered[0] = e.data == "true"
+                if rec_hovered[0]:
+                    if rec_timer[0]:
+                        rec_timer[0].cancel()
+                else:
+                    if rec_has_multiple:
+                        start_rec_auto_scroll()
+
+            if rec_has_multiple:
+                start_rec_auto_scroll()
+
+            rec_nav = ft.Row([
+                ft.IconButton(
+                    icon=ft.Icons.CHEVRON_LEFT,
+                    icon_color=ft.Colors.TEAL_600,
+                    icon_size=24,
+                    on_click=on_rec_prev,
+                    tooltip="Previous",
+                ) if rec_has_multiple else ft.Container(width=40),
+                ft.Row(rec_dots, spacing=6, alignment=ft.MainAxisAlignment.CENTER),
+                ft.IconButton(
+                    icon=ft.Icons.CHEVRON_RIGHT,
+                    icon_color=ft.Colors.TEAL_600,
+                    icon_size=24,
+                    on_click=on_rec_next,
+                    tooltip="Next",
+                ) if rec_has_multiple else ft.Container(width=40),
+            ], alignment=ft.MainAxisAlignment.CENTER, spacing=10)
+
+            rec_actions = [
+                ft.TextButton("View All", on_click=lambda e: page.go("/pet_recommendations"))
+            ]
+            if not has_preferences:
+                rec_actions.insert(0, ft.TextButton("Set Preferences", on_click=lambda e: page.go("/pet_preferences")))
+
+            rec_header = ft.Row([
+                ft.Icon(ft.Icons.AUTO_AWESOME, size=22, color=ft.Colors.TEAL_600),
+                ft.Text("Recommended For You", size=16, weight="w600", color=ft.Colors.BLACK87),
+                ft.Container(expand=True),
+                *rec_actions,
+            ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
+            rec_hint = ft.Text(
+                "Set preferences to improve your matches"
+                if not has_preferences
+                else "Personalized matches based on your profile",
+                size=12,
+                color=ft.Colors.BLACK54,
+            )
+
+            recommended_card = ft.Container(
+                ft.Column([
+                    rec_header,
+                    rec_hint,
+                    ft.Divider(height=10, thickness=1, color=ft.Colors.GREY_200),
+                    ft.Container(rec_content, alignment=ft.alignment.center, expand=True),
+                    ft.Container(height=4),
+                    rec_nav,
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                padding=ft.padding.symmetric(vertical=12, horizontal=24),
+                bgcolor=ft.Colors.WHITE,
+                border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
+                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+                on_hover=on_rec_hover,
+            )
+        else:
+            empty_action_text = "Set Preferences" if not has_preferences else "Browse Animals"
+            empty_action_route = "/pet_preferences" if not has_preferences else "/available_adoption"
+            recommended_card = ft.Container(
+                ft.Column([
+                    ft.Row([
+                        ft.Icon(ft.Icons.AUTO_AWESOME, size=22, color=ft.Colors.TEAL_600),
+                        ft.Text("Recommended For You", size=16, weight="w600", color=ft.Colors.BLACK87),
+                        ft.Container(expand=True),
+                        ft.TextButton("View All", on_click=lambda e: page.go("/pet_recommendations")),
+                    ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                    ft.Divider(height=10, thickness=1, color=ft.Colors.GREY_200),
+                    ft.Container(
+                        ft.Column([
+                            ft.Icon(ft.Icons.PETS, size=70, color=ft.Colors.GREY_400),
+                            ft.Text("No recommendations yet", size=13, color=ft.Colors.BLACK54),
+                            ft.TextButton(empty_action_text, on_click=lambda e: page.go(empty_action_route)),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                        alignment=ft.alignment.center,
+                        expand=True,
+                    ),
+                ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
+                padding=ft.padding.symmetric(vertical=18, horizontal=24),
+                bgcolor=ft.Colors.WHITE,
+                border_radius=12,
+                border=ft.border.all(1, ft.Colors.GREY_200),
+                shadow=ft.BoxShadow(blur_radius=8, spread_radius=1, color=ft.Colors.BLACK12, offset=(0, 2)),
+            )
+
         is_online = self.map_service.check_map_tiles_available()
         
         if is_online:
@@ -863,6 +1077,8 @@ class UserDashboard:
                         welcome_section,
                         ft.Container(height=20),
                         impact_section,
+                        ft.Container(height=20),
+                        recommended_card,
                         ft.Container(height=20),
                         activity_section,
                         ft.Container(height=20),

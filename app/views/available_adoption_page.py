@@ -63,6 +63,7 @@ class AvailableAdoptionPage:
         def create_card_for_animal(animal):
             aid = animal.get("id")
             photo_base64 = load_photo(animal.get("photo"))
+            listing_info = {"listing_id": aid} if animal.get("listed_by_user_id") else None
             return create_animal_card(
                 animal_id=aid,
                 name=animal.get("name", "Unknown"),
@@ -74,6 +75,7 @@ class AvailableAdoptionPage:
                 is_admin=False,
                 show_adopt_button=True,
                 breed=animal.get("breed"),
+                listing_info=listing_info,
             )
 
         animal_cards = []
@@ -198,6 +200,7 @@ class AvailableAdoptionPage:
                     is_admin=False,
                     show_adopt_button=True,
                     breed=animal.get("breed"),
+                    listing_info={"listing_id": aid} if animal.get("listed_by_user_id") else None,
                 ))
             animal_card_controls = [
                 ft.Container(card, col={"xs": 6, "sm": 6, "md": 4, "lg": 3})

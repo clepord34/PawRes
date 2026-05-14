@@ -43,6 +43,30 @@ def render_rescue_form(page, params: Dict[str, Any]) -> None:
     RescueFormPage(db_path=app_config.DB_PATH).build(page)
 
 
+def render_post_pet(page, params: Dict[str, Any]) -> None:
+    """Render the user pet listing form page."""
+    from views.post_pet_page import PostPetPage
+    PostPetPage(db_path=app_config.DB_PATH).build(page)
+
+
+def render_my_listings(page, params: Dict[str, Any]) -> None:
+    """Render the user's listings page."""
+    from views.my_listings_page import MyListingsPage
+    MyListingsPage(db_path=app_config.DB_PATH).build(page)
+
+
+def render_edit_listing(page, params: Dict[str, Any]) -> None:
+    """Render the edit listing page."""
+    from views.edit_listing_page import EditListingPage
+    animal_id = None
+    if "animal_id" in params:
+        try:
+            animal_id = int(params["animal_id"])
+        except (ValueError, TypeError):
+            pass
+    EditListingPage(db_path=app_config.DB_PATH).build(page, animal_id=animal_id)
+
+
 def render_check_status(page, params: Dict[str, Any]) -> None:
     """Render the check status page."""
     from views.check_status_page import CheckStatusPage
@@ -74,6 +98,18 @@ def render_user_analytics(page, params: Dict[str, Any]) -> None:
     UserAnalyticsPage(db_path=app_config.DB_PATH).build(page)
 
 
+def render_pet_preferences(page, params: Dict[str, Any]) -> None:
+    """Render the pet preferences page."""
+    from views.pet_preferences_page import PetPreferencesPage
+    PetPreferencesPage(db_path=app_config.DB_PATH).build(page)
+
+
+def render_pet_recommendations(page, params: Dict[str, Any]) -> None:
+    """Render the pet recommendations page."""
+    from views.pet_recommendations_page import PetRecommendationsPage
+    PetRecommendationsPage(db_path=app_config.DB_PATH).build(page)
+
+
 # ============================================================================
 # USER ROUTES - Add new user routes here
 # ============================================================================
@@ -103,6 +139,24 @@ ROUTES: Dict[str, Dict[str, Any]] = {
         "requires_auth": True,
         "allowed_roles": ["user"],
     },
+    "/post_pet": {
+        "handler": render_post_pet,
+        "description": "Post a pet for adoption",
+        "requires_auth": True,
+        "allowed_roles": ["user"],
+    },
+    "/my_listings": {
+        "handler": render_my_listings,
+        "description": "Manage your pet listings",
+        "requires_auth": True,
+        "allowed_roles": ["user"],
+    },
+    "/edit_listing": {
+        "handler": render_edit_listing,
+        "description": "Edit a pet listing",
+        "requires_auth": True,
+        "allowed_roles": ["user"],
+    },
     "/check_status": {
         "handler": render_check_status,
         "description": "Check status of user's requests",
@@ -112,6 +166,18 @@ ROUTES: Dict[str, Dict[str, Any]] = {
     "/user_analytics": {
         "handler": render_user_analytics,
         "description": "View personal analytics and statistics",
+        "requires_auth": True,
+        "allowed_roles": ["user"],
+    },
+    "/pet_preferences": {
+        "handler": render_pet_preferences,
+        "description": "Set pet adoption preferences",
+        "requires_auth": True,
+        "allowed_roles": ["user"],
+    },
+    "/pet_recommendations": {
+        "handler": render_pet_recommendations,
+        "description": "View personalized pet recommendations",
         "requires_auth": True,
         "allowed_roles": ["user"],
     },
