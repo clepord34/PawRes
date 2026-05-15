@@ -116,7 +116,7 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
         [sidebar_header] + nav_buttons,
         horizontal_alignment="center",
         spacing=12,
-        scroll=ft.ScrollMode.AUTO,
+        scroll=ft.ScrollMode.HIDDEN,
         expand=True,
     )
 
@@ -215,7 +215,7 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
         [sidebar_header] + nav_buttons,
         horizontal_alignment="center",
         spacing=12,
-        scroll=ft.ScrollMode.AUTO,
+        scroll=ft.ScrollMode.HIDDEN,
         expand=True,
     )
 
