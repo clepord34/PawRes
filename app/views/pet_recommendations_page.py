@@ -126,12 +126,16 @@ class PetRecommendationsPage:
 
         content = ft.Container(
             ft.Column([
-                header_row,
-                ft.Container(height=8),
-                control_bar,
-                recommendations_view,
-            ], spacing=0),
-            padding=responsive_padding(page),
+                ft.Container(
+                    ft.Column([
+                        header_row,
+                        ft.Container(height=8),
+                        control_bar,
+                        recommendations_view,
+                    ], spacing=0),
+                    padding=responsive_padding(page),
+                ),
+            ], scroll=ft.ScrollMode.AUTO, expand=True),
             expand=True,
         )
 

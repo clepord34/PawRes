@@ -112,16 +112,30 @@ def create_admin_sidebar(page: object, current_route: str = "") -> object:
         on_click=lambda e: page.go("/profile")
     )
     
+    nav_list = ft.Column(
+        [sidebar_header] + nav_buttons,
+        horizontal_alignment="center",
+        spacing=12,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+    )
+
+    footer = ft.Column(
+        [
+            profile,
+            logout_btn,
+            ft.Container(height=20),
+        ],
+        horizontal_alignment="center",
+        spacing=12,
+    )
+
     return ft.Container(
         ft.Column(
-            [sidebar_header] + nav_buttons + [
-                ft.Container(expand=True),  # Spacer
-                profile,
-                logout_btn,
-                ft.Container(height=20),
-            ],
+            [nav_list, footer],
             horizontal_alignment="center",
-            spacing=12
+            spacing=12,
+            expand=True,
         ),
         width=220,
         bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.WHITE),
@@ -197,16 +211,30 @@ def create_user_sidebar(page: object, user_name: str = "User", current_route: st
         on_click=lambda e: page.go("/profile")
     )
     
+    nav_list = ft.Column(
+        [sidebar_header] + nav_buttons,
+        horizontal_alignment="center",
+        spacing=12,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+    )
+
+    footer = ft.Column(
+        [
+            profile,
+            logout_btn,
+            ft.Container(height=20),
+        ],
+        horizontal_alignment="center",
+        spacing=12,
+    )
+
     return ft.Container(
         ft.Column(
-            [sidebar_header] + nav_buttons + [
-                ft.Container(expand=True),  # Spacer
-                profile,
-                logout_btn,
-                ft.Container(height=20),
-            ],
+            [nav_list, footer],
             horizontal_alignment="center",
-            spacing=12
+            spacing=12,
+            expand=True,
         ),
         width=220,
         bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.WHITE),
